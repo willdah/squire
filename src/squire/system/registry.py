@@ -51,6 +51,19 @@ class BackendRegistry:
         """Configured remote hosts keyed by name."""
         return dict(self._hosts)
 
+    def get_config(self, host: str) -> HostConfig | None:
+        """Return the HostConfig for the given host name, or None if not found."""
+        return self._hosts.get(host)
+
+    def resolve_host_for_service(self, service: str) -> str | None:
+        """Find the host that owns a service, if exactly one match exists.
+
+        Returns the host name, or None if the service is not registered
+        or is ambiguous (on multiple hosts).
+        """
+        matches = [name for name, cfg in self._hosts.items() if service in cfg.services]
+        return matches[0] if len(matches) == 1 else None
+
     async def close_all(self) -> None:
         """Close all SSH connections."""
         for backend in self._backends.values():

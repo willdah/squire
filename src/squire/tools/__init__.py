@@ -20,6 +20,8 @@ from .read_config import RISK_LEVEL as _rc_risk
 from .read_config import read_config
 from .run_command import RISK_LEVEL as _runcmd_risk
 from .run_command import run_command
+from .systemctl import RISK_LEVEL as _sctl_risk
+from .systemctl import systemctl
 from .system_info import RISK_LEVEL as _si_risk
 from .system_info import system_info
 
@@ -31,6 +33,7 @@ ALL_TOOLS = [
     docker_compose,
     read_config,
     journalctl,
+    systemctl,
     run_command,
 ]
 
@@ -42,5 +45,6 @@ TOOL_RISK_LEVELS: dict[str, int] = {
     "docker_compose": _dc_risk,
     "read_config": _rc_risk,
     "journalctl": _jctl_risk,
+    "systemctl": _sctl_risk,
     "run_command": _runcmd_risk,
 }

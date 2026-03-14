@@ -51,3 +51,25 @@ class TestBackendRegistry:
         b1 = registry.get("srv")
         b2 = registry.get("srv")
         assert b1 is b2
+
+    def test_resolve_host_for_service_unique(self):
+        hosts = [
+            HostConfig(name="apps", address="10.0.0.1", services=["syncthing", "ollama"]),
+            HostConfig(name="core", address="10.0.0.2", services=["caddy"]),
+        ]
+        registry = BackendRegistry(hosts)
+        assert registry.resolve_host_for_service("syncthing") == "apps"
+        assert registry.resolve_host_for_service("caddy") == "core"
+
+    def test_resolve_host_for_service_ambiguous(self):
+        hosts = [
+            HostConfig(name="a", address="10.0.0.1", services=["nginx"]),
+            HostConfig(name="b", address="10.0.0.2", services=["nginx"]),
+        ]
+        registry = BackendRegistry(hosts)
+        assert registry.resolve_host_for_service("nginx") is None
+
+    def test_resolve_host_for_service_not_found(self):
+        hosts = [HostConfig(name="a", address="10.0.0.1", services=["syncthing"])]
+        registry = BackendRegistry(hosts)
+        assert registry.resolve_host_for_service("unknown") is None

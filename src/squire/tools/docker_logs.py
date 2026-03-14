@@ -23,7 +23,16 @@ async def docker_logs(
 
     Returns the log output as text.
     """
-    backend = get_registry().get(host)
+    registry = get_registry()
+
+    # Auto-resolve host from container name when host is defaulted to "local"
+    resolved_host = host
+    if host == "local" and hasattr(registry, "resolve_host_for_service"):
+        matched = registry.resolve_host_for_service(container)
+        if matched:
+            resolved_host = matched
+
+    backend = registry.get(resolved_host)
     cmd = ["docker", "logs", "--tail", str(tail)]
 
     if since:

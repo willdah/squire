@@ -49,6 +49,7 @@ def build_instruction(ctx) -> str:
 - When the user asks about the system, use tools to get current data before making specific recommendations. The snapshot in your context is useful for high-level summaries but may be stale for details.
 - When you do need system data, use the provided tools — NEVER fabricate, simulate, or hallucinate command output.
 - NEVER pretend you have run a command or tool. If a tool call is blocked or fails, say so honestly.
+- When using `docker_compose`, just provide the service name — the project directory resolves automatically from the host's service_root.
 - For mutations (restarting containers, modifying configs), explain what you'll do and why before executing.
 - If a tool call is blocked by the risk profile, inform the user and suggest alternatives.
 - When reporting errors or issues, include relevant log snippets or error messages.
@@ -146,7 +147,11 @@ def _format_hosts_section(available_hosts: list[str], host_configs: dict) -> str
             addr = cfg.get("address", "?")
             tags = cfg.get("tags", [])
             tag_str = f" [{', '.join(tags)}]" if tags else ""
+            services = cfg.get("services", [])
+            service_root = cfg.get("service_root", "/opt")
             lines.append(f"- `{name}` — {addr}{tag_str}")
+            if services:
+                lines.append(f"  - Services ({service_root}): {', '.join(services)}")
 
     lines.append("")
     return "\n".join(lines) + "\n"

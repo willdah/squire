@@ -22,7 +22,8 @@ async def docker_compose(
             "down" - stop and remove services
             "pull" - pull latest images
         project_dir: Path to the directory containing docker-compose.yml.
-            If not specified, uses the current directory.
+            If omitted, the compose file is resolved at `/opt/<service>/docker-compose.yml`
+            (or `<service_root>/<service>/` if the host has a custom service_root).
         service: Optional specific service name to target.
         host: Target host name (default "local"). Use a configured host name to query a remote machine.
 
@@ -32,11 +33,31 @@ async def docker_compose(
     if action not in allowed_actions:
         return f"Invalid action '{action}'. Allowed: {', '.join(sorted(allowed_actions))}"
 
-    backend = get_registry().get(host)
+    registry = get_registry()
+
+    # Auto-resolve host from service name when host is defaulted to "local"
+    resolved_host = host
+    if host == "local" and service and hasattr(registry, "resolve_host_for_service"):
+        matched = registry.resolve_host_for_service(service)
+        if matched:
+            resolved_host = matched
+
+    backend = registry.get(resolved_host)
+
+    # Auto-resolve project_dir from service name and host config
+    resolved_dir = project_dir
+    if not resolved_dir and service:
+        service_root = "/opt"
+        if hasattr(registry, "get_config"):
+            host_config = registry.get_config(resolved_host)
+            if host_config and host_config.service_root:
+                service_root = host_config.service_root
+        resolved_dir = f"{service_root}/{service}"
+
     cmd = ["docker", "compose"]
 
-    if project_dir:
-        cmd.extend(["-f", f"{project_dir}/docker-compose.yml"])
+    if resolved_dir:
+        cmd.extend(["-f", f"{resolved_dir}/docker-compose.yml"])
 
     cmd.append(action)
 
@@ -53,7 +74,8 @@ async def docker_compose(
     result = await backend.run(cmd, timeout=120.0)
 
     if result.returncode != 0:
-        return f"Error running 'docker compose {action}': {result.stderr}"
+        path_info = f" (resolved path: {resolved_dir}/docker-compose.yml)" if resolved_dir else ""
+        return f"Error running 'docker compose {action}'{path_info}: {result.stderr}"
 
     output = result.stdout.strip()
     return output if output else f"docker compose {action} completed successfully."
