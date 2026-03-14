@@ -85,6 +85,7 @@ class ApprovalModal(ModalScreen[bool]):
             yield Static(f"Tool: [bold]{self._tool_name}[/bold]", id="approval-tool-name")
             yield Static(f"Arguments:\n{args_display}", id="approval-args")
             from agent_risk_engine import RiskLevel
+
             level_label = RiskLevel(self._risk_level).label if 1 <= self._risk_level <= 5 else str(self._risk_level)
             yield Static(f"Risk level: {level_label} ({self._risk_level}/5)", id="approval-risk")
             with Horizontal(id="approval-buttons"):

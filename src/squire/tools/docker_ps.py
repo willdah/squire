@@ -23,10 +23,12 @@ async def docker_ps(all_containers: bool = True, format: str = "table", host: st
     if format == "json":
         cmd.extend(["--format", "{{json .}}"])
     else:
-        cmd.extend([
-            "--format",
-            "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.State}}\t{{.Ports}}",
-        ])
+        cmd.extend(
+            [
+                "--format",
+                "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.State}}\t{{.Ports}}",
+            ]
+        )
 
     result = await backend.run(cmd)
 

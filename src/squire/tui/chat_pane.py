@@ -79,8 +79,14 @@ class ChatPane(Static):
     """
 
     def __init__(
-        self, agent_runner=None, session=None, app_config=None,
-        db=None, notifier=None, squire_name="Rook", **kwargs,
+        self,
+        agent_runner=None,
+        session=None,
+        app_config=None,
+        db=None,
+        notifier=None,
+        squire_name="Rook",
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self._runner: InMemoryRunner | None = agent_runner
@@ -119,9 +125,7 @@ class ChatPane(Static):
         self._processing = True
         try:
             if not self._runner or not self._session:
-                self.app.call_from_thread(
-                    self._add_message, "Agent not connected. Check your configuration.", "system"
-                )
+                self.app.call_from_thread(self._add_message, "Agent not connected. Check your configuration.", "system")
                 return
 
             session_id = self._session.id
@@ -173,9 +177,7 @@ class ChatPane(Static):
                     elif part.text and event.partial:
                         response_parts.append(part.text)
                         if streaming_bubble is None:
-                            streaming_bubble = self.app.call_from_thread(
-                                self._start_streaming_bubble, part.text
-                            )
+                            streaming_bubble = self.app.call_from_thread(self._start_streaming_bubble, part.text)
                         else:
                             self.app.call_from_thread(streaming_bubble.append_text, part.text)
                     # Final aggregated text (non-streaming fallback)

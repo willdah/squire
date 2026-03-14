@@ -382,9 +382,7 @@ class TestEndToEndRiskUtilityGate:
             rule_gate=RuleGate(threshold=5),
             action_gate=RiskUtilityGate(),
         )
-        result = await ev.evaluate(
-            "tool", {}, tool_risk=3, utility=UtilityScore(level=4)
-        )
+        result = await ev.evaluate("tool", {}, tool_risk=3, utility=UtilityScore(level=4))
         assert result.decision == GateResult.ALLOWED
 
     async def test_risk_outweighs_utility_escalates(self):
@@ -394,7 +392,5 @@ class TestEndToEndRiskUtilityGate:
             rule_gate=RuleGate(threshold=5),
             action_gate=RiskUtilityGate(),
         )
-        result = await ev.evaluate(
-            "tool", {}, tool_risk=4, utility=UtilityScore(level=2)
-        )
+        result = await ev.evaluate("tool", {}, tool_risk=4, utility=UtilityScore(level=2))
         assert result.decision == GateResult.DENIED

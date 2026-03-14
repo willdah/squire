@@ -37,11 +37,15 @@ def compose_registry(mock_backend):
     """Provide a MockRegistryWithConfig and install it globally."""
     hosts = [
         HostConfig(
-            name="prod-apps-01", address="10.20.0.100", service_root="/opt",
+            name="prod-apps-01",
+            address="10.20.0.100",
+            service_root="/opt",
             services=["syncthing", "ollama", "immich"],
         ),
         HostConfig(
-            name="custom-root", address="10.20.0.200", service_root="/srv/stacks",
+            name="custom-root",
+            address="10.20.0.200",
+            service_root="/srv/stacks",
             services=["grafana"],
         ),
     ]
@@ -54,11 +58,14 @@ def compose_registry(mock_backend):
 @pytest.mark.asyncio
 async def test_auto_resolve_service_path(mock_backend, compose_registry):
     """service='syncthing' with no project_dir should resolve to /opt/syncthing."""
-    mock_backend.set_response("docker", CommandResult(
-        returncode=0,
-        stdout="syncthing restarted\n",
-        stderr="",
-    ))
+    mock_backend.set_response(
+        "docker",
+        CommandResult(
+            returncode=0,
+            stdout="syncthing restarted\n",
+            stderr="",
+        ),
+    )
 
     result = await docker_compose(action="restart", service="syncthing", host="prod-apps-01")
     assert "restarted" in result or "completed" in result
@@ -67,26 +74,30 @@ async def test_auto_resolve_service_path(mock_backend, compose_registry):
 @pytest.mark.asyncio
 async def test_explicit_project_dir_takes_precedence(mock_backend, compose_registry):
     """An explicit project_dir should be used instead of auto-resolution."""
-    mock_backend.set_response("docker", CommandResult(
-        returncode=0,
-        stdout="ok\n",
-        stderr="",
-    ))
-
-    result = await docker_compose(
-        action="ps", project_dir="/custom/path", service="syncthing", host="prod-apps-01"
+    mock_backend.set_response(
+        "docker",
+        CommandResult(
+            returncode=0,
+            stdout="ok\n",
+            stderr="",
+        ),
     )
+
+    result = await docker_compose(action="ps", project_dir="/custom/path", service="syncthing", host="prod-apps-01")
     assert result  # Should not crash
 
 
 @pytest.mark.asyncio
 async def test_auto_resolve_custom_service_root(mock_backend, compose_registry):
     """Hosts with a custom service_root should use it for auto-resolution."""
-    mock_backend.set_response("docker", CommandResult(
-        returncode=0,
-        stdout="pulled\n",
-        stderr="",
-    ))
+    mock_backend.set_response(
+        "docker",
+        CommandResult(
+            returncode=0,
+            stdout="pulled\n",
+            stderr="",
+        ),
+    )
 
     result = await docker_compose(action="pull", service="app", host="custom-root")
     assert "pulled" in result or "completed" in result
@@ -95,11 +106,14 @@ async def test_auto_resolve_custom_service_root(mock_backend, compose_registry):
 @pytest.mark.asyncio
 async def test_error_message_includes_resolved_path(mock_backend, compose_registry):
     """Error messages should include the resolved path for diagnosability."""
-    mock_backend.set_response("docker", CommandResult(
-        returncode=1,
-        stdout="",
-        stderr="no such file",
-    ))
+    mock_backend.set_response(
+        "docker",
+        CommandResult(
+            returncode=1,
+            stdout="",
+            stderr="no such file",
+        ),
+    )
 
     result = await docker_compose(action="restart", service="syncthing", host="prod-apps-01")
     assert "/opt/syncthing/docker-compose.yml" in result
@@ -108,11 +122,14 @@ async def test_error_message_includes_resolved_path(mock_backend, compose_regist
 @pytest.mark.asyncio
 async def test_no_service_no_project_dir(mock_backend, compose_registry):
     """With no service and no project_dir, no -f flag should be added."""
-    mock_backend.set_response("docker", CommandResult(
-        returncode=0,
-        stdout="NAME   STATUS\n",
-        stderr="",
-    ))
+    mock_backend.set_response(
+        "docker",
+        CommandResult(
+            returncode=0,
+            stdout="NAME   STATUS\n",
+            stderr="",
+        ),
+    )
 
     result = await docker_compose(action="ps", host="prod-apps-01")
     assert result
@@ -121,11 +138,14 @@ async def test_no_service_no_project_dir(mock_backend, compose_registry):
 @pytest.mark.asyncio
 async def test_auto_resolve_host_from_service(mock_backend, compose_registry):
     """When host is omitted but service is registered on a host, auto-resolve the host."""
-    mock_backend.set_response("docker", CommandResult(
-        returncode=0,
-        stdout="syncthing restarted\n",
-        stderr="",
-    ))
+    mock_backend.set_response(
+        "docker",
+        CommandResult(
+            returncode=0,
+            stdout="syncthing restarted\n",
+            stderr="",
+        ),
+    )
 
     # LLM forgets host — tool should resolve syncthing → prod-apps-01
     result = await docker_compose(action="restart", service="syncthing")
@@ -135,11 +155,14 @@ async def test_auto_resolve_host_from_service(mock_backend, compose_registry):
 @pytest.mark.asyncio
 async def test_auto_resolve_host_custom_service_root(mock_backend, compose_registry):
     """Host auto-resolution should also pick up the correct service_root."""
-    mock_backend.set_response("docker", CommandResult(
-        returncode=1,
-        stdout="",
-        stderr="no such file",
-    ))
+    mock_backend.set_response(
+        "docker",
+        CommandResult(
+            returncode=1,
+            stdout="",
+            stderr="no such file",
+        ),
+    )
 
     # grafana is on custom-root with service_root=/srv/stacks
     result = await docker_compose(action="restart", service="grafana")
@@ -149,11 +172,14 @@ async def test_auto_resolve_host_custom_service_root(mock_backend, compose_regis
 @pytest.mark.asyncio
 async def test_explicit_host_not_overridden(mock_backend, compose_registry):
     """When host is explicitly set (not 'local'), don't override it."""
-    mock_backend.set_response("docker", CommandResult(
-        returncode=0,
-        stdout="ok\n",
-        stderr="",
-    ))
+    mock_backend.set_response(
+        "docker",
+        CommandResult(
+            returncode=0,
+            stdout="ok\n",
+            stderr="",
+        ),
+    )
 
     # syncthing is on prod-apps-01, but user explicitly says custom-root
     result = await docker_compose(action="ps", service="syncthing", host="custom-root")
@@ -163,11 +189,14 @@ async def test_explicit_host_not_overridden(mock_backend, compose_registry):
 @pytest.mark.asyncio
 async def test_unknown_service_stays_local(mock_backend, compose_registry):
     """Service not registered on any host should stay on local."""
-    mock_backend.set_response("docker", CommandResult(
-        returncode=0,
-        stdout="ok\n",
-        stderr="",
-    ))
+    mock_backend.set_response(
+        "docker",
+        CommandResult(
+            returncode=0,
+            stdout="ok\n",
+            stderr="",
+        ),
+    )
 
     result = await docker_compose(action="ps", service="unknown-app")
     assert result

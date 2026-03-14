@@ -8,11 +8,14 @@ from squire.tools import systemctl
 
 @pytest.mark.asyncio
 async def test_allowed_action_status(mock_backend, mock_registry):
-    mock_backend.set_response("systemctl", CommandResult(
-        returncode=0,
-        stdout="● caddy.service - Caddy\n   Active: active (running)\n",
-        stderr="",
-    ))
+    mock_backend.set_response(
+        "systemctl",
+        CommandResult(
+            returncode=0,
+            stdout="● caddy.service - Caddy\n   Active: active (running)\n",
+            stderr="",
+        ),
+    )
 
     result = await systemctl(action="status", unit="caddy")
     assert "caddy" in result.lower()
@@ -20,11 +23,14 @@ async def test_allowed_action_status(mock_backend, mock_registry):
 
 @pytest.mark.asyncio
 async def test_allowed_action_restart(mock_backend, mock_registry):
-    mock_backend.set_response("systemctl", CommandResult(
-        returncode=0,
-        stdout="",
-        stderr="",
-    ))
+    mock_backend.set_response(
+        "systemctl",
+        CommandResult(
+            returncode=0,
+            stdout="",
+            stderr="",
+        ),
+    )
 
     result = await systemctl(action="restart", unit="caddy")
     assert "completed" in result
@@ -69,11 +75,14 @@ async def test_no_pager_absent_on_restart(mock_backend, mock_registry):
 @pytest.mark.asyncio
 async def test_host_parameter(mock_backend, mock_registry):
     """The host parameter should be accepted."""
-    mock_backend.set_response("systemctl", CommandResult(
-        returncode=0,
-        stdout="active\n",
-        stderr="",
-    ))
+    mock_backend.set_response(
+        "systemctl",
+        CommandResult(
+            returncode=0,
+            stdout="active\n",
+            stderr="",
+        ),
+    )
 
     result = await systemctl(action="is-active", unit="caddy", host="local")
     assert "active" in result
@@ -82,11 +91,14 @@ async def test_host_parameter(mock_backend, mock_registry):
 @pytest.mark.asyncio
 async def test_inactive_service_status(mock_backend, mock_registry):
     """systemctl status returns exit code 3 for inactive services but still has useful output."""
-    mock_backend.set_response("systemctl", CommandResult(
-        returncode=3,
-        stdout="● caddy.service - Caddy\n   Active: inactive (dead)\n",
-        stderr="",
-    ))
+    mock_backend.set_response(
+        "systemctl",
+        CommandResult(
+            returncode=3,
+            stdout="● caddy.service - Caddy\n   Active: inactive (dead)\n",
+            stderr="",
+        ),
+    )
 
     result = await systemctl(action="status", unit="caddy")
     assert "inactive" in result

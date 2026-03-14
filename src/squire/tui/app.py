@@ -63,9 +63,15 @@ class SquireApp(App):
     ]
 
     def __init__(
-        self, agent_runner=None, session=None, app_config=None,
-        db=None, notifier=None, initial_snapshot=None,
-        prior_messages=None, **kwargs,
+        self,
+        agent_runner=None,
+        session=None,
+        app_config=None,
+        db=None,
+        notifier=None,
+        initial_snapshot=None,
+        prior_messages=None,
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self._agent_runner = agent_runner

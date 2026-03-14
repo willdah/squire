@@ -25,7 +25,9 @@ class LLMConfig(BaseSettings):
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         return (
-            init_settings, env_settings, dotenv_settings,
+            init_settings,
+            env_settings,
+            dotenv_settings,
             TomlSectionSource(settings_cls, partial(get_section, "llm")),
             file_secret_settings,
         )

@@ -56,10 +56,7 @@ class CallTracker:
         if len(self._history) >= self._loop_threshold:
             tail = list(self._history)[-self._loop_threshold :]
             if len(set(tail)) == 1:
-                warnings.append(
-                    f"Possible agent loop: '{tail[0]}' called "
-                    f"{self._loop_threshold} times consecutively"
-                )
+                warnings.append(f"Possible agent loop: '{tail[0]}' called {self._loop_threshold} times consecutively")
                 adjustment += 2
 
         # High repetition ratio in the window
@@ -68,10 +65,7 @@ class CallTracker:
             name, count = counts.most_common(1)[0]
             ratio = count / len(self._history)
             if ratio > 0.7 and count > 3:
-                warnings.append(
-                    f"High repetition: '{name}' is "
-                    f"{count}/{len(self._history)} recent calls"
-                )
+                warnings.append(f"High repetition: '{name}' is {count}/{len(self._history)} recent calls")
                 adjustment += 1
 
         return SystemState(

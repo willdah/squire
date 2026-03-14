@@ -59,13 +59,15 @@ async def _collect_snapshot(host: str = "local") -> dict:
             if line and line.startswith("{"):
                 try:
                     c = json.loads(line)
-                    containers.append({
-                        "name": c.get("Names", ""),
-                        "image": c.get("Image", ""),
-                        "status": c.get("Status", ""),
-                        "state": c.get("State", ""),
-                        "ports": c.get("Ports", ""),
-                    })
+                    containers.append(
+                        {
+                            "name": c.get("Names", ""),
+                            "image": c.get("Image", ""),
+                            "status": c.get("Status", ""),
+                            "state": c.get("State", ""),
+                            "ports": c.get("Ports", ""),
+                        }
+                    )
                 except json.JSONDecodeError:
                     pass
         snapshot["containers"] = containers
@@ -217,9 +219,7 @@ async def start_chat(resume_session_id: str | None = None) -> None:
     )
 
     # Start background snapshot task
-    snapshot_task = asyncio.create_task(
-        _background_snapshots(db, db_config.snapshot_interval_minutes, tui, registry)
-    )
+    snapshot_task = asyncio.create_task(_background_snapshots(db, db_config.snapshot_interval_minutes, tui, registry))
 
     try:
         await tui.run_async()

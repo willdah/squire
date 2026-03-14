@@ -63,17 +63,13 @@ class RiskEvaluator:
         # Resolve tool_risk
         if tool_risk is None:
             if self.registry is None:
-                raise ValueError(
-                    "tool_risk must be provided when no registry is configured"
-                )
+                raise ValueError("tool_risk must be provided when no registry is configured")
             tool_risk = self.registry.get_risk(tool_name)
 
         # Layer 1: Fast static rules — short-circuit on hard deny
         rule_result = self.rule_gate.evaluate(tool_name, tool_risk)
         if rule_result == GateResult.DENIED:
-            level_label = (
-                RiskLevel(tool_risk).label if 1 <= tool_risk <= 5 else str(tool_risk)
-            )
+            level_label = RiskLevel(tool_risk).label if 1 <= tool_risk <= 5 else str(tool_risk)
             return RiskResult(
                 decision=GateResult.DENIED,
                 risk_score=RiskScore(level=tool_risk),
@@ -92,14 +88,8 @@ class RiskEvaluator:
         # Layer 4: Final decision
         final = self.action_gate.decide(rule_result, risk_score, system_state, utility)
 
-        level_label = (
-            RiskLevel(risk_score.level).label
-            if 1 <= risk_score.level <= 5
-            else str(risk_score.level)
-        )
-        reasoning = risk_score.reasoning or (
-            f"'{tool_name}' evaluated at {level_label} ({risk_score.level}/5)"
-        )
+        level_label = RiskLevel(risk_score.level).label if 1 <= risk_score.level <= 5 else str(risk_score.level)
+        reasoning = risk_score.reasoning or (f"'{tool_name}' evaluated at {level_label} ({risk_score.level}/5)")
 
         return RiskResult(
             decision=final,

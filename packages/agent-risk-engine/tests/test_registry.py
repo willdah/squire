@@ -1,6 +1,5 @@
 """Tests for ToolRegistry."""
 
-
 from agent_risk_engine.models import ToolDef
 from agent_risk_engine.registry import ToolRegistry
 

@@ -102,12 +102,15 @@ class TestTomlLoading:
         LLMConfig()
 
     def test_hosts_from_toml(self, monkeypatch):
-        self._patch_toml(monkeypatch, {
-            "hosts": [
-                {"name": "media-server", "address": "192.168.1.10", "user": "will"},
-                {"name": "nas", "address": "192.168.1.20", "user": "root", "port": 2222},
-            ]
-        })
+        self._patch_toml(
+            monkeypatch,
+            {
+                "hosts": [
+                    {"name": "media-server", "address": "192.168.1.10", "user": "will"},
+                    {"name": "nas", "address": "192.168.1.20", "user": "root", "port": 2222},
+                ]
+            },
+        )
         host_dicts = get_list_section("hosts")
         hosts = [HostConfig(**h) for h in host_dicts]
         assert len(hosts) == 2

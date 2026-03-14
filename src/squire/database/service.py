@@ -174,9 +174,7 @@ class DatabaseService:
         )
         await conn.commit()
 
-    async def get_events(
-        self, since: str, category: str | None = None, limit: int = 100
-    ) -> list[dict]:
+    async def get_events(self, since: str, category: str | None = None, limit: int = 100) -> list[dict]:
         """Retrieve events since a timestamp, optionally filtered by category."""
         conn = await self._get_conn()
         if category:

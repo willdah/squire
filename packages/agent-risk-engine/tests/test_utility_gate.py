@@ -209,8 +209,7 @@ class TestParametricSweep:
                 UtilityScore(level=utility),
             )
             assert order.index(result) >= order.index(rule_result), (
-                f"Relaxed {rule_result}→{result} "
-                f"(risk={risk}, utility={utility}, healthy={healthy})"
+                f"Relaxed {rule_result}→{result} (risk={risk}, utility={utility}, healthy={healthy})"
             )
 
     @pytest.mark.parametrize("risk", range(1, 6))
