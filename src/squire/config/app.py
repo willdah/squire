@@ -37,8 +37,12 @@ class AppConfig(BaseSettings):
         description="Name of the house this Squire serves (e.g. a family name, crest, or domain)",
     )
     squire_name: str = Field(
-        default="Rook",
-        description="A custom name for your Squire (e.g. 'Rook', 'Cedric', 'Giles')",
+        default="",
+        description="Custom name for your Squire — overrides the profile's bundled name if set",
+    )
+    squire_profile: str = Field(
+        default="",
+        description="Pre-configured Squire profile: rook, cedric, wynn",
     )
     risk_profile: str = Field(
         default="cautious",

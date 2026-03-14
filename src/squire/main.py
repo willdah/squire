@@ -121,6 +121,7 @@ async def start_chat(resume_session_id: str | None = None) -> None:
         "latest_snapshot": snapshot,
         "house": app_config.house,
         "squire_name": app_config.squire_name,
+        "squire_profile": app_config.squire_profile,
     }
 
     # Load prior messages if resuming

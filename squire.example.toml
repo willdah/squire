@@ -12,7 +12,8 @@
 # app_name = "Squire"
 # user_id = "squire-user"
 # house = ""                       # Your house name (e.g. "Ahern", "Stark", "Homestead")
-# squire_name = "Rook"             # Give your Squire a name (e.g. "Rook", "Cedric", "Giles")
+# squire_profile = ""              # Pre-configured profile: "rook", "cedric", "wynn"
+# squire_name = ""                 # Custom name (overrides profile name if set)
 # risk_profile = "cautious"        # read-only, cautious, standard, full-trust, custom
 # history_limit = 50               # Max messages in conversation context
 # max_tool_rounds = 10             # Max tool-call rounds per user message

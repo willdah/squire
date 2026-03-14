@@ -4,6 +4,8 @@ The instruction is evaluated before each LLM invocation, injecting
 live system context from the latest snapshot stored in session state.
 """
 
+from .profiles import get_profile
+
 
 def build_instruction(ctx) -> str:
     """Build the dynamic system prompt with live system context.
@@ -17,14 +19,20 @@ def build_instruction(ctx) -> str:
     risk_profile_name = ctx.state.get("risk_profile_name", "cautious")
     house = ctx.state.get("house", "")
     squire_name = ctx.state.get("squire_name", "")
+    profile_key = ctx.state.get("squire_profile", "")
+
+    profile = get_profile(profile_key) if profile_key else None
+    effective_name = squire_name or (profile.name if profile else "") or "Rook"
 
     system_context = _format_snapshot(snapshot) if snapshot else "No system snapshot available yet."
     risk_guidance = _format_risk_guidance(risk_profile_name)
 
-    identity = f"You are {squire_name}, a squire and" if squire_name else "You are Squire, a"
+    identity = f"You are {effective_name}, a squire and"
     house_context = f" You are in the service of House {house}." if house else ""
+    personality_block = f"\n## Personality\n{profile.personality}\n" if profile else ""
 
     return f"""{identity} homelab management agent.{house_context} You help users monitor, troubleshoot, and maintain their homelab infrastructure.
+{personality_block}
 
 ## Current System State
 {system_context}
