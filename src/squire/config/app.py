@@ -32,6 +32,10 @@ class AppConfig(BaseSettings):
         default="squire-user",
         description="User ID for ADK session management",
     )
+    house: str = Field(
+        default="",
+        description="Name of the house this Squire serves (e.g. a family name, crest, or domain)",
+    )
     risk_profile: str = Field(
         default="cautious",
         description="Risk profile controlling tool permissions: read-only, cautious, standard, full-trust, custom",

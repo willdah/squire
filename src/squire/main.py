@@ -119,6 +119,7 @@ async def start_chat(resume_session_id: str | None = None) -> None:
         "risk_profile": risk_profile.model_dump(),
         "risk_profile_name": app_config.risk_profile,
         "latest_snapshot": snapshot,
+        "house": app_config.house,
     }
 
     # Load prior messages if resuming

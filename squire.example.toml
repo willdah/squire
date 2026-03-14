@@ -11,6 +11,7 @@
 # --- Top-level application settings ---
 # app_name = "Squire"
 # user_id = "squire-user"
+# house = ""                       # Your house name (e.g. "Ahern", "Stark", "Homestead")
 # risk_profile = "cautious"        # read-only, cautious, standard, full-trust, custom
 # history_limit = 50               # Max messages in conversation context
 # max_tool_rounds = 10             # Max tool-call rounds per user message
