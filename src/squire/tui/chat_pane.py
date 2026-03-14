@@ -1,19 +1,20 @@
 """Chat pane — message list and input widget for the Squire TUI."""
 
 import json
+import logging
 
+from google.adk.agents.run_config import RunConfig, StreamingMode
+from google.adk.runners import InMemoryRunner
+from google.genai import types
 from rich.markup import escape
 from textual import work
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Input, Static
 
-from google.adk.agents.run_config import RunConfig, StreamingMode
-from google.adk.runners import InMemoryRunner
-from google.genai import types
-
 from ..database.service import DatabaseService
 from ..notifications.webhook import WebhookDispatcher
+
 
 class MessageBubble(Static):
     """A single chat message displayed in the conversation."""
@@ -209,7 +210,7 @@ class ChatPane(Static):
             try:
                 await self._db.save_message(session_id=session_id, role=role, content=content)
             except Exception:
-                pass  # Don't break chat if DB fails
+                logging.getLogger(__name__).debug("Failed to persist message", exc_info=True)
 
     async def _log_event(
         self,
@@ -230,7 +231,7 @@ class ChatPane(Static):
                     details=details,
                 )
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Failed to log event to DB", exc_info=True)
         if self._notifier:
             try:
                 await self._notifier.dispatch(
@@ -241,7 +242,7 @@ class ChatPane(Static):
                     details=details,
                 )
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Failed to dispatch webhook", exc_info=True)
 
     def _add_message(self, content: str, role: str) -> None:
         """Add a message bubble to the chat display."""

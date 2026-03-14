@@ -4,10 +4,12 @@ The instruction is evaluated before each LLM invocation, injecting
 live system context from the latest snapshot stored in session state.
 """
 
+from google.adk.agents import ReadonlyContext
+
 from .profiles import get_profile
 
 
-def build_instruction(ctx) -> str:
+def build_instruction(ctx: ReadonlyContext) -> str:
     """Build the dynamic system prompt with live system context.
 
     Called by the ADK Agent before each LLM invocation.

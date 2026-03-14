@@ -8,7 +8,21 @@ version = "0.1.0"
 description = "An AI agent that monitors and manages your homelab."
 authors = [{name = "Will Ahern"}]
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Framework :: Pydantic :: 2",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Systems Administration",
+    "Typing :: Typed",
+]
 dependencies = [
     "google-adk>=1.23.0",
     "litellm>=1.81.1",
@@ -43,7 +57,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 
 [tool.uv.sources]
-agent-risk-engine = { path = "../agent-risk-engine", editable = true }
+agent-risk-engine = { path = "packages/agent-risk-engine", editable = true }
 
 [tool.ruff]
 line-length = 120

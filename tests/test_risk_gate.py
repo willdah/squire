@@ -1,12 +1,11 @@
 """Tests for the layered risk evaluation system."""
 
 import pytest
-
 from agent_risk_engine import (
     GateResult,
+    NullStateMonitor,
     PassthroughActionGate,
     PassthroughAnalyzer,
-    NullStateMonitor,
     RiskEvaluator,
     RiskLevel,
     RuleGate,

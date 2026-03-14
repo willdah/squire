@@ -48,6 +48,7 @@ async def _collect_snapshot(host: str = "local") -> dict:
         snapshot["uptime"] = sys_data.get("uptime", "")
         snapshot["disk_usage_raw"] = sys_data.get("disk_usage", "")
     except Exception:
+        logging.getLogger(__name__).debug("Failed to collect system_info for %s", host, exc_info=True)
         snapshot["hostname"] = host if host != "local" else "unknown"
 
     try:
@@ -69,6 +70,7 @@ async def _collect_snapshot(host: str = "local") -> dict:
                     pass
         snapshot["containers"] = containers
     except Exception:
+        logging.getLogger(__name__).debug("Failed to collect docker_ps for %s", host, exc_info=True)
         snapshot["containers"] = []
 
     return snapshot
@@ -85,6 +87,7 @@ async def _collect_all_snapshots(registry: BackendRegistry) -> dict[str, dict]:
         try:
             return (host, await _collect_snapshot(host=host))
         except Exception:
+            logging.getLogger(__name__).debug("Failed to collect snapshot for %s", host, exc_info=True)
             return (host, {"hostname": host, "error": "unreachable", "containers": []})
 
     tasks = [_collect_one(h) for h in registry.host_names]

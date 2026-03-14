@@ -65,7 +65,6 @@ class BackendRegistry:
         return matches[0] if len(matches) == 1 else None
 
     async def close_all(self) -> None:
-        """Close all SSH connections."""
+        """Close all backend connections."""
         for backend in self._backends.values():
-            if hasattr(backend, "close"):
-                await backend.close()
+            await backend.close()

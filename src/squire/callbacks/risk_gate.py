@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from agent_risk_engine import GateResult, RiskEvaluator, RuleGate
 from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
 
-from agent_risk_engine import GateResult, RiskEvaluator, RuleGate
 from ..tools import TOOL_RISK_LEVELS
 from ..tui.approval_bridge import approval_bridge
 

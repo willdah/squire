@@ -37,7 +37,7 @@ async def docker_compose(
 
     # Auto-resolve host from service name when host is defaulted to "local"
     resolved_host = host
-    if host == "local" and service and hasattr(registry, "resolve_host_for_service"):
+    if host == "local" and service:
         matched = registry.resolve_host_for_service(service)
         if matched:
             resolved_host = matched
@@ -48,10 +48,9 @@ async def docker_compose(
     resolved_dir = project_dir
     if not resolved_dir and service:
         service_root = "/opt"
-        if hasattr(registry, "get_config"):
-            host_config = registry.get_config(resolved_host)
-            if host_config and host_config.service_root:
-                service_root = host_config.service_root
+        host_config = registry.get_config(resolved_host)
+        if host_config and host_config.service_root:
+            service_root = host_config.service_root
         resolved_dir = f"{service_root}/{service}"
 
     cmd = ["docker", "compose"]

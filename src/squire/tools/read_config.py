@@ -1,13 +1,21 @@
 """read_config tool — read configuration files with path allowlist enforcement."""
 
 import os
+import posixpath
 
 from ..config import SecurityConfig
 from ._registry import get_registry
 
 RISK_LEVEL = 2  # Low
 
-_security_config = SecurityConfig()
+_security_config: SecurityConfig | None = None
+
+
+def _get_security_config() -> SecurityConfig:
+    global _security_config
+    if _security_config is None:
+        _security_config = SecurityConfig()
+    return _security_config
 
 
 async def read_config(path: str, head: int | None = None, host: str = "local") -> str:
@@ -25,16 +33,17 @@ async def read_config(path: str, head: int | None = None, host: str = "local") -
     Returns the file contents as text.
     """
     # Resolve and check allowlist
-    allowlist = _security_config.config_allowlist
+    security = _get_security_config()
+    allowlist = security.config_allowlist
     if allowlist:
         if host == "local":
             # Local: resolve symlinks then check prefix
             resolved = os.path.realpath(path)
             allowed = any(resolved.startswith(os.path.realpath(d)) for d in allowlist)
         else:
-            # Remote: string prefix match on raw path (can't resolve remote symlinks)
-            resolved = path
-            allowed = any(path.startswith(d) for d in allowlist)
+            # Remote: normalize then string prefix match (can't resolve remote symlinks)
+            resolved = posixpath.normpath(path)
+            allowed = any(resolved.startswith(posixpath.normpath(d)) for d in allowlist)
 
         if not allowed:
             return (

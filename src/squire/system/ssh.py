@@ -60,11 +60,16 @@ class SSHBackend:
             except (OSError, asyncssh.ConnectionLost):
                 self._conn = None
 
-        known_hosts: str | None = None
+        known_hosts: str | list | None = None
         if self._strict_host_keys:
-            # Use the user's known_hosts file
+            # Use the user's known_hosts file; reject connections if it's missing
             known_hosts_path = Path.home() / ".ssh" / "known_hosts"
-            known_hosts = str(known_hosts_path) if known_hosts_path.exists() else ()
+            if not known_hosts_path.exists():
+                raise FileNotFoundError(
+                    f"Strict host key checking is enabled but {known_hosts_path} does not exist. "
+                    "Create the file or disable strict_host_keys in your host configuration."
+                )
+            known_hosts = str(known_hosts_path)
         else:
             known_hosts = None
 

@@ -4,7 +4,6 @@ import pytest
 
 from squire.config.hosts import HostConfig
 from squire.system.backend import CommandResult
-from squire.system.registry import BackendRegistry
 from squire.tools import docker_compose
 from squire.tools._registry import set_registry
 

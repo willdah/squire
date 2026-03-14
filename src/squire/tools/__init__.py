@@ -2,6 +2,15 @@
 
 Each tool module exports an async function and a RISK_LEVEL constant.
 Tools are registered here for the agent and the risk gate callback.
+
+Tool conventions:
+- Every tool function is async, accepts an optional ``host`` parameter
+  (default ``"local"``), and returns a ``str``.
+- Errors are returned as descriptive strings (never raised) so the LLM
+  can relay them to the user. Only use exceptions for truly unexpected
+  failures that should surface as system errors.
+- Each module sets a module-level ``RISK_LEVEL`` int (1–5) used by the
+  risk gate callback to decide whether user approval is needed.
 """
 
 from ._registry import get_registry as get_registry
@@ -20,10 +29,10 @@ from .read_config import RISK_LEVEL as _rc_risk
 from .read_config import read_config
 from .run_command import RISK_LEVEL as _runcmd_risk
 from .run_command import run_command
-from .systemctl import RISK_LEVEL as _sctl_risk
-from .systemctl import systemctl
 from .system_info import RISK_LEVEL as _si_risk
 from .system_info import system_info
+from .systemctl import RISK_LEVEL as _sctl_risk
+from .systemctl import systemctl
 
 ALL_TOOLS = [
     system_info,

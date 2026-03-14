@@ -26,7 +26,7 @@ class LocalBackend:
         )
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.communicate()
             return CommandResult(
@@ -60,3 +60,6 @@ class LocalBackend:
             content: Content to write.
         """
         Path(path).write_text(content)
+
+    async def close(self) -> None:
+        """No-op for local backend."""

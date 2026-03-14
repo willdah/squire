@@ -7,7 +7,14 @@ from ._registry import get_registry
 
 RISK_LEVEL = 5  # Critical
 
-_security_config = SecurityConfig()
+_security_config: SecurityConfig | None = None
+
+
+def _get_security_config() -> SecurityConfig:
+    global _security_config
+    if _security_config is None:
+        _security_config = SecurityConfig()
+    return _security_config
 
 
 async def run_command(command: str, timeout: float = 30.0, host: str = "local") -> str:
@@ -34,15 +41,17 @@ async def run_command(command: str, timeout: float = 30.0, host: str = "local") 
 
     base_cmd = parts[0]
 
+    security = _get_security_config()
+
     # Check denylist first
-    if base_cmd in _security_config.command_denylist:
+    if base_cmd in security.command_denylist:
         return f"DENIED: '{base_cmd}' is on the command denylist. Tell the user this command is not allowed."
 
     # Check allowlist
-    if _security_config.command_allowlist and base_cmd not in _security_config.command_allowlist:
+    if security.command_allowlist and base_cmd not in security.command_allowlist:
         return (
             f"DENIED: '{base_cmd}' is not on the command allowlist. Tell the user this command is not allowed.\n"
-            f"Allowed commands: {', '.join(sorted(_security_config.command_allowlist))}"
+            f"Allowed commands: {', '.join(sorted(security.command_allowlist))}"
         )
 
     backend = get_registry().get(host)

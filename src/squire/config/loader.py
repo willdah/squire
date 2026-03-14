@@ -59,7 +59,7 @@ def get_list_section(name: str) -> list[dict]:
 def get_top_level() -> dict:
     """Get top-level keys (everything not in a sub-table)."""
     data = _load_toml()
-    return {k: v for k, v in data.items() if not isinstance(v, dict)}
+    return {k: v for k, v in data.items() if not isinstance(v, (dict, list))}
 
 
 class TomlSectionSource(PydanticBaseSettingsSource):
