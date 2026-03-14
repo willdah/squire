@@ -12,7 +12,7 @@
 - **Interactive TUI** — Chat with your Squire in a terminal interface with status panel, log viewer, and approval modals
 - **Built-in tools** — System info, Docker management, log reading, network diagnostics, config inspection, and guarded command execution — all targetable at any configured host
 - **Risk profiles** — Control what your Squire can do: `read-only`, `cautious`, `standard`, `full-trust`, or `custom`
-- **Multi-model LLM** — Powered by [LiteLLM](https://github.com/BerriAI/litellm) — use Ollama, Anthropic, OpenAI, Gemini, or any supported provider
+- **Multi-model LLM** — Powered by [LiteLLM](https://github.com/BerriAI/litellm) — use Ollama, Anthropic, OpenAI, Gemini, or any supported provider. Latest functionality tested with Qwen 3.5 (35B) on Ollama
 - **Session persistence** — SQLite-backed chat history with session resume
 - **Webhook notifications** — Get alerts on Discord, ntfy.sh, or any HTTP endpoint
 - **Personality profiles** — Choose from built-in squire personalities (Rook, Cedric, Wynn) or create your own

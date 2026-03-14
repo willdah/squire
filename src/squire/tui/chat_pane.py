@@ -15,7 +15,6 @@ from google.genai import types
 from ..database.service import DatabaseService
 from ..notifications.webhook import WebhookDispatcher
 
-
 class MessageBubble(Static):
     """A single chat message displayed in the conversation."""
 
@@ -141,6 +140,9 @@ class ChatPane(Static):
                     continue
 
                 for part in event.content.parts:
+                    # Skip model thinking/reasoning parts (e.g. Qwen 3.5)
+                    if getattr(part, "thought", False):
+                        continue
                     # Log tool calls to activity log (not chat)
                     if part.function_call:
                         fc = part.function_call
@@ -255,6 +257,7 @@ class ChatPane(Static):
         prefix = f"[bold]{self._squire_name}[/bold]: "
         display_text = f"{prefix}{escape(first_chunk)}"
         bubble = MessageBubble(display_text, role="assistant", prefix=prefix)
+        bubble._raw_text = first_chunk
         bubble.add_class("streaming")
         message_list = self.query_one("#message-list")
         message_list.mount(bubble)
