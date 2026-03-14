@@ -50,6 +50,24 @@
 # approve = ["docker_compose"]     # Always prompt, even if threshold would allow
 # deny = ["run_command"]           # Hard block, never execute
 
+# --- Remote hosts (multi-machine management) ---
+# Define remote hosts that Squire can connect to via SSH.
+# Each tool accepts an optional `host` parameter to target a specific machine.
+#
+# [[hosts]]
+# name = "media-server"
+# address = "192.168.1.10"
+# user = "will"
+# # port = 22                        # SSH port (default 22)
+# # key_file = "~/.ssh/id_ed25519"   # SSH key (uses ssh-agent if omitted)
+# # tags = ["media", "docker"]       # Optional tags for grouping
+#
+# [[hosts]]
+# name = "nas"
+# address = "192.168.1.20"
+# user = "will"
+# port = 2222
+
 # --- Notifications ---
 [notifications]
 # enabled = false

@@ -4,6 +4,8 @@ Each tool module exports an async function and a RISK_LEVEL constant.
 Tools are registered here for the agent and the risk gate callback.
 """
 
+from ._registry import get_registry as get_registry
+from ._registry import set_registry as set_registry
 from .docker_compose import RISK_LEVEL as _dc_risk
 from .docker_compose import docker_compose
 from .docker_logs import RISK_LEVEL as _dl_risk

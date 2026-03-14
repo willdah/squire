@@ -2,6 +2,7 @@
 
 import json
 
+from rich.markup import escape
 from textual import work
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
@@ -46,15 +47,16 @@ class MessageBubble(Static):
     }
     """
 
-    def __init__(self, content: str, role: str = "assistant", **kwargs):
+    def __init__(self, content: str, role: str = "assistant", prefix: str = "", **kwargs):
         super().__init__(content, **kwargs)
         self.add_class(role)
-        self._raw_content = content
+        self._prefix = prefix
+        self._raw_text = ""
 
     def append_text(self, text: str) -> None:
         """Append streaming text to this bubble and refresh the display."""
-        self._raw_content += text
-        self.update(self._raw_content)
+        self._raw_text += text
+        self.update(self._prefix + escape(self._raw_text))
 
 
 class ChatPane(Static):
@@ -76,21 +78,22 @@ class ChatPane(Static):
     }
     """
 
-    def __init__(self, agent_runner=None, session=None, app_config=None, db=None, notifier=None, **kwargs):
+    def __init__(self, agent_runner=None, session=None, app_config=None, db=None, notifier=None, squire_name="Rook", **kwargs):
         super().__init__(**kwargs)
         self._runner: InMemoryRunner | None = agent_runner
         self._session = session
         self._app_config = app_config
         self._db: DatabaseService | None = db
         self._notifier: WebhookDispatcher | None = notifier
+        self._squire_name = squire_name
         self._processing = False
 
     def compose(self) -> ComposeResult:
         yield VerticalScroll(id="message-list")
-        yield Input(placeholder="Ask Squire something...", id="chat-input")
+        yield Input(placeholder=f"Ask {self._squire_name} something...", id="chat-input")
 
     def on_mount(self) -> None:
-        self._add_message("Squire is ready. Ask me about your system.", "system")
+        self._add_message(f"{self._squire_name} is ready. Ask me about your system.", "system")
         self.query_one("#chat-input", Input).focus()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
@@ -240,16 +243,18 @@ class ChatPane(Static):
 
     def _add_message(self, content: str, role: str) -> None:
         """Add a message bubble to the chat display."""
-        prefix = {"user": "You", "assistant": "Squire", "system": ""}.get(role, "")
-        display_text = f"[bold]{prefix}[/bold]: {content}" if prefix else content
+        prefix = {"user": "You", "assistant": self._squire_name, "system": ""}.get(role, "")
+        safe_content = escape(content)
+        display_text = f"[bold]{prefix}[/bold]: {safe_content}" if prefix else safe_content
         message_list = self.query_one("#message-list")
         message_list.mount(MessageBubble(display_text, role=role))
         message_list.scroll_end(animate=False)
 
     def _start_streaming_bubble(self, first_chunk: str) -> MessageBubble:
         """Mount a streaming assistant bubble and return it for incremental updates."""
-        display_text = f"[bold]Squire[/bold]: {first_chunk}"
-        bubble = MessageBubble(display_text, role="assistant")
+        prefix = f"[bold]{self._squire_name}[/bold]: "
+        display_text = f"{prefix}{escape(first_chunk)}"
+        bubble = MessageBubble(display_text, role="assistant", prefix=prefix)
         bubble.add_class("streaming")
         message_list = self.query_one("#message-list")
         message_list.mount(bubble)

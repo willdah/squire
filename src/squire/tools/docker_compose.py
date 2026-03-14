@@ -1,16 +1,15 @@
 """docker_compose tool — read and manage Docker Compose stacks."""
 
-from ..system import LocalBackend
+from ._registry import get_registry
 
 RISK_LEVEL = 3  # Moderate
-
-_backend = LocalBackend()
 
 
 async def docker_compose(
     action: str = "ps",
     project_dir: str | None = None,
     service: str | None = None,
+    host: str = "local",
 ) -> str:
     """Manage Docker Compose stacks.
 
@@ -25,6 +24,7 @@ async def docker_compose(
         project_dir: Path to the directory containing docker-compose.yml.
             If not specified, uses the current directory.
         service: Optional specific service name to target.
+        host: Target host name (default "local"). Use a configured host name to query a remote machine.
 
     Returns the command output as text.
     """
@@ -32,6 +32,7 @@ async def docker_compose(
     if action not in allowed_actions:
         return f"Invalid action '{action}'. Allowed: {', '.join(sorted(allowed_actions))}"
 
+    backend = get_registry().get(host)
     cmd = ["docker", "compose"]
 
     if project_dir:
@@ -49,7 +50,7 @@ async def docker_compose(
     if service:
         cmd.append(service)
 
-    result = await _backend.run(cmd, timeout=120.0)
+    result = await backend.run(cmd, timeout=120.0)
 
     if result.returncode != 0:
         return f"Error running 'docker compose {action}': {result.stderr}"

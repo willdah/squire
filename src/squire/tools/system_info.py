@@ -3,48 +3,62 @@
 import json
 import platform
 
-from ..system import LocalBackend
+from ._registry import get_registry
 
 RISK_LEVEL = 1  # Info
 
-_backend = LocalBackend()
+
+def _get_os_type(backend, host: str) -> str:
+    """Determine the OS type for the target host."""
+    if host == "local":
+        return platform.system()
+    return getattr(backend, "os_type", "Linux")
 
 
-async def system_info() -> str:
+async def system_info(host: str = "local") -> str:
     """Get system information including OS, CPU usage, memory usage, disk usage, and uptime.
+
+    Args:
+        host: Target host name (default "local"). Use a configured host name to query a remote machine.
 
     Returns a JSON object with hostname, os, cpu_percent, memory, disk, and uptime fields.
     """
-    info: dict = {
-        "hostname": platform.node(),
-        "os": f"{platform.system()} {platform.release()}",
-        "architecture": platform.machine(),
-    }
+    backend = get_registry().get(host)
+    os_type = _get_os_type(backend, host)
 
-    # CPU usage (Linux: /proc/stat is complex, use top/vmstat; macOS: sysctl)
-    if platform.system() == "Darwin":
-        cpu_result = await _backend.run(
-            ["sysctl", "-n", "hw.ncpu"],
-        )
+    info: dict = {}
+
+    # Hostname — use the backend for remote hosts
+    if host == "local":
+        info["hostname"] = platform.node()
+        info["os"] = f"{platform.system()} {platform.release()}"
+        info["architecture"] = platform.machine()
+    else:
+        hostname_result = await backend.run(["hostname"])
+        info["hostname"] = hostname_result.stdout.strip() or host
+
+        os_result = await backend.run(["uname", "-sr"])
+        info["os"] = os_result.stdout.strip() or os_type
+
+        arch_result = await backend.run(["uname", "-m"])
+        info["architecture"] = arch_result.stdout.strip()
+
+    # CPU usage
+    if os_type == "Darwin":
+        cpu_result = await backend.run(["sysctl", "-n", "hw.ncpu"])
         info["cpu_cores"] = cpu_result.stdout.strip()
 
-        # CPU usage via ps
-        cpu_usage = await _backend.run(
-            ["ps", "-A", "-o", "%cpu"],
-        )
+        cpu_usage = await backend.run(["ps", "-A", "-o", "%cpu"])
         try:
             values = [float(line.strip()) for line in cpu_usage.stdout.strip().split("\n")[1:] if line.strip()]
             info["cpu_percent"] = round(sum(values), 1)
         except (ValueError, IndexError):
             info["cpu_percent"] = -1
     else:
-        # Linux: use nproc and /proc/stat or top
-        cpu_result = await _backend.run(["nproc"])
+        cpu_result = await backend.run(["nproc"])
         info["cpu_cores"] = cpu_result.stdout.strip()
 
-        cpu_usage = await _backend.run(
-            ["grep", "cpu ", "/proc/stat"],
-        )
+        cpu_usage = await backend.run(["grep", "cpu ", "/proc/stat"])
         try:
             fields = cpu_usage.stdout.strip().split()
             idle = int(fields[4])
@@ -54,15 +68,15 @@ async def system_info() -> str:
             info["cpu_percent"] = -1
 
     # Memory
-    if platform.system() == "Darwin":
-        mem_result = await _backend.run(["sysctl", "-n", "hw.memsize"])
+    if os_type == "Darwin":
+        mem_result = await backend.run(["sysctl", "-n", "hw.memsize"])
         try:
             total_bytes = int(mem_result.stdout.strip())
             info["memory_total_mb"] = round(total_bytes / (1024 * 1024))
         except ValueError:
             info["memory_total_mb"] = -1
 
-        vm_result = await _backend.run(["vm_stat"])
+        vm_result = await backend.run(["vm_stat"])
         try:
             lines = vm_result.stdout.strip().split("\n")
             page_size = 16384  # default on Apple Silicon
@@ -80,7 +94,7 @@ async def system_info() -> str:
         except (ValueError, IndexError):
             info["memory_used_mb"] = -1
     else:
-        mem_result = await _backend.run(["free", "-m"])
+        mem_result = await backend.run(["free", "-m"])
         try:
             lines = mem_result.stdout.strip().split("\n")
             parts = lines[1].split()
@@ -91,12 +105,12 @@ async def system_info() -> str:
             info["memory_used_mb"] = -1
 
     # Disk usage
-    df_result = await _backend.run(["df", "-h"])
+    df_result = await backend.run(["df", "-h"])
     if df_result.returncode == 0:
         info["disk_usage"] = df_result.stdout.strip()
 
     # Uptime
-    uptime_result = await _backend.run(["uptime"])
+    uptime_result = await backend.run(["uptime"])
     if uptime_result.returncode == 0:
         info["uptime"] = uptime_result.stdout.strip()
 

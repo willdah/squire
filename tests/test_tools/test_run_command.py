@@ -12,8 +12,7 @@ _mod = sys.modules["squire.tools.run_command"]
 
 
 @pytest.mark.asyncio
-async def test_allowed_command(mock_backend, monkeypatch):
-    monkeypatch.setattr(_mod, "_backend", mock_backend)
+async def test_allowed_command(mock_backend, mock_registry, monkeypatch):
     monkeypatch.setattr(_mod, "_paths_config", PathsConfig())
     mock_backend.set_response("ping", CommandResult(returncode=0, stdout="PING ok\n", stderr=""))
 
@@ -47,3 +46,13 @@ async def test_empty_command():
 async def test_invalid_syntax():
     result = await run_command("echo 'unclosed")
     assert "Invalid" in result or "syntax" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_run_command_with_host_param(mock_backend, mock_registry, monkeypatch):
+    """The host parameter should be accepted."""
+    monkeypatch.setattr(_mod, "_paths_config", PathsConfig())
+    mock_backend.set_response("ping", CommandResult(returncode=0, stdout="PING ok\n", stderr=""))
+
+    result = await run_command("ping -c 1 localhost", host="local")
+    assert "PING ok" in result

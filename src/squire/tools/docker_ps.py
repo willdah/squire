@@ -1,21 +1,21 @@
 """docker_ps tool — list Docker containers with status."""
 
-from ..system import LocalBackend
+from ._registry import get_registry
 
 RISK_LEVEL = 1  # Info
 
-_backend = LocalBackend()
 
-
-async def docker_ps(all_containers: bool = True, format: str = "table") -> str:
+async def docker_ps(all_containers: bool = True, format: str = "table", host: str = "local") -> str:
     """List Docker containers with their status, image, ports, and names.
 
     Args:
         all_containers: Include stopped containers (default True).
         format: Output format - "table" for human-readable, "json" for structured data.
+        host: Target host name (default "local"). Use a configured host name to query a remote machine.
 
     Returns container listing as text or JSON.
     """
+    backend = get_registry().get(host)
     cmd = ["docker", "ps"]
     if all_containers:
         cmd.append("-a")
@@ -28,7 +28,7 @@ async def docker_ps(all_containers: bool = True, format: str = "table") -> str:
             "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.State}}\t{{.Ports}}",
         ])
 
-    result = await _backend.run(cmd)
+    result = await backend.run(cmd)
 
     if result.returncode != 0:
         return f"Error running docker ps: {result.stderr}"

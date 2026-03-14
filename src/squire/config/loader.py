@@ -49,6 +49,13 @@ def get_section(name: str) -> dict:
     return section if isinstance(section, dict) else {}
 
 
+def get_list_section(name: str) -> list[dict]:
+    """Get a TOML array-of-tables section by name, returning [] if not found."""
+    data = _load_toml()
+    section = data.get(name, [])
+    return section if isinstance(section, list) else []
+
+
 def get_top_level() -> dict:
     """Get top-level keys (everything not in a sub-table)."""
     data = _load_toml()

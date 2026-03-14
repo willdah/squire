@@ -1,10 +1,8 @@
 """journalctl tool — read systemd journal logs."""
 
-from ..system import LocalBackend
+from ._registry import get_registry
 
 RISK_LEVEL = 2  # Low
-
-_backend = LocalBackend()
 
 
 async def journalctl(
@@ -13,6 +11,7 @@ async def journalctl(
     since: str | None = None,
     priority: str | None = None,
     grep: str | None = None,
+    host: str = "local",
 ) -> str:
     """Read systemd journal logs.
 
@@ -22,9 +21,11 @@ async def journalctl(
         since: Only show entries since this time (e.g., "1 hour ago", "today", "2024-01-01").
         priority: Filter by priority level (e.g., "err", "warning", "info").
         grep: Filter log lines containing this string.
+        host: Target host name (default "local"). Use a configured host name to query a remote machine.
 
     Returns journal log output as text.
     """
+    backend = get_registry().get(host)
     cmd = ["journalctl", "--no-pager", "-n", str(lines)]
 
     if unit:
@@ -39,7 +40,7 @@ async def journalctl(
     if grep:
         cmd.extend(["-g", grep])
 
-    result = await _backend.run(cmd, timeout=30.0)
+    result = await backend.run(cmd, timeout=30.0)
 
     if result.returncode != 0:
         # journalctl may not be available on macOS

@@ -3,15 +3,14 @@
 import os
 
 from ..config import PathsConfig
-from ..system import LocalBackend
+from ._registry import get_registry
 
 RISK_LEVEL = 2  # Low
 
-_backend = LocalBackend()
 _paths_config = PathsConfig()
 
 
-async def read_config(path: str, head: int | None = None) -> str:
+async def read_config(path: str, head: int | None = None, host: str = "local") -> str:
     """Read a configuration file from the system.
 
     The file must be within one of the allowed directories configured in
@@ -21,24 +20,33 @@ async def read_config(path: str, head: int | None = None) -> str:
     Args:
         path: Absolute path to the configuration file.
         head: Optional number of lines to return from the beginning of the file.
+        host: Target host name (default "local"). Use a configured host name to query a remote machine.
 
     Returns the file contents as text.
     """
-    # Resolve to absolute path and normalize
-    resolved = os.path.realpath(path)
-
-    # Check allowlist
+    # Resolve and check allowlist
     allowlist = _paths_config.config_allowlist
     if allowlist:
-        allowed = any(resolved.startswith(os.path.realpath(allowed_dir)) for allowed_dir in allowlist)
+        if host == "local":
+            # Local: resolve symlinks then check prefix
+            resolved = os.path.realpath(path)
+            allowed = any(resolved.startswith(os.path.realpath(d)) for d in allowlist)
+        else:
+            # Remote: string prefix match on raw path (can't resolve remote symlinks)
+            resolved = path
+            allowed = any(path.startswith(d) for d in allowlist)
+
         if not allowed:
             return (
                 f"Access denied: '{path}' is not within any allowed directory.\n"
                 f"Allowed directories: {', '.join(allowlist)}"
             )
+    else:
+        resolved = path if host != "local" else os.path.realpath(path)
 
+    backend = get_registry().get(host)
     try:
-        content = await _backend.read_file(resolved)
+        content = await backend.read_file(resolved)
     except FileNotFoundError:
         return f"File not found: {path}"
     except PermissionError:

@@ -8,8 +8,9 @@
 
 ## Features
 
+- **Multi-machine management** — Connect to remote hosts over SSH and manage your entire homelab from one Squire instance
 - **Interactive TUI** — Chat with your Squire in a terminal interface with status panel, log viewer, and approval modals
-- **Built-in tools** — System info, Docker management, log reading, network diagnostics, config inspection, and guarded command execution
+- **Built-in tools** — System info, Docker management, log reading, network diagnostics, config inspection, and guarded command execution — all targetable at any configured host
 - **Risk profiles** — Control what your Squire can do: `read-only`, `cautious`, `standard`, `full-trust`, or `custom`
 - **Multi-model LLM** — Powered by [LiteLLM](https://github.com/BerriAI/litellm) — use Ollama, Anthropic, OpenAI, Gemini, or any supported provider
 - **Session persistence** — SQLite-backed chat history with session resume
@@ -76,6 +77,28 @@ squire_name = "Gareth"       # Custom name (overrides profile name)
 - **Rook** — Watchful and methodical. Concise responses, confirms before acting.
 - **Cedric** — Confident and proactive. Anticipates problems, takes initiative.
 - **Wynn** — Thoughtful and educational. Explains reasoning, teaches as it goes.
+
+### Remote Hosts
+
+Connect Squire to other machines in your homelab via SSH:
+
+```toml
+[[hosts]]
+name = "media-server"
+address = "192.168.1.10"
+user = "will"
+
+[[hosts]]
+name = "nas"
+address = "192.168.1.20"
+user = "will"
+port = 2222
+tags = ["storage"]
+```
+
+Squire connects lazily on first use via SSH key authentication (uses your ssh-agent or a configured `key_file`). Once configured, just mention a host by name in conversation — Squire will target the right machine automatically. Every tool also accepts an explicit `host` parameter.
+
+Remote tool calls receive a +1 risk bump, so `docker_ps` on a remote host becomes risk level 2 instead of 1.
 
 ## CLI
 

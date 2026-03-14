@@ -3,15 +3,14 @@
 import shlex
 
 from ..config import PathsConfig
-from ..system import LocalBackend
+from ._registry import get_registry
 
 RISK_LEVEL = 5  # Critical
 
-_backend = LocalBackend()
 _paths_config = PathsConfig()
 
 
-async def run_command(command: str, timeout: float = 30.0) -> str:
+async def run_command(command: str, timeout: float = 30.0, host: str = "local") -> str:
     """Execute a shell command on the system.
 
     This is a guarded tool — the command is checked against an allowlist
@@ -21,6 +20,7 @@ async def run_command(command: str, timeout: float = 30.0) -> str:
     Args:
         command: The shell command to execute (e.g., "ping -c 4 8.8.8.8").
         timeout: Maximum seconds to wait for the command to complete (default 30).
+        host: Target host name (default "local"). Use a configured host name to query a remote machine.
 
     Returns the command output (stdout + stderr) as text.
     """
@@ -45,7 +45,8 @@ async def run_command(command: str, timeout: float = 30.0) -> str:
             f"Allowed commands: {', '.join(sorted(_paths_config.command_allowlist))}"
         )
 
-    result = await _backend.run(parts, timeout=min(timeout, 120.0))
+    backend = get_registry().get(host)
+    result = await backend.run(parts, timeout=min(timeout, 120.0))
 
     output_parts = []
     if result.stdout:

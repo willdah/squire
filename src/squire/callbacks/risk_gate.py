@@ -34,6 +34,11 @@ async def risk_gate_callback(
     tool_name = tool.name
     tool_risk = TOOL_RISK_LEVELS.get(tool_name, 5)
 
+    # Bump risk for remote host operations
+    host = args.get("host", "local")
+    if host != "local":
+        tool_risk = min(tool_risk + 1, 5)
+
     # Load the risk evaluator from session state
     evaluator = tool_context.state.get("risk_evaluator")
     if not evaluator or not isinstance(evaluator, RiskEvaluator):

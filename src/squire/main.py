@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 
+from agent_risk_engine import RiskEvaluator, RuleGate
 from dotenv import load_dotenv
 from google.adk.apps import App
 from google.adk.events.event import Event
@@ -12,9 +13,12 @@ from google.genai import types
 
 from .agents import create_squire_agent
 from .config import AppConfig, DatabaseConfig, LLMConfig, NotificationsConfig, RiskOverridesConfig
+from .config.hosts import HostConfig
+from .config.loader import get_list_section
 from .database.service import DatabaseService
 from .notifications.webhook import WebhookDispatcher
-from agent_risk_engine import RiskEvaluator, RuleGate
+from .system.registry import BackendRegistry
+from .tools import set_registry
 from .tools.docker_ps import docker_ps
 from .tools.system_info import system_info
 from .tui.app import SquireApp
@@ -23,15 +27,18 @@ from .tui.app import SquireApp
 load_dotenv()
 
 
-async def _collect_snapshot() -> dict:
-    """Run system_info and docker_ps to build an initial snapshot.
+async def _collect_snapshot(host: str = "local") -> dict:
+    """Run system_info and docker_ps to build a snapshot for a single host.
+
+    Args:
+        host: Target host name (default "local").
 
     Returns a dict suitable for the system prompt and status panel.
     """
     snapshot = {}
 
     try:
-        sys_raw = await system_info()
+        sys_raw = await system_info(host=host)
         sys_data = json.loads(sys_raw)
         snapshot["hostname"] = sys_data.get("hostname", "unknown")
         snapshot["os_info"] = sys_data.get("os", "")
@@ -41,10 +48,10 @@ async def _collect_snapshot() -> dict:
         snapshot["uptime"] = sys_data.get("uptime", "")
         snapshot["disk_usage_raw"] = sys_data.get("disk_usage", "")
     except Exception:
-        snapshot["hostname"] = "unknown"
+        snapshot["hostname"] = host if host != "local" else "unknown"
 
     try:
-        containers_raw = await docker_ps(all_containers=True, format="json")
+        containers_raw = await docker_ps(all_containers=True, format="json", host=host)
         containers = []
         for line in containers_raw.strip().split("\n"):
             line = line.strip()
@@ -67,7 +74,30 @@ async def _collect_snapshot() -> dict:
     return snapshot
 
 
-async def _background_snapshots(db: DatabaseService, interval_minutes: int, tui: SquireApp) -> None:
+async def _collect_all_snapshots(registry: BackendRegistry) -> dict[str, dict]:
+    """Collect snapshots from all configured hosts in parallel.
+
+    Returns a dict keyed by host name, where each value is a snapshot dict.
+    Unreachable hosts get an error entry instead of raising.
+    """
+
+    async def _collect_one(host: str) -> tuple[str, dict]:
+        try:
+            return (host, await _collect_snapshot(host=host))
+        except Exception:
+            return (host, {"hostname": host, "error": "unreachable", "containers": []})
+
+    tasks = [_collect_one(h) for h in registry.host_names]
+    results = await asyncio.gather(*tasks)
+    return dict(results)
+
+
+async def _background_snapshots(
+    db: DatabaseService,
+    interval_minutes: int,
+    tui: SquireApp,
+    registry: BackendRegistry,
+) -> None:
     """Periodically collect and persist system snapshots.
 
     Also updates the TUI status panel and ADK session state.
@@ -75,8 +105,9 @@ async def _background_snapshots(db: DatabaseService, interval_minutes: int, tui:
     while True:
         await asyncio.sleep(interval_minutes * 60)
         try:
-            snapshot = await _collect_snapshot()
-            await db.save_snapshot(snapshot)
+            snapshot = await _collect_all_snapshots(registry)
+            if "local" in snapshot:
+                await db.save_snapshot(snapshot["local"])
             # Update TUI status panel from main thread
             tui.call_from_thread(tui.update_status_snapshot, snapshot)
         except Exception:
@@ -93,6 +124,12 @@ async def start_chat(resume_session_id: str | None = None) -> None:
     llm_config = LLMConfig()
     db_config = DatabaseConfig()
     notif_config = NotificationsConfig()
+
+    # Load host configuration and create backend registry
+    host_dicts = get_list_section("hosts")
+    hosts = [HostConfig(**h) for h in host_dicts]
+    registry = BackendRegistry(hosts)
+    set_registry(registry)
 
     # Initialize database and webhook dispatcher
     db = DatabaseService(db_config.path)
@@ -114,9 +151,11 @@ async def start_chat(resume_session_id: str | None = None) -> None:
     )
     risk_evaluator = RiskEvaluator(rule_gate=rule_gate)
 
-    # Collect initial system snapshot
-    snapshot = await _collect_snapshot()
-    await db.save_snapshot(snapshot)
+    # Collect initial system snapshots (all hosts in parallel)
+    snapshot = await _collect_all_snapshots(registry)
+    # Save the local snapshot to DB (primary host)
+    if "local" in snapshot:
+        await db.save_snapshot(snapshot["local"])
 
     session_state = {
         "risk_evaluator": risk_evaluator,
@@ -125,6 +164,8 @@ async def start_chat(resume_session_id: str | None = None) -> None:
         "house": app_config.house,
         "squire_name": app_config.squire_name,
         "squire_profile": app_config.squire_profile,
+        "available_hosts": registry.host_names,
+        "host_configs": {name: cfg.model_dump() for name, cfg in registry.host_configs.items()},
     }
 
     # Load prior messages if resuming
@@ -174,7 +215,7 @@ async def start_chat(resume_session_id: str | None = None) -> None:
 
     # Start background snapshot task
     snapshot_task = asyncio.create_task(
-        _background_snapshots(db, db_config.snapshot_interval_minutes, tui)
+        _background_snapshots(db, db_config.snapshot_interval_minutes, tui, registry)
     )
 
     try:
@@ -185,6 +226,7 @@ async def start_chat(resume_session_id: str | None = None) -> None:
             await snapshot_task
         except asyncio.CancelledError:
             pass
+        await registry.close_all()
         await notifier.close()
         await db.close()
 

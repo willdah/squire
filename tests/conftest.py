@@ -1,7 +1,5 @@
 """Shared test fixtures for Squire tests."""
 
-from pathlib import Path
-
 import pytest
 import pytest_asyncio
 
@@ -18,6 +16,7 @@ class MockBackend:
     def __init__(self):
         self._responses: dict[str, CommandResult] = {}
         self._files: dict[str, str] = {}
+        self.os_type: str = "Linux"
 
     def set_response(self, cmd_prefix: str, result: CommandResult) -> None:
         """Register a canned response for a command prefix (e.g. 'docker')."""
@@ -48,10 +47,35 @@ class MockBackend:
         self._files[path] = content
 
 
+class MockRegistry:
+    """A mock BackendRegistry that returns a MockBackend for all hosts."""
+
+    def __init__(self, backend: MockBackend):
+        self._backend = backend
+
+    def get(self, host: str = "local"):
+        return self._backend
+
+    @property
+    def host_names(self) -> list[str]:
+        return ["local"]
+
+
 @pytest.fixture
 def mock_backend():
     """Provide a fresh MockBackend instance."""
     return MockBackend()
+
+
+@pytest.fixture
+def mock_registry(mock_backend):
+    """Provide a MockRegistry wrapping the mock_backend and install it globally."""
+    from squire.tools._registry import set_registry
+
+    registry = MockRegistry(mock_backend)
+    set_registry(registry)
+    yield registry
+    set_registry(None)
 
 
 @pytest_asyncio.fixture

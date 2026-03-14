@@ -5,6 +5,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Header
 
+from ..instructions.profiles import get_profile
 from .approval_bridge import ApprovalRequest, approval_bridge
 from .approval_modal import ApprovalModal
 from .chat_pane import ChatPane
@@ -12,10 +13,21 @@ from .log_viewer import LogViewer
 from .status_panel import StatusPanel
 
 
+def _resolve_squire_name(app_config) -> str:
+    """Resolve the effective squire name from config and profile."""
+    if app_config:
+        if app_config.squire_name:
+            return app_config.squire_name
+        if app_config.squire_profile:
+            profile = get_profile(app_config.squire_profile)
+            if profile:
+                return profile.name
+    return "Rook"
+
+
 class SquireApp(App):
     """Main Textual application for Squire."""
 
-    TITLE = "Squire"
     SUB_TITLE = "Homelab Agent"
     CSS = """
     #main-container {
@@ -55,6 +67,8 @@ class SquireApp(App):
         self._agent_runner = agent_runner
         self._session = session
         self._app_config = app_config
+        self._squire_name = _resolve_squire_name(app_config)
+        self.title = self._squire_name
         self._db = db
         self._notifier = notifier
         self._initial_snapshot = initial_snapshot
@@ -71,6 +85,7 @@ class SquireApp(App):
                     app_config=self._app_config,
                     db=self._db,
                     notifier=self._notifier,
+                    squire_name=self._squire_name,
                     id="chat-pane",
                 )
                 yield LogViewer(id="log-viewer")

@@ -45,29 +45,47 @@ class StatusPanel(Static):
         """Update the status panel with fresh snapshot data.
 
         Args:
-            snapshot: A SystemSnapshot dict.
+            snapshot: Either a single-host snapshot dict or a multi-host dict
+                keyed by host name.
         """
         content = self.query_one("#status-content")
         content.remove_children()
 
+        # Detect multi-host snapshot
+        if snapshot and all(isinstance(v, dict) for v in snapshot.values()):
+            sections = []
+            for host_name, host_snapshot in snapshot.items():
+                sections.append(self._format_host(host_name, host_snapshot))
+            display_text = "\n\n".join(sections) if sections else "No data yet."
+        else:
+            # Legacy single-host snapshot
+            display_text = self._format_host("local", snapshot)
+
+        content.mount(Static(display_text, classes="status-section"))
+
+    @staticmethod
+    def _format_host(host_name: str, snapshot: dict) -> str:
+        """Format a single host's snapshot for the status panel."""
         parts = []
 
-        if hostname := snapshot.get("hostname"):
-            parts.append(f"[bold]Host:[/bold] {hostname}")
+        if snapshot.get("error"):
+            parts.append(f"[bold]{host_name}:[/bold] [red]{snapshot['error']}[/red]")
+            return "\n".join(parts)
+
+        hostname = snapshot.get("hostname", host_name)
+        parts.append(f"[bold]{hostname}:[/bold]")
 
         cpu = snapshot.get("cpu_percent", 0)
         mem_used = snapshot.get("memory_used_mb", 0)
         mem_total = snapshot.get("memory_total_mb", 0)
         if mem_total > 0:
-            parts.append(f"[bold]CPU:[/bold] {cpu:.1f}%")
-            parts.append(f"[bold]Mem:[/bold] {mem_used:.0f}/{mem_total:.0f}MB")
+            parts.append(f"  CPU: {cpu:.1f}% | Mem: {mem_used:.0f}/{mem_total:.0f}MB")
 
         if containers := snapshot.get("containers", []):
             running = sum(1 for c in containers if c.get("state") == "running")
-            parts.append(f"\n[bold]Containers:[/bold] {running}/{len(containers)}")
+            parts.append(f"  Containers: {running}/{len(containers)}")
             for c in containers[:10]:
                 icon = "+" if c.get("state") == "running" else "-"
-                parts.append(f"  {icon} {c.get('name', '?')}")
+                parts.append(f"    {icon} {c.get('name', '?')}")
 
-        display_text = "\n".join(parts) if parts else "No data yet."
-        content.mount(Static(display_text, classes="status-section"))
+        return "\n".join(parts) if parts else f"[bold]{host_name}:[/bold] No data."

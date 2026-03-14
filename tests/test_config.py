@@ -1,7 +1,8 @@
 """Tests for configuration classes."""
 
 import squire.config.loader as loader_mod
-from squire.config import AppConfig, DatabaseConfig, LLMConfig, NotificationsConfig, PathsConfig
+from squire.config import AppConfig, DatabaseConfig, HostConfig, LLMConfig, NotificationsConfig, PathsConfig
+from squire.config.loader import get_list_section
 
 
 class TestAppConfig:
@@ -97,3 +98,45 @@ class TestTomlLoading:
         # Should not raise
         AppConfig()
         LLMConfig()
+
+    def test_hosts_from_toml(self, monkeypatch):
+        self._patch_toml(monkeypatch, {
+            "hosts": [
+                {"name": "media-server", "address": "192.168.1.10", "user": "will"},
+                {"name": "nas", "address": "192.168.1.20", "user": "root", "port": 2222},
+            ]
+        })
+        host_dicts = get_list_section("hosts")
+        hosts = [HostConfig(**h) for h in host_dicts]
+        assert len(hosts) == 2
+        assert hosts[0].name == "media-server"
+        assert hosts[0].address == "192.168.1.10"
+        assert hosts[0].user == "will"
+        assert hosts[0].port == 22  # default
+        assert hosts[1].port == 2222
+
+    def test_hosts_empty_when_missing(self, monkeypatch):
+        self._patch_toml(monkeypatch, {})
+        host_dicts = get_list_section("hosts")
+        assert host_dicts == []
+
+
+class TestHostConfig:
+    def test_defaults(self):
+        host = HostConfig(name="test", address="10.0.0.1")
+        assert host.user == "root"
+        assert host.port == 22
+        assert host.key_file is None
+        assert host.tags == []
+
+    def test_full_config(self):
+        host = HostConfig(
+            name="srv",
+            address="10.0.0.1",
+            user="admin",
+            port=2222,
+            key_file="~/.ssh/id_ed25519",
+            tags=["docker", "media"],
+        )
+        assert host.name == "srv"
+        assert host.tags == ["docker", "media"]

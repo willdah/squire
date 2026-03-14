@@ -20,12 +20,15 @@ def build_instruction(ctx) -> str:
     house = ctx.state.get("house", "")
     squire_name = ctx.state.get("squire_name", "")
     profile_key = ctx.state.get("squire_profile", "")
+    available_hosts = ctx.state.get("available_hosts", ["local"])
+    host_configs = ctx.state.get("host_configs", {})
 
     profile = get_profile(profile_key) if profile_key else None
     effective_name = squire_name or (profile.name if profile else "") or "Rook"
 
     system_context = _format_snapshot(snapshot) if snapshot else "No system snapshot available yet."
     risk_guidance = _format_risk_guidance(risk_threshold)
+    hosts_section = _format_hosts_section(available_hosts, host_configs)
 
     identity = f"You are {effective_name}, a squire and"
     house_context = f" You are in the service of House {house}." if house else ""
@@ -52,14 +55,34 @@ def build_instruction(ctx) -> str:
 
 ## Risk Threshold: {risk_threshold}/5
 {risk_guidance}
-
+{hosts_section}
 ## Current System State
 {system_context}
 """
 
 
 def _format_snapshot(snapshot: dict) -> str:
-    """Format a SystemSnapshot dict into a readable summary for the system prompt."""
+    """Format a snapshot dict into a readable summary for the system prompt.
+
+    Accepts either a single-host dict (legacy) or a multi-host dict keyed by host name.
+    """
+    # Detect multi-host snapshot: keys are host names mapping to dicts
+    if snapshot and all(isinstance(v, dict) for v in snapshot.values()):
+        parts = []
+        for host_name, host_snapshot in snapshot.items():
+            label = f"### {host_name}"
+            if host_snapshot.get("error"):
+                parts.append(f"{label}\n*{host_snapshot['error']}*")
+            else:
+                parts.append(f"{label}\n{_format_single_host_snapshot(host_snapshot)}")
+        return "\n\n".join(parts) if parts else "System information not yet collected."
+
+    # Legacy single-host snapshot
+    return _format_single_host_snapshot(snapshot)
+
+
+def _format_single_host_snapshot(snapshot: dict) -> str:
+    """Format a single host's snapshot dict into a readable summary."""
     parts = []
 
     if hostname := snapshot.get("hostname"):
@@ -101,7 +124,32 @@ def _format_snapshot(snapshot: dict) -> str:
             container_lines.append(f"  - {name}: {state} ({image})")
         parts.append(f"**Containers** ({len(containers)}):\n" + "\n".join(container_lines))
 
-    return "\n".join(parts) if parts else "System information not yet collected."
+    return "\n".join(parts) if parts else "No data available."
+
+
+def _format_hosts_section(available_hosts: list[str], host_configs: dict) -> str:
+    """Format the available hosts section for the system prompt."""
+    if len(available_hosts) <= 1:
+        return ""
+
+    lines = ["## Available Hosts"]
+    lines.append(
+        "Every tool accepts an optional `host` parameter. "
+        "Use the host name below to target a remote machine. "
+        "Default is `local` (this machine).\n"
+    )
+    for name in available_hosts:
+        if name == "local":
+            lines.append("- `local` — this machine")
+        else:
+            cfg = host_configs.get(name, {})
+            addr = cfg.get("address", "?")
+            tags = cfg.get("tags", [])
+            tag_str = f" [{', '.join(tags)}]" if tags else ""
+            lines.append(f"- `{name}` — {addr}{tag_str}")
+
+    lines.append("")
+    return "\n".join(lines) + "\n"
 
 
 def _format_risk_guidance(threshold: int) -> str:
