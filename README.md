@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="docs/assets/squire_mascot.png" alt="Squire" width="200">
   <h1>Squire</h1>
+  <img src="docs/assets/squire_logo_wide.png" alt="Squire" width="100%">
   <p><strong>Your homelab's faithful attendant.</strong></p>
 </div>
 
