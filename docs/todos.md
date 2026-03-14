@@ -5,8 +5,7 @@
 - [ ] Should users be able to name their Squire? This could add a personalized touch and enhance the medieval theme
 
 ## Bugs
-- [ ] Fix denylist enforcement in `run_command` — `rm` is not being blocked despite being on the denylist
-- [ ] Fix `test_defaults` assertion in `test_config.py` (expects `rm` in denylist)
+- [x] Fix test isolation — tests were picking up local `squire.toml` instead of using defaults
 
 ## Documentation
 - [ ] Expand README with usage guide, configuration examples, and TUI screenshots

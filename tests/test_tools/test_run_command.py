@@ -22,13 +22,17 @@ async def test_allowed_command(mock_backend, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_denied_command():
+async def test_denied_command(monkeypatch):
+    config = PathsConfig(command_denylist=["rm"], command_allowlist=[])
+    monkeypatch.setattr(_mod, "_paths_config", config)
     result = await run_command("rm -rf /")
     assert "Blocked" in result or "denylist" in result
 
 
 @pytest.mark.asyncio
-async def test_unlisted_command():
+async def test_unlisted_command(monkeypatch):
+    config = PathsConfig(command_allowlist=["ping"], command_denylist=[])
+    monkeypatch.setattr(_mod, "_paths_config", config)
     result = await run_command("curl http://example.com")
     assert "not on the allowlist" in result
 

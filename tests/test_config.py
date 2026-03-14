@@ -32,12 +32,14 @@ class TestDatabaseConfig:
 
 
 class TestPathsConfig:
-    def test_defaults(self):
+    def test_defaults(self, monkeypatch):
+        monkeypatch.setattr(loader_mod, "_cached", {})
         config = PathsConfig()
         assert "ping" in config.command_allowlist
         assert "rm" in config.command_denylist
 
-    def test_config_allowlist_empty_by_default(self):
+    def test_config_allowlist_empty_by_default(self, monkeypatch):
+        monkeypatch.setattr(loader_mod, "_cached", {})
         config = PathsConfig()
         assert config.config_allowlist == []
 
