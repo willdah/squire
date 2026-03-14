@@ -6,7 +6,8 @@ from squire.config.loader import get_list_section
 
 
 class TestAppConfig:
-    def test_defaults(self):
+    def test_defaults(self, monkeypatch):
+        monkeypatch.setattr(loader_mod, "_cached", {})
         config = AppConfig()
         assert config.app_name == "Squire"
         assert config.risk_threshold == "cautious"
@@ -14,6 +15,7 @@ class TestAppConfig:
         assert config.max_tool_rounds == 10
 
     def test_env_override(self, monkeypatch):
+        monkeypatch.setattr(loader_mod, "_cached", {})
         monkeypatch.setenv("SQUIRE_RISK_THRESHOLD", "full-trust")
         config = AppConfig()
         assert config.risk_threshold == "full-trust"

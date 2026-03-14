@@ -36,12 +36,12 @@ async def run_command(command: str, timeout: float = 30.0, host: str = "local") 
 
     # Check denylist first
     if base_cmd in _security_config.command_denylist:
-        return f"Blocked: '{base_cmd}' is on the command denylist."
+        return f"DENIED: '{base_cmd}' is on the command denylist. Tell the user this command is not allowed."
 
     # Check allowlist
     if _security_config.command_allowlist and base_cmd not in _security_config.command_allowlist:
         return (
-            f"Command '{base_cmd}' is not on the allowlist.\n"
+            f"DENIED: '{base_cmd}' is not on the command allowlist. Tell the user this command is not allowed.\n"
             f"Allowed commands: {', '.join(sorted(_security_config.command_allowlist))}"
         )
 

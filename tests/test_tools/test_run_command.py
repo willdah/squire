@@ -25,7 +25,7 @@ async def test_denied_command(monkeypatch):
     config = SecurityConfig(command_denylist=["rm"], command_allowlist=[])
     monkeypatch.setattr(_mod, "_security_config", config)
     result = await run_command("rm -rf /")
-    assert "Blocked" in result or "denylist" in result
+    assert "DENIED" in result
 
 
 @pytest.mark.asyncio
@@ -33,7 +33,7 @@ async def test_unlisted_command(monkeypatch):
     config = SecurityConfig(command_allowlist=["ping"], command_denylist=[])
     monkeypatch.setattr(_mod, "_security_config", config)
     result = await run_command("curl http://example.com")
-    assert "not on the allowlist" in result
+    assert "DENIED" in result
 
 
 @pytest.mark.asyncio
