@@ -15,9 +15,9 @@
 
 ## Features
 - [x] Revamp risk system: layered architecture (RuleGate → ToolAnalyzer → StateMonitor → ActionGate) with integer 1-5 risk levels, framework-agnostic `squire.risk` package, stub layers ready for future implementation
-- [ ] SSH/remote backend — implement `SSHBackend` to manage remote machines via the `SystemBackend` protocol
-- [ ] Streaming LLM responses in the TUI (currently buffered until complete)
-- [ ] More tools: package management (`apt`, `brew`), service management (`systemctl`), backup status
+- [ ] Streaming LLM responses — the TUI experience improves dramatically when tokens appear as they arrive rather than all at once
+- [ ] More tools — `systemctl` and package management (`apt`, `brew`) would make Squire genuinely useful for daily homelab ops; also backup status
+- [ ] SSH/remote backend — unlocks multi-machine management, which is the real power move for a homelab agent. Implement `SSHBackend` via the `SystemBackend` protocol
 - [ ] Web UI or HTTP API for browser/mobile access alongside the TUI
 
 ## Infrastructure

@@ -7,6 +7,7 @@ from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Input, Static
 
+from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 
@@ -39,11 +40,21 @@ class MessageBubble(Static):
         color: $text-muted;
         text-style: italic;
     }
+
+    MessageBubble.streaming {
+        border-left: thick $warning;
+    }
     """
 
     def __init__(self, content: str, role: str = "assistant", **kwargs):
         super().__init__(content, **kwargs)
         self.add_class(role)
+        self._raw_content = content
+
+    def append_text(self, text: str) -> None:
+        """Append streaming text to this bubble and refresh the display."""
+        self._raw_content += text
+        self.update(self._raw_content)
 
 
 class ChatPane(Static):
@@ -114,11 +125,14 @@ class ChatPane(Static):
 
             message = types.Content(parts=[types.Part(text=user_text)])
             response_parts = []
+            streaming_bubble = None
+            run_config = RunConfig(streaming_mode=StreamingMode.SSE)
 
             async for event in self._runner.run_async(
                 user_id=self._app_config.user_id if self._app_config else "squire-user",
                 session_id=session_id,
                 new_message=message,
+                run_config=run_config,
             ):
                 if not event.content or not event.content.parts:
                     continue
@@ -139,6 +153,8 @@ class ChatPane(Static):
                             tool_name=fc.name,
                             details=json.dumps(fc.args or {}),
                         )
+                        # Reset streaming bubble — tool calls interrupt the response
+                        streaming_bubble = None
                     # Show tool results as system messages + log viewer
                     elif part.function_response:
                         fr = part.function_response
@@ -146,12 +162,28 @@ class ChatPane(Static):
                         result_text = f"Tool result ({fr.name}): {preview}"
                         self.app.call_from_thread(self._add_message, result_text, "system")
                         self.app.call_from_thread(self.app.add_log_entry, result_text, "tool-result")
-                    # Collect final text response
-                    elif part.text and event.is_final_response():
+                    # Stream partial text tokens into the live bubble
+                    elif part.text and event.partial:
+                        response_parts.append(part.text)
+                        if streaming_bubble is None:
+                            streaming_bubble = self.app.call_from_thread(
+                                self._start_streaming_bubble, part.text
+                            )
+                        else:
+                            self.app.call_from_thread(streaming_bubble.append_text, part.text)
+                    # Final aggregated text (non-streaming fallback)
+                    elif part.text and event.is_final_response() and streaming_bubble is None:
                         response_parts.append(part.text)
 
-            response_text = "\n".join(response_parts) if response_parts else "No response from agent."
-            self.app.call_from_thread(self._add_message, response_text, "assistant")
+            # Finalize the streaming bubble or show the buffered response
+            if streaming_bubble is not None:
+                self.app.call_from_thread(self._finalize_streaming_bubble, streaming_bubble)
+            elif response_parts:
+                self.app.call_from_thread(self._add_message, "".join(response_parts), "assistant")
+            else:
+                self.app.call_from_thread(self._add_message, "No response from agent.", "system")
+
+            response_text = "".join(response_parts)
 
             # Persist assistant response
             await self._persist_message(session_id, "assistant", response_text)
@@ -215,6 +247,21 @@ class ChatPane(Static):
         message_list = self.query_one("#message-list")
         message_list.mount(MessageBubble(display_text, role=role))
         message_list.scroll_end(animate=False)
+
+    def _start_streaming_bubble(self, first_chunk: str) -> MessageBubble:
+        """Mount a streaming assistant bubble and return it for incremental updates."""
+        display_text = f"[bold]Squire[/bold]: {first_chunk}"
+        bubble = MessageBubble(display_text, role="assistant")
+        bubble.add_class("streaming")
+        message_list = self.query_one("#message-list")
+        message_list.mount(bubble)
+        message_list.scroll_end(animate=False)
+        return bubble
+
+    def _finalize_streaming_bubble(self, bubble: MessageBubble) -> None:
+        """Mark a streaming bubble as complete."""
+        bubble.remove_class("streaming")
+        self.query_one("#message-list").scroll_end(animate=False)
 
     def restore_messages(self, messages: list[dict]) -> None:
         """Replay prior messages into the chat display for a resumed session."""
