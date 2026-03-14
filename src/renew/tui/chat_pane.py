@@ -11,6 +11,7 @@ from google.adk.runners import InMemoryRunner
 from google.genai import types
 
 from ..database.service import DatabaseService
+from ..notifications.webhook import WebhookDispatcher
 
 
 class MessageBubble(Static):
@@ -64,12 +65,13 @@ class ChatPane(Static):
     }
     """
 
-    def __init__(self, agent_runner=None, session=None, app_config=None, db=None, **kwargs):
+    def __init__(self, agent_runner=None, session=None, app_config=None, db=None, notifier=None, **kwargs):
         super().__init__(**kwargs)
         self._runner: InMemoryRunner | None = agent_runner
         self._session = session
         self._app_config = app_config
         self._db: DatabaseService | None = db
+        self._notifier: WebhookDispatcher | None = notifier
         self._processing = False
 
     def compose(self) -> ComposeResult:
@@ -161,6 +163,7 @@ class ChatPane(Static):
             error_text = f"Error: {e}"
             self.app.call_from_thread(self._add_message, error_text, "system")
             self.app.call_from_thread(self.app.add_log_entry, error_text, "error")
+            await self._log_event(session_id, "error", str(e))
         finally:
             self._processing = False
 
@@ -180,10 +183,21 @@ class ChatPane(Static):
         tool_name: str | None = None,
         details: str | None = None,
     ) -> None:
-        """Log an event to the database if available."""
+        """Log an event to the database and dispatch webhook notifications."""
         if self._db:
             try:
                 await self._db.log_event(
+                    category=category,
+                    summary=summary,
+                    session_id=session_id,
+                    tool_name=tool_name,
+                    details=details,
+                )
+            except Exception:
+                pass
+        if self._notifier:
+            try:
+                await self._notifier.dispatch(
                     category=category,
                     summary=summary,
                     session_id=session_id,

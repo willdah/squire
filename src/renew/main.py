@@ -10,8 +10,9 @@ from google.adk.runners import InMemoryRunner
 from google.genai import types
 
 from .agents import create_renew_agent
-from .config import AppConfig, DatabaseConfig, LLMConfig
+from .config import AppConfig, DatabaseConfig, LLMConfig, NotificationsConfig
 from .database.service import DatabaseService
+from .notifications.webhook import WebhookDispatcher
 from .schemas.risk import RiskProfile
 from .tools.docker_ps import docker_ps
 from .tools.system_info import system_info
@@ -90,9 +91,11 @@ async def start_chat(resume_session_id: str | None = None) -> None:
     app_config = AppConfig()
     llm_config = LLMConfig()
     db_config = DatabaseConfig()
+    notif_config = NotificationsConfig()
 
-    # Initialize database
+    # Initialize database and webhook dispatcher
     db = DatabaseService(db_config.path)
+    notifier = WebhookDispatcher(notif_config)
 
     # Build the agent and ADK runner
     agent = create_renew_agent(app_config=app_config, llm_config=llm_config)
@@ -157,6 +160,7 @@ async def start_chat(resume_session_id: str | None = None) -> None:
         session=session,
         app_config=app_config,
         db=db,
+        notifier=notifier,
         initial_snapshot=snapshot,
         prior_messages=prior_messages if prior_messages else None,
     )
@@ -170,6 +174,7 @@ async def start_chat(resume_session_id: str | None = None) -> None:
         await tui.run_async()
     finally:
         snapshot_task.cancel()
+        await notifier.close()
         await db.close()
 
 

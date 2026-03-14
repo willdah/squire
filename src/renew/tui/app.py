@@ -48,12 +48,13 @@ class RenewApp(App):
         Binding("ctrl+l", "clear_chat", "Clear", show=True),
     ]
 
-    def __init__(self, agent_runner=None, session=None, app_config=None, db=None, initial_snapshot=None, prior_messages=None, **kwargs):
+    def __init__(self, agent_runner=None, session=None, app_config=None, db=None, notifier=None, initial_snapshot=None, prior_messages=None, **kwargs):
         super().__init__(**kwargs)
         self._agent_runner = agent_runner
         self._session = session
         self._app_config = app_config
         self._db = db
+        self._notifier = notifier
         self._initial_snapshot = initial_snapshot
         self._prior_messages = prior_messages
 
@@ -67,6 +68,7 @@ class RenewApp(App):
                     session=self._session,
                     app_config=self._app_config,
                     db=self._db,
+                    notifier=self._notifier,
                     id="chat-pane",
                 )
                 yield LogViewer(id="log-viewer")
