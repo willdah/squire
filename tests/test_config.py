@@ -8,14 +8,14 @@ class TestAppConfig:
     def test_defaults(self):
         config = AppConfig()
         assert config.app_name == "Squire"
-        assert config.risk_profile == "cautious"
+        assert config.risk_threshold == "cautious"
         assert config.history_limit == 50
         assert config.max_tool_rounds == 10
 
     def test_env_override(self, monkeypatch):
-        monkeypatch.setenv("SQUIRE_RISK_PROFILE", "full-trust")
+        monkeypatch.setenv("SQUIRE_RISK_THRESHOLD", "full-trust")
         config = AppConfig()
-        assert config.risk_profile == "full-trust"
+        assert config.risk_threshold == "full-trust"
 
 
 class TestLLMConfig:
@@ -59,9 +59,9 @@ class TestTomlLoading:
         monkeypatch.setattr(loader_mod, "_cached", data)
 
     def test_app_config_from_toml(self, monkeypatch):
-        self._patch_toml(monkeypatch, {"risk_profile": "full-trust", "history_limit": 100})
+        self._patch_toml(monkeypatch, {"risk_threshold": "full-trust", "history_limit": 100})
         config = AppConfig()
-        assert config.risk_profile == "full-trust"
+        assert config.risk_threshold == "full-trust"
         assert config.history_limit == 100
 
     def test_llm_config_from_toml(self, monkeypatch):
@@ -87,10 +87,10 @@ class TestTomlLoading:
 
     def test_env_overrides_toml(self, monkeypatch):
         """Env vars should take precedence over TOML values."""
-        self._patch_toml(monkeypatch, {"risk_profile": "full-trust"})
-        monkeypatch.setenv("SQUIRE_RISK_PROFILE", "read-only")
+        self._patch_toml(monkeypatch, {"risk_threshold": "full-trust"})
+        monkeypatch.setenv("SQUIRE_RISK_THRESHOLD", "read-only")
         config = AppConfig()
-        assert config.risk_profile == "read-only"
+        assert config.risk_threshold == "read-only"
 
     def test_unknown_toml_keys_ignored(self, monkeypatch):
         self._patch_toml(monkeypatch, {"bogus_key": "value", "llm": {"bogus_nested": 42}})

@@ -5,7 +5,7 @@ import shlex
 from ..config import PathsConfig
 from ..system import LocalBackend
 
-RISK_LEVEL = "full"
+RISK_LEVEL = 5  # Critical
 
 _backend = LocalBackend()
 _paths_config = PathsConfig()

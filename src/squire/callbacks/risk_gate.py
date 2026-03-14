@@ -1,8 +1,7 @@
-"""Risk gate callback — enforces risk profiles on tool execution.
+"""Risk gate callback — ADK adapter for the risk evaluation pipeline.
 
-Wired into the ADK Agent as a before_tool_callback. Checks the active
-risk profile and either allows, blocks, or requests approval for each
-tool invocation.
+Wired into the ADK Agent as a before_tool_callback. Translates between
+the framework-agnostic RiskEvaluator and ADK's callback signature.
 """
 
 from __future__ import annotations
@@ -12,7 +11,7 @@ from typing import Any
 from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
 
-from ..schemas.risk import GateResult, RiskProfile
+from agent_risk_engine import GateResult, RiskEvaluator, RuleGate
 from ..tools import TOOL_RISK_LEVELS
 from ..tui.approval_bridge import approval_bridge
 
@@ -22,9 +21,7 @@ async def risk_gate_callback(
     args: dict[str, Any],
     tool_context: ToolContext,
 ) -> dict | None:
-    """ADK before_tool_callback that enforces the active risk profile.
-
-    Signature: Callable[[BaseTool, dict[str, Any], ToolContext], Optional[dict]]
+    """ADK before_tool_callback that runs the risk evaluation pipeline.
 
     Args:
         tool: The ADK BaseTool instance about to be executed.
@@ -35,24 +32,20 @@ async def risk_gate_callback(
         None to allow execution, or a dict response to block it.
     """
     tool_name = tool.name
-    risk_level = TOOL_RISK_LEVELS.get(tool_name, "full")
+    tool_risk = TOOL_RISK_LEVELS.get(tool_name, 5)
 
-    # Load risk profile from session state
-    profile_data = tool_context.state.get("risk_profile")
-    if not profile_data:
-        profile = RiskProfile(name="cautious")
-    elif isinstance(profile_data, dict):
-        profile = RiskProfile.model_validate(profile_data)
-    else:
-        profile = profile_data
+    # Load the risk evaluator from session state
+    evaluator = tool_context.state.get("risk_evaluator")
+    if not evaluator or not isinstance(evaluator, RiskEvaluator):
+        evaluator = RiskEvaluator(rule_gate=RuleGate())
 
-    gate_result = profile.gate(tool_name, risk_level)
+    result = await evaluator.evaluate(tool_name, args, tool_risk)
 
-    if gate_result == GateResult.DENIED:
-        return {"error": f"Blocked: '{tool_name}' is denied by the '{profile.name}' risk profile."}
+    if result.decision == GateResult.DENIED:
+        return {"error": f"Blocked: {result.reasoning}"}
 
-    if gate_result == GateResult.NEEDS_APPROVAL:
-        approved = approval_bridge.request_approval(tool_name, args, risk_level)
+    if result.decision == GateResult.NEEDS_APPROVAL:
+        approved = approval_bridge.request_approval(tool_name, args, result.risk_score.level)
         if not approved:
             return {"error": f"User declined to approve '{tool_name}'."}
 

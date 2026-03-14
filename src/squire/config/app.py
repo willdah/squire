@@ -1,7 +1,10 @@
+from functools import partial
+from typing import Any
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
-from .loader import TomlSectionSource, get_top_level
+from .loader import TomlSectionSource, get_section, get_top_level
 
 
 class AppConfig(BaseSettings):
@@ -44,21 +47,13 @@ class AppConfig(BaseSettings):
         default="",
         description="Pre-configured Squire profile: rook, cedric, wynn",
     )
-    risk_profile: str = Field(
+    risk_threshold: Any = Field(
         default="cautious",
-        description="Risk profile controlling tool permissions: read-only, cautious, standard, full-trust, custom",
+        description="Risk threshold (1-5 or alias: read-only, cautious, standard, full-trust)",
     )
-    custom_allowed_tools: list[str] = Field(
-        default_factory=list,
-        description="Tools auto-allowed when risk_profile=custom",
-    )
-    custom_approval_tools: list[str] = Field(
-        default_factory=list,
-        description="Tools requiring approval when risk_profile=custom",
-    )
-    custom_denied_tools: list[str] = Field(
-        default_factory=list,
-        description="Tools denied when risk_profile=custom",
+    risk_strict: bool = Field(
+        default=False,
+        description="When true, tools above threshold are denied outright instead of prompting for approval",
     )
     history_limit: int = Field(
         default=50,
@@ -69,4 +64,34 @@ class AppConfig(BaseSettings):
         default=10,
         ge=1,
         description="Maximum tool-call rounds per user message",
+    )
+
+
+class RiskOverridesConfig(BaseSettings):
+    """Per-tool risk overrides from [risk] section in squire.toml."""
+
+    model_config = SettingsConfigDict(env_prefix="SQUIRE_RISK_", case_sensitive=False, extra="ignore")
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (init_settings, env_settings, dotenv_settings, TomlSectionSource(settings_cls, partial(get_section, "risk")), file_secret_settings)
+
+    allow: list[str] = Field(
+        default_factory=list,
+        description="Tool names that are always auto-allowed regardless of threshold",
+    )
+    approve: list[str] = Field(
+        default_factory=list,
+        description="Tool names that always require approval even if threshold would allow",
+    )
+    deny: list[str] = Field(
+        default_factory=list,
+        description="Tool names that are always denied",
     )

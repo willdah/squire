@@ -2,7 +2,7 @@
 
 from ..system import LocalBackend
 
-RISK_LEVEL = "read"
+RISK_LEVEL = 2  # Low
 
 _backend = LocalBackend()
 

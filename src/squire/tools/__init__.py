@@ -32,7 +32,7 @@ ALL_TOOLS = [
     run_command,
 ]
 
-TOOL_RISK_LEVELS: dict[str, str] = {
+TOOL_RISK_LEVELS: dict[str, int] = {
     "system_info": _si_risk,
     "network_info": _ni_risk,
     "docker_ps": _dp_risk,

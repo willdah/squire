@@ -20,7 +20,7 @@ from typing import Any
 class ApprovalRequest:
     """A pending approval request with a threading event for synchronization."""
 
-    def __init__(self, tool_name: str, args: dict[str, Any], risk_level: str):
+    def __init__(self, tool_name: str, args: dict[str, Any], risk_level: int):
         self.tool_name = tool_name
         self.args = args
         self.risk_level = risk_level
@@ -51,7 +51,7 @@ class ApprovalBridge:
         """Register the Textual app for posting approval requests."""
         self._app = app
 
-    def request_approval(self, tool_name: str, args: dict[str, Any], risk_level: str) -> bool:
+    def request_approval(self, tool_name: str, args: dict[str, Any], risk_level: int) -> bool:
         """Request user approval for a tool execution.
 
         Called from the worker thread (inside the ADK agent loop).

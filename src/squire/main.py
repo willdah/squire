@@ -11,10 +11,10 @@ from google.adk.runners import InMemoryRunner
 from google.genai import types
 
 from .agents import create_squire_agent
-from .config import AppConfig, DatabaseConfig, LLMConfig, NotificationsConfig
+from .config import AppConfig, DatabaseConfig, LLMConfig, NotificationsConfig, RiskOverridesConfig
 from .database.service import DatabaseService
 from .notifications.webhook import WebhookDispatcher
-from .schemas.risk import RiskProfile
+from agent_risk_engine import RiskEvaluator, RuleGate
 from .tools.docker_ps import docker_ps
 from .tools.system_info import system_info
 from .tui.app import SquireApp
@@ -103,21 +103,24 @@ async def start_chat(resume_session_id: str | None = None) -> None:
     adk_app = App(name=app_config.app_name, root_agent=agent)
     runner = InMemoryRunner(app_name=app_config.app_name, app=adk_app)
 
-    # Build the risk profile from config
-    risk_profile = RiskProfile(
-        name=app_config.risk_profile,
-        allowed_tools=set(app_config.custom_allowed_tools),
-        approval_tools=set(app_config.custom_approval_tools),
-        denied_tools=set(app_config.custom_denied_tools),
+    # Build the risk evaluation pipeline
+    risk_overrides = RiskOverridesConfig()
+    rule_gate = RuleGate(
+        threshold=app_config.risk_threshold,
+        strict=app_config.risk_strict,
+        allowed_tools=set(risk_overrides.allow),
+        approve_tools=set(risk_overrides.approve),
+        denied_tools=set(risk_overrides.deny),
     )
+    risk_evaluator = RiskEvaluator(rule_gate=rule_gate)
 
     # Collect initial system snapshot
     snapshot = await _collect_snapshot()
     await db.save_snapshot(snapshot)
 
     session_state = {
-        "risk_profile": risk_profile.model_dump(),
-        "risk_profile_name": app_config.risk_profile,
+        "risk_evaluator": risk_evaluator,
+        "risk_threshold": rule_gate.threshold,
         "latest_snapshot": snapshot,
         "house": app_config.house,
         "squire_name": app_config.squire_name,

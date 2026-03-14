@@ -2,7 +2,7 @@
 
 from ..system import LocalBackend
 
-RISK_LEVEL = "cautious"
+RISK_LEVEL = 3  # Moderate
 
 _backend = LocalBackend()
 

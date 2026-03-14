@@ -5,7 +5,7 @@ import platform
 
 from ..system import LocalBackend
 
-RISK_LEVEL = "read"
+RISK_LEVEL = 1  # Info
 
 _backend = LocalBackend()
 

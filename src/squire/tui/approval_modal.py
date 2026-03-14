@@ -71,7 +71,7 @@ class ApprovalModal(ModalScreen[bool]):
     }
     """
 
-    def __init__(self, tool_name: str, tool_args: dict, risk_level: str, **kwargs):
+    def __init__(self, tool_name: str, tool_args: dict, risk_level: int, **kwargs):
         super().__init__(**kwargs)
         self._tool_name = tool_name
         self._tool_args = tool_args
@@ -84,7 +84,9 @@ class ApprovalModal(ModalScreen[bool]):
             yield Label("Tool Approval Required", id="approval-title")
             yield Static(f"Tool: [bold]{self._tool_name}[/bold]", id="approval-tool-name")
             yield Static(f"Arguments:\n{args_display}", id="approval-args")
-            yield Static(f"Risk level: {self._risk_level}", id="approval-risk")
+            from agent_risk_engine import RiskLevel
+            level_label = RiskLevel(self._risk_level).label if 1 <= self._risk_level <= 5 else str(self._risk_level)
+            yield Static(f"Risk level: {level_label} ({self._risk_level}/5)", id="approval-risk")
             with Horizontal(id="approval-buttons"):
                 yield Button("Approve", variant="success", id="btn-approve")
                 yield Button("Deny", variant="error", id="btn-deny")

@@ -14,6 +14,7 @@
 - [ ] Expand README with usage guide, configuration examples, and TUI screenshots
 
 ## Features
+- [x] Revamp risk system: layered architecture (RuleGate → ToolAnalyzer → StateMonitor → ActionGate) with integer 1-5 risk levels, framework-agnostic `squire.risk` package, stub layers ready for future implementation
 - [ ] SSH/remote backend — implement `SSHBackend` to manage remote machines via the `SystemBackend` protocol
 - [ ] Streaming LLM responses in the TUI (currently buffered until complete)
 - [ ] More tools: package management (`apt`, `brew`), service management (`systemctl`), backup status

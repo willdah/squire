@@ -16,7 +16,7 @@ def build_instruction(ctx) -> str:
         ctx: ADK ReadonlyContext with access to session state.
     """
     snapshot = ctx.state.get("latest_snapshot", {})
-    risk_profile_name = ctx.state.get("risk_profile_name", "cautious")
+    risk_threshold = ctx.state.get("risk_threshold", 2)
     house = ctx.state.get("house", "")
     squire_name = ctx.state.get("squire_name", "")
     profile_key = ctx.state.get("squire_profile", "")
@@ -25,7 +25,7 @@ def build_instruction(ctx) -> str:
     effective_name = squire_name or (profile.name if profile else "") or "Rook"
 
     system_context = _format_snapshot(snapshot) if snapshot else "No system snapshot available yet."
-    risk_guidance = _format_risk_guidance(risk_profile_name)
+    risk_guidance = _format_risk_guidance(risk_threshold)
 
     identity = f"You are {effective_name}, a squire and"
     house_context = f" You are in the service of House {house}." if house else ""
@@ -37,7 +37,7 @@ def build_instruction(ctx) -> str:
 ## Current System State
 {system_context}
 
-## Risk Profile: {risk_profile_name}
+## Risk Threshold: {risk_threshold}/5
 {risk_guidance}
 
 ## Critical Rules
@@ -100,19 +100,14 @@ def _format_snapshot(snapshot: dict) -> str:
     return "\n".join(parts) if parts else "System information not yet collected."
 
 
-def _format_risk_guidance(profile_name: str) -> str:
-    """Return guidance text based on the active risk profile."""
-    guidance = {
-        "read-only": "You can only read system information. All mutations are blocked.",
-        "cautious": (
-            "You can read anything and perform low-risk mutations (restart containers, clear logs). "
-            "Higher-risk actions (config changes, network modifications) require user approval."
-        ),
-        "standard": (
-            "You can read anything, restart services, and modify configurations. "
-            "Only destructive operations (data deletion, reboots) require user approval."
-        ),
-        "full-trust": "You have full access to all tools without requiring approval.",
-        "custom": "Tool permissions are configured per-tool by the user.",
-    }
-    return guidance.get(profile_name, guidance["cautious"])
+def _format_risk_guidance(threshold: int) -> str:
+    """Return guidance text based on the active risk threshold."""
+    from agent_risk_engine import RiskLevel
+
+    level_label = RiskLevel(threshold).label if 1 <= threshold <= 5 else "Custom"
+    return (
+        f"Your risk threshold is set to {threshold}/5 ({level_label}). "
+        f"Tools at risk level {threshold} or below run automatically. "
+        f"Tools above level {threshold} require user approval before execution. "
+        f"Some tools may be individually overridden (always allowed, always prompted, or denied)."
+    )

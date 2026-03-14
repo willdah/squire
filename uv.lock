@@ -8,6 +8,11 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "agent-risk-engine"
+version = "0.1.0"
+source = { editable = "../agent-risk-engine" }
+
+[[package]]
 name = "aiohappyeyeballs"
 version = "2.6.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2939,6 +2944,7 @@ name = "squire"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "agent-risk-engine" },
     { name = "aiosqlite" },
     { name = "google-adk" },
     { name = "httpx" },
@@ -2961,6 +2967,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agent-risk-engine", editable = "../agent-risk-engine" },
     { name = "aiosqlite", specifier = ">=0.19.0" },
     { name = "google-adk", specifier = ">=1.23.0" },
     { name = "httpx", specifier = ">=0.27.0" },
