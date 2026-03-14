@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dockerfile for containerized deployment.
 - MIT license.
 
+### Changed
+
+- Improved system prompt for conversational intelligence — Squire now matches its response to user intent (greetings get greetings, not system dumps). Reordered prompt sections so behavioral guidance comes before system data. Personality profiles now include conversational hints for greetings.
+- Tool calls and results no longer clutter the main chat — they appear only in the activity log.
+
 ### Fixed
 
 - Test isolation — config tests no longer pick up local `squire.toml` file.

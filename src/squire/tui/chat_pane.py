@@ -138,12 +138,11 @@ class ChatPane(Static):
                     continue
 
                 for part in event.content.parts:
-                    # Show tool calls as system messages + log viewer
+                    # Log tool calls to activity log (not chat)
                     if part.function_call:
                         fc = part.function_call
                         args_str = ", ".join(f"{k}={v!r}" for k, v in (fc.args or {}).items())
                         call_text = f"Calling tool: {fc.name}({args_str})"
-                        self.app.call_from_thread(self._add_message, call_text, "system")
                         self.app.call_from_thread(self.app.add_log_entry, call_text, "tool-call")
                         # Log tool call event
                         await self._log_event(
@@ -155,12 +154,11 @@ class ChatPane(Static):
                         )
                         # Reset streaming bubble — tool calls interrupt the response
                         streaming_bubble = None
-                    # Show tool results as system messages + log viewer
+                    # Log tool results to activity log (not chat)
                     elif part.function_response:
                         fr = part.function_response
                         preview = str(fr.response)[:200]
                         result_text = f"Tool result ({fr.name}): {preview}"
-                        self.app.call_from_thread(self._add_message, result_text, "system")
                         self.app.call_from_thread(self.app.add_log_entry, result_text, "tool-result")
                     # Stream partial text tokens into the live bubble
                     elif part.text and event.partial:
