@@ -1,6 +1,7 @@
 """Tests for system_info tool with mocked backend."""
 
 import json
+from unittest.mock import patch
 
 import pytest
 
@@ -9,8 +10,13 @@ from squire.tools import system_info
 
 
 @pytest.mark.asyncio
-async def test_system_info_basic(mock_backend, mock_registry):
+@patch("squire.tools.system_info.platform")
+async def test_system_info_basic(mock_platform, mock_backend, mock_registry):
     """system_info should return valid JSON with expected fields."""
+    mock_platform.system.return_value = "Darwin"
+    mock_platform.node.return_value = "test-host"
+    mock_platform.release.return_value = "23.0.0"
+    mock_platform.machine.return_value = "arm64"
     mock_backend.set_response("sysctl", CommandResult(returncode=0, stdout="8\n", stderr=""))
     mock_backend.set_response("ps", CommandResult(returncode=0, stdout="%CPU\n10.0\n5.0\n", stderr=""))
     mock_backend.set_response(
