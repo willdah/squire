@@ -1,7 +1,7 @@
 """Tests for configuration classes."""
 
 import squire.config.loader as loader_mod
-from squire.config import AppConfig, DatabaseConfig, HostConfig, LLMConfig, NotificationsConfig, PathsConfig
+from squire.config import AppConfig, DatabaseConfig, HostConfig, LLMConfig, NotificationsConfig, SecurityConfig
 from squire.config.loader import get_list_section
 
 
@@ -32,16 +32,16 @@ class TestDatabaseConfig:
         assert "squire.db" in str(config.path)
 
 
-class TestPathsConfig:
+class TestSecurityConfig:
     def test_defaults(self, monkeypatch):
         monkeypatch.setattr(loader_mod, "_cached", {})
-        config = PathsConfig()
+        config = SecurityConfig()
         assert "ping" in config.command_allowlist
         assert "rm" in config.command_denylist
 
     def test_config_allowlist_empty_by_default(self, monkeypatch):
         monkeypatch.setattr(loader_mod, "_cached", {})
-        config = PathsConfig()
+        config = SecurityConfig()
         assert config.config_allowlist == []
 
 
@@ -76,9 +76,9 @@ class TestTomlLoading:
         config = DatabaseConfig()
         assert config.snapshot_interval_minutes == 30
 
-    def test_paths_config_from_toml(self, monkeypatch):
-        self._patch_toml(monkeypatch, {"paths": {"config_allowlist": ["/etc/nginx/", "/opt/stacks/"]}})
-        config = PathsConfig()
+    def test_security_config_from_toml(self, monkeypatch):
+        self._patch_toml(monkeypatch, {"security": {"config_allowlist": ["/etc/nginx/", "/opt/stacks/"]}})
+        config = SecurityConfig()
         assert config.config_allowlist == ["/etc/nginx/", "/opt/stacks/"]
 
     def test_notifications_config_from_toml(self, monkeypatch):

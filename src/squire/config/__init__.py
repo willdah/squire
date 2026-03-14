@@ -3,7 +3,7 @@ from .database import DatabaseConfig
 from .hosts import HostConfig
 from .llm import LLMConfig
 from .notifications import NotificationsConfig, WebhookConfig
-from .paths import PathsConfig
+from .security import SecurityConfig
 
 __all__ = [
     "AppConfig",
@@ -12,6 +12,6 @@ __all__ = [
     "HostConfig",
     "LLMConfig",
     "NotificationsConfig",
-    "PathsConfig",
+    "SecurityConfig",
     "WebhookConfig",
 ]

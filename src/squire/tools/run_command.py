@@ -2,12 +2,12 @@
 
 import shlex
 
-from ..config import PathsConfig
+from ..config import SecurityConfig
 from ._registry import get_registry
 
 RISK_LEVEL = 5  # Critical
 
-_paths_config = PathsConfig()
+_security_config = SecurityConfig()
 
 
 async def run_command(command: str, timeout: float = 30.0, host: str = "local") -> str:
@@ -35,14 +35,14 @@ async def run_command(command: str, timeout: float = 30.0, host: str = "local") 
     base_cmd = parts[0]
 
     # Check denylist first
-    if base_cmd in _paths_config.command_denylist:
+    if base_cmd in _security_config.command_denylist:
         return f"Blocked: '{base_cmd}' is on the command denylist."
 
     # Check allowlist
-    if _paths_config.command_allowlist and base_cmd not in _paths_config.command_allowlist:
+    if _security_config.command_allowlist and base_cmd not in _security_config.command_allowlist:
         return (
             f"Command '{base_cmd}' is not on the allowlist.\n"
-            f"Allowed commands: {', '.join(sorted(_paths_config.command_allowlist))}"
+            f"Allowed commands: {', '.join(sorted(_security_config.command_allowlist))}"
         )
 
     backend = get_registry().get(host)

@@ -32,7 +32,7 @@
 # snapshot_interval_minutes = 15
 
 # --- Tool security: path and command lists ---
-[paths]
+[security]
 # config_allowlist = ["/etc/nginx/", "/opt/stacks/"]
 # command_allowlist = [
 #     "ping", "traceroute", "dig", "nslookup",

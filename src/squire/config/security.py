@@ -6,14 +6,14 @@ from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, Settings
 from .loader import TomlSectionSource, get_section
 
 
-class PathsConfig(BaseSettings):
-    """Path and command allowlist/denylist configuration.
+class SecurityConfig(BaseSettings):
+    """Tool security allow/deny lists for commands and config paths.
 
-    Loaded from [paths] section in squire.toml and/or SQUIRE_PATHS_ env vars.
+    Loaded from [security] section in squire.toml and/or SQUIRE_SECURITY_ env vars.
     Env vars take precedence over TOML values.
     """
 
-    model_config = SettingsConfigDict(env_prefix="SQUIRE_PATHS_", case_sensitive=False, extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="SQUIRE_SECURITY_", case_sensitive=False, extra="ignore")
 
     @classmethod
     def settings_customise_sources(
@@ -24,7 +24,7 @@ class PathsConfig(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        return (init_settings, env_settings, dotenv_settings, TomlSectionSource(settings_cls, partial(get_section, "paths")), file_secret_settings)
+        return (init_settings, env_settings, dotenv_settings, TomlSectionSource(settings_cls, partial(get_section, "security")), file_secret_settings)
 
     config_allowlist: list[str] = Field(
         default_factory=list,

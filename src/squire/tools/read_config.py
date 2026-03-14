@@ -2,12 +2,12 @@
 
 import os
 
-from ..config import PathsConfig
+from ..config import SecurityConfig
 from ._registry import get_registry
 
 RISK_LEVEL = 2  # Low
 
-_paths_config = PathsConfig()
+_security_config = SecurityConfig()
 
 
 async def read_config(path: str, head: int | None = None, host: str = "local") -> str:
@@ -25,7 +25,7 @@ async def read_config(path: str, head: int | None = None, host: str = "local") -
     Returns the file contents as text.
     """
     # Resolve and check allowlist
-    allowlist = _paths_config.config_allowlist
+    allowlist = _security_config.config_allowlist
     if allowlist:
         if host == "local":
             # Local: resolve symlinks then check prefix
