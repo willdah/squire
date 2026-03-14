@@ -1,0 +1,58 @@
+"""run_command tool — guarded shell execution with command allowlist/denylist."""
+
+import shlex
+
+from ..config import PathsConfig
+from ..system import LocalBackend
+
+RISK_LEVEL = "full"
+
+_backend = LocalBackend()
+_paths_config = PathsConfig()
+
+
+async def run_command(command: str, timeout: float = 30.0) -> str:
+    """Execute a shell command on the system.
+
+    This is a guarded tool — the command is checked against an allowlist
+    and denylist before execution. Denied commands are blocked entirely.
+    Commands not on the allowlist require approval via the risk profile.
+
+    Args:
+        command: The shell command to execute (e.g., "ping -c 4 8.8.8.8").
+        timeout: Maximum seconds to wait for the command to complete (default 30).
+
+    Returns the command output (stdout + stderr) as text.
+    """
+    try:
+        parts = shlex.split(command)
+    except ValueError as e:
+        return f"Invalid command syntax: {e}"
+
+    if not parts:
+        return "Empty command."
+
+    base_cmd = parts[0]
+
+    # Check denylist first
+    if base_cmd in _paths_config.command_denylist:
+        return f"Blocked: '{base_cmd}' is on the command denylist."
+
+    # Check allowlist
+    if _paths_config.command_allowlist and base_cmd not in _paths_config.command_allowlist:
+        return (
+            f"Command '{base_cmd}' is not on the allowlist.\n"
+            f"Allowed commands: {', '.join(sorted(_paths_config.command_allowlist))}"
+        )
+
+    result = await _backend.run(parts, timeout=min(timeout, 120.0))
+
+    output_parts = []
+    if result.stdout:
+        output_parts.append(result.stdout)
+    if result.stderr:
+        output_parts.append(f"[stderr]\n{result.stderr}")
+    if result.returncode != 0:
+        output_parts.append(f"\n[exit code: {result.returncode}]")
+
+    return "\n".join(output_parts).strip() if output_parts else "Command completed with no output."
