@@ -1,4 +1,4 @@
-"""Root Renew agent — an ADK LlmAgent with system tools and risk gating."""
+"""Root Squire agent — an ADK LlmAgent with system tools and risk gating."""
 
 from google.adk.agents.llm_agent import Agent
 from google.adk.models.lite_llm import LiteLlm
@@ -6,15 +6,15 @@ from google.genai import types
 
 from ..callbacks.risk_gate import risk_gate_callback
 from ..config import AppConfig, LLMConfig
-from ..instructions.renew_agent import build_instruction
+from ..instructions.squire_agent import build_instruction
 from ..tools import ALL_TOOLS
 
 
-def create_renew_agent(
+def create_squire_agent(
     app_config: AppConfig | None = None,
     llm_config: LLMConfig | None = None,
 ) -> Agent:
-    """Factory function that creates the root Renew agent.
+    """Factory function that creates the root Squire agent.
 
     Args:
         app_config: Application configuration.
@@ -31,7 +31,7 @@ def create_renew_agent(
         model_kwargs["api_base"] = llm_config.api_base
 
     return Agent(
-        name="Renew",
+        name="Squire",
         model=LiteLlm(model=llm_config.model, **model_kwargs),
         instruction=build_instruction,
         tools=ALL_TOOLS,

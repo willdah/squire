@@ -4,11 +4,11 @@ import sys
 
 import pytest
 
-from renew.system.backend import CommandResult
-from renew.tools import docker_ps
+from squire.system.backend import CommandResult
+from squire.tools import docker_ps
 
 # Get the actual module (not the function re-exported by __init__.py)
-_mod = sys.modules["renew.tools.docker_ps"]
+_mod = sys.modules["squire.tools.docker_ps"]
 
 
 @pytest.mark.asyncio

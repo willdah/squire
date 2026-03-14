@@ -1,6 +1,6 @@
 """Tests for risk profile gating logic."""
 
-from renew.schemas.risk import GateResult, RiskProfile
+from squire.schemas.risk import GateResult, RiskProfile
 
 
 class TestBuiltinProfiles:

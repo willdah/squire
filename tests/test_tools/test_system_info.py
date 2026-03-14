@@ -5,10 +5,10 @@ import sys
 
 import pytest
 
-from renew.system.backend import CommandResult
-from renew.tools import system_info
+from squire.system.backend import CommandResult
+from squire.tools import system_info
 
-_mod = sys.modules["renew.tools.system_info"]
+_mod = sys.modules["squire.tools.system_info"]
 
 
 @pytest.mark.asyncio

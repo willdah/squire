@@ -9,11 +9,11 @@ from .loader import TomlSectionSource, get_section
 class LLMConfig(BaseSettings):
     """LLM provider configuration.
 
-    Loaded from [llm] section in renew.toml and/or RENEW_LLM_ env vars.
+    Loaded from [llm] section in squire.toml and/or SQUIRE_LLM_ env vars.
     Env vars take precedence over TOML values.
     """
 
-    model_config = SettingsConfigDict(env_prefix="RENEW_LLM_", case_sensitive=False, extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="SQUIRE_LLM_", case_sensitive=False, extra="ignore")
 
     @classmethod
     def settings_customise_sources(

@@ -1,19 +1,19 @@
 """Tests for configuration classes."""
 
-import renew.config.loader as loader_mod
-from renew.config import AppConfig, DatabaseConfig, LLMConfig, NotificationsConfig, PathsConfig
+import squire.config.loader as loader_mod
+from squire.config import AppConfig, DatabaseConfig, LLMConfig, NotificationsConfig, PathsConfig
 
 
 class TestAppConfig:
     def test_defaults(self):
         config = AppConfig()
-        assert config.app_name == "Renew"
+        assert config.app_name == "Squire"
         assert config.risk_profile == "cautious"
         assert config.history_limit == 50
         assert config.max_tool_rounds == 10
 
     def test_env_override(self, monkeypatch):
-        monkeypatch.setenv("RENEW_RISK_PROFILE", "full-trust")
+        monkeypatch.setenv("SQUIRE_RISK_PROFILE", "full-trust")
         config = AppConfig()
         assert config.risk_profile == "full-trust"
 
@@ -28,7 +28,7 @@ class TestLLMConfig:
 class TestDatabaseConfig:
     def test_default_path(self):
         config = DatabaseConfig()
-        assert "renew.db" in str(config.path)
+        assert "squire.db" in str(config.path)
 
 
 class TestPathsConfig:
@@ -50,7 +50,7 @@ class TestNotificationsConfig:
 
 
 class TestTomlLoading:
-    """Test that config classes load values from renew.toml."""
+    """Test that config classes load values from squire.toml."""
 
     def _patch_toml(self, monkeypatch, data: dict):
         """Inject fake TOML data into the loader cache."""
@@ -86,7 +86,7 @@ class TestTomlLoading:
     def test_env_overrides_toml(self, monkeypatch):
         """Env vars should take precedence over TOML values."""
         self._patch_toml(monkeypatch, {"risk_profile": "full-trust"})
-        monkeypatch.setenv("RENEW_RISK_PROFILE", "read-only")
+        monkeypatch.setenv("SQUIRE_RISK_PROFILE", "read-only")
         config = AppConfig()
         assert config.risk_profile == "read-only"
 

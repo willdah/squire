@@ -1,13 +1,13 @@
 """TOML configuration file loader.
 
-Loads renew.toml from standard locations and returns section dicts
+Loads squire.toml from standard locations and returns section dicts
 that can be passed as overrides when constructing config classes.
 Env vars still take precedence (handled by pydantic-settings).
 
 Search order:
-  1. ./renew.toml (project directory)
-  2. ~/.config/renew/renew.toml (user config)
-  3. /etc/renew/renew.toml (system-wide)
+  1. ./squire.toml (project directory)
+  2. ~/.config/squire/squire.toml (user config)
+  3. /etc/squire/squire.toml (system-wide)
 """
 
 import tomllib
@@ -18,16 +18,16 @@ from typing import Any
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource
 
 _SEARCH_PATHS = [
-    Path("renew.toml"),
-    Path.home() / ".config" / "renew" / "renew.toml",
-    Path("/etc/renew/renew.toml"),
+    Path("squire.toml"),
+    Path.home() / ".config" / "squire" / "squire.toml",
+    Path("/etc/squire/squire.toml"),
 ]
 
 _cached: dict | None = None
 
 
 def _load_toml() -> dict:
-    """Load the first renew.toml found in search paths."""
+    """Load the first squire.toml found in search paths."""
     global _cached
     if _cached is not None:
         return _cached

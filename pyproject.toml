@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "renew"
+name = "squire"
 version = "0.1.0"
 description = "An AI agent that monitors and manages your homelab."
 authors = [{name = "Will Ahern"}]
@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.scripts]
-renew = "renew.cli:app"
+squire = "squire.cli:app"
 
 [dependency-groups]
 dev = [
@@ -34,7 +34,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/renew"]
+packages = ["src/squire"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

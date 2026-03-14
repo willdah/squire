@@ -24,11 +24,11 @@ class WebhookConfig(BaseModel):
 class NotificationsConfig(BaseSettings):
     """Notification system configuration.
 
-    Loaded from [notifications] section in renew.toml and/or RENEW_NOTIFICATIONS_ env vars.
+    Loaded from [notifications] section in squire.toml and/or SQUIRE_NOTIFICATIONS_ env vars.
     Env vars take precedence over TOML values.
     """
 
-    model_config = SettingsConfigDict(env_prefix="RENEW_NOTIFICATIONS_", case_sensitive=False, extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="SQUIRE_NOTIFICATIONS_", case_sensitive=False, extra="ignore")
 
     @classmethod
     def settings_customise_sources(

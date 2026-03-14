@@ -10,14 +10,14 @@ from google.adk.events.event import Event
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 
-from .agents import create_renew_agent
+from .agents import create_squire_agent
 from .config import AppConfig, DatabaseConfig, LLMConfig, NotificationsConfig
 from .database.service import DatabaseService
 from .notifications.webhook import WebhookDispatcher
 from .schemas.risk import RiskProfile
 from .tools.docker_ps import docker_ps
 from .tools.system_info import system_info
-from .tui.app import RenewApp
+from .tui.app import SquireApp
 
 # Load environment variables before instantiating settings
 load_dotenv()
@@ -67,7 +67,7 @@ async def _collect_snapshot() -> dict:
     return snapshot
 
 
-async def _background_snapshots(db: DatabaseService, interval_minutes: int, tui: RenewApp) -> None:
+async def _background_snapshots(db: DatabaseService, interval_minutes: int, tui: SquireApp) -> None:
     """Periodically collect and persist system snapshots.
 
     Also updates the TUI status panel and ADK session state.
@@ -84,7 +84,7 @@ async def _background_snapshots(db: DatabaseService, interval_minutes: int, tui:
 
 
 async def start_chat(resume_session_id: str | None = None) -> None:
-    """Start a Renew chat session with the TUI.
+    """Start a Squire chat session with the TUI.
 
     Args:
         resume_session_id: Optional session ID to resume a previous conversation.
@@ -99,7 +99,7 @@ async def start_chat(resume_session_id: str | None = None) -> None:
     notifier = WebhookDispatcher(notif_config)
 
     # Build the agent and ADK runner
-    agent = create_renew_agent(app_config=app_config, llm_config=llm_config)
+    agent = create_squire_agent(app_config=app_config, llm_config=llm_config)
     adk_app = App(name=app_config.app_name, root_agent=agent)
     runner = InMemoryRunner(app_name=app_config.app_name, app=adk_app)
 
@@ -156,7 +156,7 @@ async def start_chat(resume_session_id: str | None = None) -> None:
     await db.create_session(session.id)
 
     # Launch the TUI
-    tui = RenewApp(
+    tui = SquireApp(
         agent_runner=runner,
         session=session,
         app_config=app_config,

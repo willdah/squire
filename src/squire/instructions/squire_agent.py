@@ -1,4 +1,4 @@
-"""Callable instruction builder for the Renew agent.
+"""Callable instruction builder for the Squire agent.
 
 The instruction is evaluated before each LLM invocation, injecting
 live system context from the latest snapshot stored in session state.
@@ -19,7 +19,7 @@ def build_instruction(ctx) -> str:
     system_context = _format_snapshot(snapshot) if snapshot else "No system snapshot available yet."
     risk_guidance = _format_risk_guidance(risk_profile_name)
 
-    return f"""You are Renew, a homelab management agent. You help users monitor, troubleshoot, and maintain their homelab infrastructure.
+    return f"""You are Squire, a homelab management agent. You help users monitor, troubleshoot, and maintain their homelab infrastructure.
 
 ## Current System State
 {system_context}

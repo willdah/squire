@@ -1,4 +1,4 @@
-"""Typer CLI entry points for Renew."""
+"""Typer CLI entry points for Squire."""
 
 import asyncio
 from typing import Annotated
@@ -8,8 +8,8 @@ from rich.console import Console
 from rich.table import Table
 
 app = typer.Typer(
-    name="renew",
-    help="Renew — an AI agent that monitors and manages your homelab.",
+    name="squire",
+    help="Squire — an AI agent that monitors and manages your homelab.",
     no_args_is_help=True,
 )
 
@@ -21,7 +21,7 @@ def chat(
         typer.Option("--resume", "-r", help="Resume a previous session by ID"),
     ] = None,
 ) -> None:
-    """Start an interactive chat session with Renew."""
+    """Start an interactive chat session with Squire."""
     from .main import run_chat
 
     run_chat(resume_session_id=resume)
@@ -59,10 +59,10 @@ def sessions() -> None:
 
 @app.command()
 def version() -> None:
-    """Show the Renew version."""
+    """Show the Squire version."""
     from . import __version__
 
-    typer.echo(f"renew {__version__}")
+    typer.echo(f"squire {__version__}")
 
 
 if __name__ == "__main__":

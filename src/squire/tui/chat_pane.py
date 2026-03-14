@@ -1,4 +1,4 @@
-"""Chat pane — message list and input widget for the Renew TUI."""
+"""Chat pane — message list and input widget for the Squire TUI."""
 
 import json
 
@@ -76,10 +76,10 @@ class ChatPane(Static):
 
     def compose(self) -> ComposeResult:
         yield VerticalScroll(id="message-list")
-        yield Input(placeholder="Ask Renew something...", id="chat-input")
+        yield Input(placeholder="Ask Squire something...", id="chat-input")
 
     def on_mount(self) -> None:
-        self._add_message("Renew is ready. Ask me about your system.", "system")
+        self._add_message("Squire is ready. Ask me about your system.", "system")
         self.query_one("#chat-input", Input).focus()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
@@ -116,7 +116,7 @@ class ChatPane(Static):
             response_parts = []
 
             async for event in self._runner.run_async(
-                user_id=self._app_config.user_id if self._app_config else "renew-user",
+                user_id=self._app_config.user_id if self._app_config else "squire-user",
                 session_id=session_id,
                 new_message=message,
             ):
@@ -210,7 +210,7 @@ class ChatPane(Static):
 
     def _add_message(self, content: str, role: str) -> None:
         """Add a message bubble to the chat display."""
-        prefix = {"user": "You", "assistant": "Renew", "system": ""}.get(role, "")
+        prefix = {"user": "You", "assistant": "Squire", "system": ""}.get(role, "")
         display_text = f"[bold]{prefix}[/bold]: {content}" if prefix else content
         message_list = self.query_one("#message-list")
         message_list.mount(MessageBubble(display_text, role=role))

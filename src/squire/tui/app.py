@@ -1,4 +1,4 @@
-"""Renew TUI — Textual application with chat pane and status panels."""
+"""Squire TUI — Textual application with chat pane and status panels."""
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -12,10 +12,10 @@ from .log_viewer import LogViewer
 from .status_panel import StatusPanel
 
 
-class RenewApp(App):
-    """Main Textual application for Renew."""
+class SquireApp(App):
+    """Main Textual application for Squire."""
 
-    TITLE = "Renew"
+    TITLE = "Squire"
     SUB_TITLE = "Homelab Agent"
     CSS = """
     #main-container {

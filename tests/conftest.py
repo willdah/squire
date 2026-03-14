@@ -1,12 +1,12 @@
-"""Shared test fixtures for Renew tests."""
+"""Shared test fixtures for Squire tests."""
 
 from pathlib import Path
 
 import pytest
 import pytest_asyncio
 
-from renew.database.service import DatabaseService
-from renew.system.backend import CommandResult
+from squire.database.service import DatabaseService
+from squire.system.backend import CommandResult
 
 
 class MockBackend:

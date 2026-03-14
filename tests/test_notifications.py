@@ -2,8 +2,8 @@
 
 import pytest
 
-from renew.config.notifications import NotificationsConfig, WebhookConfig
-from renew.notifications.webhook import WebhookDispatcher
+from squire.config.notifications import NotificationsConfig, WebhookConfig
+from squire.notifications.webhook import WebhookDispatcher
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,4 @@
-"""Async webhook dispatcher for Renew notifications.
+"""Async webhook dispatcher for Squire notifications.
 
 Sends event payloads to configured webhook endpoints via httpx.
 Each webhook can filter which event categories it receives.
@@ -48,7 +48,7 @@ class WebhookDispatcher:
             return
 
         payload = {
-            "app": "renew",
+            "app": "squire",
             "timestamp": datetime.now(UTC).isoformat(),
             "category": category,
             "summary": summary,

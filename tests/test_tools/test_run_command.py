@@ -4,11 +4,11 @@ import sys
 
 import pytest
 
-from renew.config import PathsConfig
-from renew.system.backend import CommandResult
-from renew.tools import run_command
+from squire.config import PathsConfig
+from squire.system.backend import CommandResult
+from squire.tools import run_command
 
-_mod = sys.modules["renew.tools.run_command"]
+_mod = sys.modules["squire.tools.run_command"]
 
 
 @pytest.mark.asyncio

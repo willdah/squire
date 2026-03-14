@@ -7,11 +7,11 @@ from .loader import TomlSectionSource, get_top_level
 class AppConfig(BaseSettings):
     """Top-level application configuration.
 
-    Loaded from renew.toml top-level keys and/or RENEW_ env vars.
+    Loaded from squire.toml top-level keys and/or SQUIRE_ env vars.
     Env vars take precedence over TOML values.
     """
 
-    model_config = SettingsConfigDict(env_prefix="RENEW_", case_sensitive=False, extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="SQUIRE_", case_sensitive=False, extra="ignore")
 
     @classmethod
     def settings_customise_sources(
@@ -25,11 +25,11 @@ class AppConfig(BaseSettings):
         return (init_settings, env_settings, dotenv_settings, TomlSectionSource(settings_cls, get_top_level), file_secret_settings)
 
     app_name: str = Field(
-        default="Renew",
+        default="Squire",
         description="Application name passed to the ADK runner",
     )
     user_id: str = Field(
-        default="renew-user",
+        default="squire-user",
         description="User ID for ADK session management",
     )
     risk_profile: str = Field(

@@ -1,5 +1,5 @@
 """
-SQLite persistence layer for Renew.
+SQLite persistence layer for Squire.
 
 Stores system snapshots, events, and conversation messages.
 Uses aiosqlite for non-blocking async SQLite access.
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 
 class DatabaseService:
-    """Async wrapper around aiosqlite for Renew persistence.
+    """Async wrapper around aiosqlite for Squire persistence.
 
     The connection is opened lazily on first use.
     """

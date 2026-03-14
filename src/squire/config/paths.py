@@ -9,11 +9,11 @@ from .loader import TomlSectionSource, get_section
 class PathsConfig(BaseSettings):
     """Path and command allowlist/denylist configuration.
 
-    Loaded from [paths] section in renew.toml and/or RENEW_PATHS_ env vars.
+    Loaded from [paths] section in squire.toml and/or SQUIRE_PATHS_ env vars.
     Env vars take precedence over TOML values.
     """
 
-    model_config = SettingsConfigDict(env_prefix="RENEW_PATHS_", case_sensitive=False, extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="SQUIRE_PATHS_", case_sensitive=False, extra="ignore")
 
     @classmethod
     def settings_customise_sources(

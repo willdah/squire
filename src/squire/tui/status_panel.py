@@ -1,4 +1,4 @@
-"""Status panel — system status sidebar for the Renew TUI.
+"""Status panel — system status sidebar for the Squire TUI.
 
 Displays container states, CPU/memory/disk gauges, and network info.
 In Phase 4 this will be driven by live snapshot data.

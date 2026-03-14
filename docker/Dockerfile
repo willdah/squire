@@ -14,10 +14,10 @@ COPY README.md ./
 RUN uv sync --no-dev --frozen
 
 # Default environment
-ENV RENEW_RISK_PROFILE=cautious
-ENV RENEW_DB_PATH=/data/renew.db
+ENV SQUIRE_RISK_PROFILE=cautious
+ENV SQUIRE_DB_PATH=/data/squire.db
 
 VOLUME ["/data"]
 
-ENTRYPOINT ["uv", "run", "renew"]
+ENTRYPOINT ["uv", "run", "squire"]
 CMD ["chat"]
