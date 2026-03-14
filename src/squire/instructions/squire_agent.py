@@ -16,12 +16,15 @@ def build_instruction(ctx) -> str:
     snapshot = ctx.state.get("latest_snapshot", {})
     risk_profile_name = ctx.state.get("risk_profile_name", "cautious")
     house = ctx.state.get("house", "")
+    squire_name = ctx.state.get("squire_name", "")
 
     system_context = _format_snapshot(snapshot) if snapshot else "No system snapshot available yet."
     risk_guidance = _format_risk_guidance(risk_profile_name)
+
+    identity = f"You are {squire_name}, a squire and" if squire_name else "You are Squire, a"
     house_context = f" You are in the service of House {house}." if house else ""
 
-    return f"""You are Squire, a homelab management agent.{house_context} You help users monitor, troubleshoot, and maintain their homelab infrastructure.
+    return f"""{identity} homelab management agent.{house_context} You help users monitor, troubleshoot, and maintain their homelab infrastructure.
 
 ## Current System State
 {system_context}

@@ -2,7 +2,10 @@
 
 ## Theme & Personalization
 - [x] Users should be able to set their "house" so the Squire knows what house it represents
-- [ ] Should users be able to name their Squire? This could add a personalized touch and enhance the medieval theme
+- [x] Allow users to name their Squire via `squire_name` config
+- [ ] Add ASCII art or color themes to the TUI for a more engaging experience (e.g. house sigils, themed colors)
+- [ ] Ship with a few pre-configured "Squire profiles" that users can choose from (e.g. "Rook the Cautious", "Cedric the Bold", "Wynn the Wise") with response styles
+- [ ] Allow users to customize the Squire's personality and response style via config (e.g. formal vs casual, verbose vs concise, humorous vs serious)
 
 ## Bugs
 - [x] Fix test isolation — tests were picking up local `squire.toml` instead of using defaults
