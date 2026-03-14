@@ -1,7 +1,6 @@
 """Tests for RiskUtilityGate — Layer 4 risk-vs-utility escalation."""
 
 import pytest
-
 from agent_risk_engine.action_gate import RiskUtilityGate
 from agent_risk_engine.models import GateResult, RiskScore, SystemState, UtilityScore
 

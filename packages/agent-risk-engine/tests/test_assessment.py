@@ -1,7 +1,6 @@
 """Tests for RiskEvaluator — pipeline orchestration."""
 
 import pytest
-
 from agent_risk_engine.action_gate import PassthroughActionGate
 from agent_risk_engine.analyzer import PassthroughAnalyzer
 from agent_risk_engine.assessment import RiskEvaluator
@@ -9,7 +8,6 @@ from agent_risk_engine.models import GateResult, RiskScore, SystemState, Utility
 from agent_risk_engine.registry import ToolRegistry
 from agent_risk_engine.rule_gate import RuleGate
 from agent_risk_engine.state_monitor import CallTracker, NullStateMonitor
-
 
 # --- Recording fakes for verifying layer interaction ---
 

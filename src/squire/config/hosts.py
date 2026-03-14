@@ -15,5 +15,8 @@ class HostConfig(BaseModel):
     port: int = Field(default=22, description="SSH port")
     key_file: str | None = Field(default=None, description="Path to SSH private key (uses ssh-agent if omitted)")
     tags: list[str] = Field(default_factory=list, description="Optional tags for grouping (e.g. ['media', 'docker'])")
-    services: list[str] = Field(default_factory=list, description="Docker Compose services on this host (e.g. ['syncthing', 'ollama'])")
+    services: list[str] = Field(
+        default_factory=list,
+        description="Docker Compose services on this host (e.g. ['syncthing', 'ollama'])",
+    )
     service_root: str = Field(default="/opt", description="Root directory for compose service directories")

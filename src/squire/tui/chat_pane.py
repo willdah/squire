@@ -78,7 +78,10 @@ class ChatPane(Static):
     }
     """
 
-    def __init__(self, agent_runner=None, session=None, app_config=None, db=None, notifier=None, squire_name="Rook", **kwargs):
+    def __init__(
+        self, agent_runner=None, session=None, app_config=None,
+        db=None, notifier=None, squire_name="Rook", **kwargs,
+    ):
         super().__init__(**kwargs)
         self._runner: InMemoryRunner | None = agent_runner
         self._session = session

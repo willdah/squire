@@ -25,7 +25,11 @@ class AppConfig(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        return (init_settings, env_settings, dotenv_settings, TomlSectionSource(settings_cls, get_top_level), file_secret_settings)
+        return (
+            init_settings, env_settings, dotenv_settings,
+            TomlSectionSource(settings_cls, get_top_level),
+            file_secret_settings,
+        )
 
     app_name: str = Field(
         default="Squire",
@@ -81,7 +85,11 @@ class RiskOverridesConfig(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        return (init_settings, env_settings, dotenv_settings, TomlSectionSource(settings_cls, partial(get_section, "risk")), file_secret_settings)
+        return (
+            init_settings, env_settings, dotenv_settings,
+            TomlSectionSource(settings_cls, partial(get_section, "risk")),
+            file_secret_settings,
+        )
 
     allow: list[str] = Field(
         default_factory=list,

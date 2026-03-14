@@ -1,12 +1,10 @@
 """Tests for passthrough/stub implementations of Layers 2-4."""
 
 import pytest
-
 from agent_risk_engine.action_gate import PassthroughActionGate
 from agent_risk_engine.analyzer import PassthroughAnalyzer
 from agent_risk_engine.models import GateResult, RiskScore, SystemState, UtilityScore
 from agent_risk_engine.state_monitor import NullStateMonitor
-
 
 # --- PassthroughAnalyzer ---
 

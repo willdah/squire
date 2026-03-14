@@ -1,7 +1,6 @@
 """Tests for core data models."""
 
 import pytest
-
 from agent_risk_engine.models import (
     THRESHOLD_ALIASES,
     GateResult,
@@ -11,7 +10,6 @@ from agent_risk_engine.models import (
     SystemState,
     UtilityScore,
 )
-
 
 # --- RiskLevel ---
 

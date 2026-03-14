@@ -4,7 +4,7 @@ No LLM calls. Evaluates tool risk against a threshold with per-tool overrides.
 Framework-agnostic — no imports from squire or any agent framework.
 """
 
-from .models import GateResult, THRESHOLD_ALIASES
+from .models import THRESHOLD_ALIASES, GateResult
 
 
 class RuleGate:

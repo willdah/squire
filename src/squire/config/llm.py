@@ -24,7 +24,11 @@ class LLMConfig(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        return (init_settings, env_settings, dotenv_settings, TomlSectionSource(settings_cls, partial(get_section, "llm")), file_secret_settings)
+        return (
+            init_settings, env_settings, dotenv_settings,
+            TomlSectionSource(settings_cls, partial(get_section, "llm")),
+            file_secret_settings,
+        )
 
     model: str = Field(
         default="ollama_chat/llama3.1:8b",

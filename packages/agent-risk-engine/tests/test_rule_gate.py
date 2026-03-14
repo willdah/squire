@@ -1,10 +1,8 @@
 """Tests for RuleGate — Layer 1: Fast static risk evaluation."""
 
 import pytest
-
 from agent_risk_engine.models import THRESHOLD_ALIASES, GateResult
 from agent_risk_engine.rule_gate import RuleGate
-
 
 # --- Threshold resolution ---
 

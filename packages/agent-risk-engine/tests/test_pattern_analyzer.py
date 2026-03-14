@@ -1,6 +1,5 @@
 """Tests for PatternAnalyzer — Layer 2 pattern-based implementation."""
 
-import pytest
 
 from agent_risk_engine.analyzer import DEFAULT_PATTERNS, PatternAnalyzer
 from agent_risk_engine.models import RiskPattern

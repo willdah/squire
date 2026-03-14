@@ -40,7 +40,6 @@ async def test_disallowed_action():
 async def test_no_pager_on_status(mock_backend, mock_registry):
     """Status action should include --no-pager flag."""
     calls = []
-    original_run = mock_backend.run
 
     async def capture_run(cmd, *, timeout=30.0):
         calls.append(cmd)

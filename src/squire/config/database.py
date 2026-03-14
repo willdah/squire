@@ -25,7 +25,11 @@ class DatabaseConfig(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        return (init_settings, env_settings, dotenv_settings, TomlSectionSource(settings_cls, partial(get_section, "db")), file_secret_settings)
+        return (
+            init_settings, env_settings, dotenv_settings,
+            TomlSectionSource(settings_cls, partial(get_section, "db")),
+            file_secret_settings,
+        )
 
     path: Path = Field(
         default=Path.home() / ".local" / "share" / "squire" / "squire.db",
