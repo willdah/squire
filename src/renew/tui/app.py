@@ -2,12 +2,13 @@
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Header
 
 from .approval_bridge import ApprovalRequest, approval_bridge
 from .approval_modal import ApprovalModal
 from .chat_pane import ChatPane
+from .log_viewer import LogViewer
 from .status_panel import StatusPanel
 
 
@@ -27,8 +28,18 @@ class RenewApp(App):
         border-right: solid $primary;
     }
 
-    #chat-pane {
+    #right-column {
         width: 1fr;
+        layout: vertical;
+    }
+
+    #chat-pane {
+        height: 2fr;
+    }
+
+    #log-viewer {
+        height: 1fr;
+        border-top: solid $primary;
     }
     """
 
@@ -37,23 +48,28 @@ class RenewApp(App):
         Binding("ctrl+l", "clear_chat", "Clear", show=True),
     ]
 
-    def __init__(self, agent_runner=None, session=None, app_config=None, initial_snapshot=None, **kwargs):
+    def __init__(self, agent_runner=None, session=None, app_config=None, db=None, initial_snapshot=None, prior_messages=None, **kwargs):
         super().__init__(**kwargs)
         self._agent_runner = agent_runner
         self._session = session
         self._app_config = app_config
+        self._db = db
         self._initial_snapshot = initial_snapshot
+        self._prior_messages = prior_messages
 
     def compose(self) -> ComposeResult:
         yield Header()
         with Horizontal(id="main-container"):
             yield StatusPanel(id="status-panel")
-            yield ChatPane(
-                agent_runner=self._agent_runner,
-                session=self._session,
-                app_config=self._app_config,
-                id="chat-pane",
-            )
+            with Vertical(id="right-column"):
+                yield ChatPane(
+                    agent_runner=self._agent_runner,
+                    session=self._session,
+                    app_config=self._app_config,
+                    db=self._db,
+                    id="chat-pane",
+                )
+                yield LogViewer(id="log-viewer")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -63,6 +79,11 @@ class RenewApp(App):
         if self._initial_snapshot:
             status_panel = self.query_one(StatusPanel)
             status_panel.update_snapshot(self._initial_snapshot)
+
+        # Restore prior messages if resuming a session
+        if self._prior_messages:
+            chat_pane = self.query_one(ChatPane)
+            chat_pane.restore_messages(self._prior_messages)
 
     def show_approval_modal(self, request: ApprovalRequest) -> None:
         """Show the approval modal for a pending tool execution.
@@ -79,6 +100,22 @@ class RenewApp(App):
             request.set_result(approved)
 
         self.push_screen(modal, callback=on_dismiss)
+
+    def update_status_snapshot(self, snapshot: dict) -> None:
+        """Update the status panel with a new snapshot (called from background task)."""
+        try:
+            status_panel = self.query_one(StatusPanel)
+            status_panel.update_snapshot(snapshot)
+        except Exception:
+            pass
+
+    def add_log_entry(self, text: str, category: str = "event") -> None:
+        """Add an entry to the log viewer panel."""
+        try:
+            log_viewer = self.query_one(LogViewer)
+            log_viewer.add_entry(text, category=category)
+        except Exception:
+            pass
 
     def action_clear_chat(self) -> None:
         chat_pane = self.query_one(ChatPane)
