@@ -1,15 +1,28 @@
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
+
+from .loader import TomlSectionSource, get_top_level
 
 
 class AppConfig(BaseSettings):
     """Top-level application configuration.
 
-    Environment variables use the prefix RENEW_.
-    Example: RENEW_RISK_PROFILE=cautious
+    Loaded from renew.toml top-level keys and/or RENEW_ env vars.
+    Env vars take precedence over TOML values.
     """
 
     model_config = SettingsConfigDict(env_prefix="RENEW_", case_sensitive=False, extra="ignore")
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (init_settings, env_settings, dotenv_settings, TomlSectionSource(settings_cls, get_top_level), file_secret_settings)
 
     app_name: str = Field(
         default="Renew",

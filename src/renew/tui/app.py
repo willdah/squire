@@ -46,6 +46,8 @@ class RenewApp(App):
     BINDINGS = [
         Binding("ctrl+q", "quit", "Quit", show=True),
         Binding("ctrl+l", "clear_chat", "Clear", show=True),
+        Binding("ctrl+g", "toggle_log", "Log", show=True),
+        Binding("ctrl+s", "toggle_status", "Status", show=True),
     ]
 
     def __init__(self, agent_runner=None, session=None, app_config=None, db=None, notifier=None, initial_snapshot=None, prior_messages=None, **kwargs):
@@ -118,6 +120,14 @@ class RenewApp(App):
             log_viewer.add_entry(text, category=category)
         except Exception:
             pass
+
+    def action_toggle_log(self) -> None:
+        log_viewer = self.query_one(LogViewer)
+        log_viewer.display = not log_viewer.display
+
+    def action_toggle_status(self) -> None:
+        status_panel = self.query_one(StatusPanel)
+        status_panel.display = not status_panel.display
 
     def action_clear_chat(self) -> None:
         chat_pane = self.query_one(ChatPane)

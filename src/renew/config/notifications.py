@@ -1,5 +1,9 @@
+from functools import partial
+
 from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
+
+from .loader import TomlSectionSource, get_section
 
 
 class WebhookConfig(BaseModel):
@@ -20,10 +24,22 @@ class WebhookConfig(BaseModel):
 class NotificationsConfig(BaseSettings):
     """Notification system configuration.
 
-    Environment variables use the prefix RENEW_NOTIFICATIONS_.
+    Loaded from [notifications] section in renew.toml and/or RENEW_NOTIFICATIONS_ env vars.
+    Env vars take precedence over TOML values.
     """
 
     model_config = SettingsConfigDict(env_prefix="RENEW_NOTIFICATIONS_", case_sensitive=False, extra="ignore")
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (init_settings, env_settings, dotenv_settings, TomlSectionSource(settings_cls, partial(get_section, "notifications")), file_secret_settings)
 
     enabled: bool = Field(
         default=False,

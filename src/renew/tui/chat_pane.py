@@ -80,6 +80,7 @@ class ChatPane(Static):
 
     def on_mount(self) -> None:
         self._add_message("Renew is ready. Ask me about your system.", "system")
+        self.query_one("#chat-input", Input).focus()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         user_text = event.value.strip()

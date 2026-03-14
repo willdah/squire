@@ -1,15 +1,30 @@
+from functools import partial
+
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
+
+from .loader import TomlSectionSource, get_section
 
 
 class LLMConfig(BaseSettings):
     """LLM provider configuration.
 
-    Environment variables use the prefix RENEW_LLM_.
-    Example: RENEW_LLM_MODEL=anthropic/claude-sonnet-4-20250514
+    Loaded from [llm] section in renew.toml and/or RENEW_LLM_ env vars.
+    Env vars take precedence over TOML values.
     """
 
     model_config = SettingsConfigDict(env_prefix="RENEW_LLM_", case_sensitive=False, extra="ignore")
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (init_settings, env_settings, dotenv_settings, TomlSectionSource(settings_cls, partial(get_section, "llm")), file_secret_settings)
 
     model: str = Field(
         default="ollama_chat/llama3.1:8b",

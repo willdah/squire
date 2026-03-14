@@ -1,0 +1,61 @@
+# Renew — Example Configuration
+#
+# Copy this file to one of:
+#   ./renew.toml              (project directory — highest priority)
+#   ~/.config/renew/renew.toml (user config)
+#   /etc/renew/renew.toml      (system-wide)
+#
+# Environment variables (RENEW_*) take precedence over TOML values.
+# Values shown here are the defaults.
+
+# --- Top-level application settings ---
+# app_name = "Renew"
+# user_id = "renew-user"
+# risk_profile = "cautious"        # read-only, cautious, standard, full-trust, custom
+# history_limit = 50               # Max messages in conversation context
+# max_tool_rounds = 10             # Max tool-call rounds per user message
+
+# Custom risk profile (only used when risk_profile = "custom")
+# custom_allowed_tools = ["docker_ps", "system_info"]
+# custom_approval_tools = ["docker_compose"]
+# custom_denied_tools = ["run_command"]
+
+# --- LLM provider ---
+[llm]
+# model = "ollama_chat/llama3.1:8b"
+# api_base = "http://localhost:11434"
+# temperature = 0.2
+# max_tokens = 4096
+
+# --- Database persistence ---
+[db]
+# path = "~/.local/share/renew/renew.db"
+# snapshot_interval_minutes = 15
+
+# --- Tool security: path and command lists ---
+[paths]
+# config_allowlist = ["/etc/nginx/", "/opt/stacks/"]
+# command_allowlist = [
+#     "ping", "traceroute", "dig", "nslookup",
+#     "df", "free", "uptime", "ip", "ss",
+#     "cat", "head", "tail",
+# ]
+# command_denylist = [
+#     "rm", "mkfs", "dd", "fdisk", "parted",
+#     "shutdown", "reboot", "init",
+# ]
+
+# --- Notifications ---
+[notifications]
+# enabled = false
+#
+# [[notifications.webhooks]]
+# name = "discord"
+# url = "https://discord.com/api/webhooks/..."
+# events = ["error", "approval_denied"]
+# headers = {}
+#
+# [[notifications.webhooks]]
+# name = "ntfy"
+# url = "https://ntfy.sh/renew-alerts"
+# events = ["*"]

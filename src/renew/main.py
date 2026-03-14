@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 
 from dotenv import load_dotenv
 from google.adk.apps import App
@@ -79,7 +80,7 @@ async def _background_snapshots(db: DatabaseService, interval_minutes: int, tui:
             # Update TUI status panel from main thread
             tui.call_from_thread(tui.update_status_snapshot, snapshot)
         except Exception:
-            pass  # Background task should not crash
+            logging.getLogger(__name__).debug("Background snapshot failed", exc_info=True)
 
 
 async def start_chat(resume_session_id: str | None = None) -> None:
@@ -174,6 +175,10 @@ async def start_chat(resume_session_id: str | None = None) -> None:
         await tui.run_async()
     finally:
         snapshot_task.cancel()
+        try:
+            await snapshot_task
+        except asyncio.CancelledError:
+            pass
         await notifier.close()
         await db.close()
 
