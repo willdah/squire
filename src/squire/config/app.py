@@ -1,10 +1,34 @@
+from enum import StrEnum
 from functools import partial
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import Field
+from pydantic import BeforeValidator, Field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 from .loader import TomlSectionSource, get_section, get_top_level
+
+
+class RiskThreshold(StrEnum):
+    """Named risk-threshold aliases accepted in config and env vars."""
+
+    READ_ONLY = "read-only"
+    CAUTIOUS = "cautious"
+    STANDARD = "standard"
+    FULL_TRUST = "full-trust"
+
+
+_INT_TO_ALIAS: dict[int, str] = {1: "read-only", 2: "cautious", 3: "standard", 5: "full-trust"}
+
+
+def _coerce_risk_threshold(value: Any) -> str:
+    """Accept int (1-3, 5) or string alias; normalise to a RiskThreshold value."""
+    if isinstance(value, int):
+        if value in _INT_TO_ALIAS:
+            return _INT_TO_ALIAS[value]
+        raise ValueError(f"No alias for numeric threshold {value}; valid: {list(_INT_TO_ALIAS.keys())}")
+    if isinstance(value, str) and value.isdigit():
+        return _coerce_risk_threshold(int(value))
+    return value
 
 
 class AppConfig(BaseSettings):
@@ -53,8 +77,8 @@ class AppConfig(BaseSettings):
         default="",
         description="Pre-configured Squire profile: rook, cedric, wynn",
     )
-    risk_threshold: Any = Field(
-        default="cautious",
+    risk_threshold: Annotated[RiskThreshold, BeforeValidator(_coerce_risk_threshold)] = Field(
+        default=RiskThreshold.CAUTIOUS,
         description="Risk threshold (1-5 or alias: read-only, cautious, standard, full-trust)",
     )
     risk_strict: bool = Field(
