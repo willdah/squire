@@ -4,7 +4,7 @@ The instruction is evaluated before each LLM invocation, injecting
 live system context from the latest snapshot stored in session state.
 """
 
-from google.adk.agents import ReadonlyContext
+from google.adk.agents.readonly_context import ReadonlyContext
 
 from .profiles import get_profile
 

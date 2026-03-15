@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-03-14
+
+### Fixed
+
+- **Startup crash with google-adk 1.27+** — `ReadonlyContext` moved from `google.adk.agents` to `google.adk.agents.readonly_context`; updated import path.
+
 ## [0.1.0] - 2026-03-14
 
 ### Added
