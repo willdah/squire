@@ -44,11 +44,11 @@ def build_conversation_style() -> str:
 
 
 def build_risk_section(ctx: ReadonlyContext) -> str:
-    """Build the risk threshold guidance section."""
-    risk_threshold = ctx.state.get("risk_threshold", 2)
+    """Build the risk tolerance guidance section."""
+    risk_tolerance = ctx.state.get("risk_tolerance", 2)
     return f"""\
-## Risk Threshold: {risk_threshold}/5
-{format_risk_guidance(risk_threshold)}"""
+## Risk Tolerance: {risk_tolerance}/5
+{format_risk_guidance(risk_tolerance)}"""
 
 
 def build_hosts_section(ctx: ReadonlyContext) -> str:
@@ -201,12 +201,12 @@ def format_hosts_section(available_hosts: list[str], host_configs: dict) -> str:
 
 
 def format_risk_guidance(threshold: int) -> str:
-    """Return guidance text based on the active risk threshold."""
+    """Return guidance text based on the active risk tolerance."""
     from agent_risk_engine import RiskLevel
 
     level_label = RiskLevel(threshold).label if 1 <= threshold <= 5 else "Custom"
     return (
-        f"Your risk threshold is set to {threshold}/5 ({level_label}). "
+        f"Your risk tolerance is set to {threshold}/5 ({level_label}). "
         f"Tools at risk level {threshold} or below run automatically. "
         f"Tools above level {threshold} require user approval before execution. "
         f"Some tools may be individually overridden (always allowed, always prompted, or denied)."

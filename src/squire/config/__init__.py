@@ -1,4 +1,4 @@
-from .app import AppConfig, RiskOverridesConfig, RiskThreshold
+from .app import AppConfig, RiskOverridesConfig, RiskTolerance
 from .database import DatabaseConfig
 from .hosts import HostConfig
 from .llm import LLMConfig
@@ -9,7 +9,7 @@ from .watch import WatchConfig
 __all__ = [
     "AppConfig",
     "RiskOverridesConfig",
-    "RiskThreshold",
+    "RiskTolerance",
     "DatabaseConfig",
     "HostConfig",
     "LLMConfig",

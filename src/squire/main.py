@@ -182,7 +182,7 @@ async def start_chat(resume_session_id: str | None = None) -> None:
     # Build the risk evaluation pipeline
     risk_overrides = RiskOverridesConfig()
     rule_gate = RuleGate(
-        threshold=app_config.risk_threshold,
+        threshold=app_config.risk_tolerance,
         strict=app_config.risk_strict,
         allowed_tools=set(risk_overrides.allow),
         approve_tools=set(risk_overrides.approve),
@@ -198,7 +198,7 @@ async def start_chat(resume_session_id: str | None = None) -> None:
 
     session_state = {
         "risk_evaluator": risk_evaluator,
-        "risk_threshold": rule_gate.threshold,
+        "risk_tolerance": rule_gate.threshold,
         "latest_snapshot": snapshot,
         "house": app_config.house,
         "squire_name": app_config.squire_name,

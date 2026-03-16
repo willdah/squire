@@ -8,9 +8,9 @@ class TestWatchConfigDefaults:
         c = WatchConfig()
         assert c.interval_minutes == 5
 
-    def test_default_risk_threshold(self):
+    def test_default_risk_tolerance(self):
         c = WatchConfig()
-        assert c.risk_threshold == "read-only"
+        assert c.risk_tolerance == "read-only"
 
     def test_default_strict(self):
         c = WatchConfig()
@@ -29,8 +29,8 @@ class TestWatchConfigDefaults:
         assert c.cycles_per_session == 50
 
     def test_override_threshold(self):
-        c = WatchConfig(risk_threshold="standard")
-        assert c.risk_threshold == "standard"
+        c = WatchConfig(risk_tolerance="standard")
+        assert c.risk_tolerance == "standard"
 
     def test_override_interval(self):
         c = WatchConfig(interval_minutes=10)

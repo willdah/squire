@@ -14,7 +14,7 @@
 # house = ""                       # Your house name (e.g. "Ahern", "Stark", "Homestead")
 # squire_profile = ""              # Pre-configured profile: "rook", "cedric", "wynn"
 # squire_name = ""                 # Custom name (overrides profile name if set)
-# risk_threshold = "cautious"      # 1-5 or alias: read-only(1), cautious(2), standard(3), full-trust(5)
+# risk_tolerance = "cautious"      # 1-5 or alias: read-only(1), cautious(2), standard(3), full-trust(5)
 # risk_strict = false              # true = deny above threshold; false = prompt for approval
 # history_limit = 50               # Max messages in conversation context
 # max_tool_rounds = 10             # Max tool-call rounds per user message

@@ -9,7 +9,7 @@ from typing import Annotated, Any
 from pydantic import BeforeValidator, Field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
-from .app import RiskThreshold, _coerce_risk_threshold
+from .app import RiskTolerance, _coerce_risk_tolerance
 from .loader import TomlSectionSource, get_section
 
 
@@ -44,9 +44,9 @@ class WatchConfig(BaseSettings):
         ge=1,
         description="Minutes between watch cycles",
     )
-    risk_threshold: Annotated[RiskThreshold, BeforeValidator(_coerce_risk_threshold)] = Field(
-        default=RiskThreshold.READ_ONLY,
-        description="Risk threshold for watch mode (conservative default)",
+    risk_tolerance: Annotated[RiskTolerance, BeforeValidator(_coerce_risk_tolerance)] = Field(
+        default=RiskTolerance.READ_ONLY,
+        description="Risk tolerance for watch mode (conservative default)",
     )
     risk_strict: bool = Field(
         default=True,

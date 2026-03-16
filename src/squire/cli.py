@@ -103,7 +103,7 @@ def watch_status() -> None:
         table.add_row("Last cycle", last_cycle[:19])
     if interval := state.get("interval_minutes"):
         table.add_row("Interval", f"{interval}m")
-    if threshold := state.get("risk_threshold"):
+    if threshold := state.get("risk_tolerance"):
         table.add_row("Risk threshold", threshold)
     if session_id := state.get("session_id"):
         table.add_row("Session", session_id[:12] + "...")

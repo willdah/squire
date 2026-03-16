@@ -89,7 +89,7 @@ async def start_watch() -> None:
     risk_overrides = RiskOverridesConfig()
     call_tracker = CallTracker()
     rule_gate = RuleGate(
-        threshold=watch_config.risk_threshold,
+        threshold=watch_config.risk_tolerance,
         strict=True,  # Always strict in watch mode — deny, don't prompt
         allowed_tools=set(watch_config.allow) | set(risk_overrides.allow),
         denied_tools=set(watch_config.deny) | set(risk_overrides.deny),
@@ -131,7 +131,7 @@ async def start_watch() -> None:
     # Create initial session
     session_state = {
         "risk_evaluator": risk_evaluator,
-        "risk_threshold": rule_gate.threshold,
+        "risk_tolerance": rule_gate.threshold,
         "latest_snapshot": snapshot,
         "watch_mode": True,
         "house": app_config.house,
@@ -169,7 +169,7 @@ async def start_watch() -> None:
         "last_response": "",
         "session_id": session.id,
         "interval_minutes": str(watch_config.interval_minutes),
-        "risk_threshold": str(watch_config.risk_threshold),
+        "risk_tolerance": str(watch_config.risk_tolerance),
     })
 
     # Dispatch lifecycle notification
@@ -177,7 +177,7 @@ async def start_watch() -> None:
     logger.info(
         "Watch mode started — interval=%dm, threshold=%s, cycles_per_session=%d",
         watch_config.interval_minutes,
-        watch_config.risk_threshold,
+        watch_config.risk_tolerance,
         watch_config.cycles_per_session,
     )
 

@@ -8,8 +8,8 @@ from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, Settings
 from .loader import TomlSectionSource, get_section, get_top_level
 
 
-class RiskThreshold(StrEnum):
-    """Named risk-threshold aliases accepted in config and env vars."""
+class RiskTolerance(StrEnum):
+    """Named risk-tolerance aliases accepted in config and env vars."""
 
     READ_ONLY = "read-only"
     CAUTIOUS = "cautious"
@@ -20,16 +20,16 @@ class RiskThreshold(StrEnum):
 _INT_TO_ALIAS: dict[int, str] = {1: "read-only", 2: "cautious", 3: "standard", 5: "full-trust"}
 
 
-def _coerce_risk_threshold(value: Any) -> str | None:
-    """Accept int (1-3, 5) or string alias; normalise to a RiskThreshold value."""
+def _coerce_risk_tolerance(value: Any) -> str | None:
+    """Accept int (1-3, 5) or string alias; normalise to a RiskTolerance value."""
     if value is None:
         return None
     if isinstance(value, int):
         if value in _INT_TO_ALIAS:
             return _INT_TO_ALIAS[value]
-        raise ValueError(f"No alias for numeric threshold {value}; valid: {list(_INT_TO_ALIAS.keys())}")
+        raise ValueError(f"No alias for numeric tolerance {value}; valid: {list(_INT_TO_ALIAS.keys())}")
     if isinstance(value, str) and value.isdigit():
-        return _coerce_risk_threshold(int(value))
+        return _coerce_risk_tolerance(int(value))
     return value
 
 
@@ -79,13 +79,13 @@ class AppConfig(BaseSettings):
         default="",
         description="Pre-configured Squire profile: rook, cedric, wynn",
     )
-    risk_threshold: Annotated[RiskThreshold, BeforeValidator(_coerce_risk_threshold)] = Field(
-        default=RiskThreshold.CAUTIOUS,
-        description="Risk threshold (1-5 or alias: read-only, cautious, standard, full-trust)",
+    risk_tolerance: Annotated[RiskTolerance, BeforeValidator(_coerce_risk_tolerance)] = Field(
+        default=RiskTolerance.CAUTIOUS,
+        description="Risk tolerance (1-5 or alias: read-only, cautious, standard, full-trust)",
     )
     risk_strict: bool = Field(
         default=False,
-        description="When true, tools above threshold are denied outright instead of prompting for approval",
+        description="When true, tools above tolerance are denied outright instead of prompting for approval",
     )
     history_limit: int = Field(
         default=50,
@@ -101,21 +101,21 @@ class AppConfig(BaseSettings):
         default=False,
         description="Enable sub-agent decomposition (Monitor, Container, Admin, Notifier)",
     )
-    monitor_risk_threshold: Annotated[RiskThreshold | None, BeforeValidator(_coerce_risk_threshold)] = Field(
+    monitor_risk_tolerance: Annotated[RiskTolerance | None, BeforeValidator(_coerce_risk_tolerance)] = Field(
         default=None,
-        description="Per-agent risk threshold for Monitor (falls back to global risk_threshold)",
+        description="Per-agent risk tolerance for Monitor (falls back to global risk_tolerance)",
     )
-    container_risk_threshold: Annotated[RiskThreshold | None, BeforeValidator(_coerce_risk_threshold)] = Field(
+    container_risk_tolerance: Annotated[RiskTolerance | None, BeforeValidator(_coerce_risk_tolerance)] = Field(
         default=None,
-        description="Per-agent risk threshold for Container (falls back to global risk_threshold)",
+        description="Per-agent risk tolerance for Container (falls back to global risk_tolerance)",
     )
-    admin_risk_threshold: Annotated[RiskThreshold | None, BeforeValidator(_coerce_risk_threshold)] = Field(
+    admin_risk_tolerance: Annotated[RiskTolerance | None, BeforeValidator(_coerce_risk_tolerance)] = Field(
         default=None,
-        description="Per-agent risk threshold for Admin (falls back to global risk_threshold)",
+        description="Per-agent risk tolerance for Admin (falls back to global risk_tolerance)",
     )
-    notifier_risk_threshold: Annotated[RiskThreshold | None, BeforeValidator(_coerce_risk_threshold)] = Field(
+    notifier_risk_tolerance: Annotated[RiskTolerance | None, BeforeValidator(_coerce_risk_tolerance)] = Field(
         default=None,
-        description="Per-agent risk threshold for Notifier (falls back to global risk_threshold)",
+        description="Per-agent risk tolerance for Notifier (falls back to global risk_tolerance)",
     )
 
 
@@ -143,11 +143,11 @@ class RiskOverridesConfig(BaseSettings):
 
     allow: list[str] = Field(
         default_factory=list,
-        description="Tool names that are always auto-allowed regardless of threshold",
+        description="Tool names that are always auto-allowed regardless of tolerance",
     )
     approve: list[str] = Field(
         default_factory=list,
-        description="Tool names that always require approval even if threshold would allow",
+        description="Tool names that always require approval even if tolerance would allow",
     )
     deny: list[str] = Field(
         default_factory=list,

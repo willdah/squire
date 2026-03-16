@@ -31,7 +31,7 @@ def _make_context(threshold=3, evaluator=None):
     if evaluator is None:
         evaluator = RiskEvaluator(rule_gate=RuleGate(threshold=threshold))
     ctx = MagicMock()
-    ctx.state = _FakeState({"risk_evaluator": evaluator, "risk_threshold": threshold})
+    ctx.state = _FakeState({"risk_evaluator": evaluator, "risk_tolerance": threshold})
     return ctx
 
 
