@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-16
+
+### Fixed
+
+- **LocalBackend crash on missing commands** — `FileNotFoundError`, `PermissionError`, and `OSError` from `create_subprocess_exec` are now caught and returned as `CommandResult` instead of propagating up and breaking the event loop. Fixes macOS crash when the agent calls Linux-only tools like `journalctl`.
+- **Chat pane error handling** — agent errors now show a user-friendly message, log the full traceback, persist error details to the database, and guard against `UnboundLocalError` on `session_id`.
+
+### Added
+
+- **`safe_tool` decorator** — defense-in-depth wrapper applied to all ADK tool functions. Catches any uncaught exception and returns it as a string so the LLM can reason about failures instead of crashing. Preserves function metadata for ADK schema discovery.
+- **Watch mode error context injection** — when a watch cycle fails, the next cycle's prompt includes the error so the agent can adapt (e.g. skip unavailable tools).
+
 ## [0.2.0] - 2026-03-15
 
 ### Added

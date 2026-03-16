@@ -184,6 +184,7 @@ async def start_watch() -> None:
     )
 
     cycle_count = 0
+    last_cycle_error: str | None = None
 
     try:
         while not shutdown.is_set():
@@ -205,21 +206,33 @@ async def start_watch() -> None:
             # Reset per-cycle state
             call_tracker.reset()
 
+            # Build prompt with error context from previous cycle
+            prompt = watch_config.checkin_prompt
+            if last_cycle_error:
+                prompt = (
+                    f"Note: the previous watch cycle encountered an error: {last_cycle_error}\n"
+                    "Adjust your approach if needed (e.g. skip unavailable tools).\n\n"
+                    f"{prompt}"
+                )
+
             # Run the watch cycle
             try:
                 response_text = await asyncio.wait_for(
-                    _run_cycle(runner, session, agent, watch_config.checkin_prompt, app_config),
+                    _run_cycle(runner, session, agent, prompt, app_config),
                     timeout=watch_config.cycle_timeout_seconds,
                 )
+                last_cycle_error = None
                 if response_text:
                     await db.save_message(session_id=session.id, role="assistant", content=response_text)
                     await db.set_watch_state("last_response", response_text[:500])
                     logger.info("Cycle %d:\n%s", cycle_count, response_text)
             except TimeoutError:
+                last_cycle_error = f"Cycle timed out after {watch_config.cycle_timeout_seconds}s"
                 logger.warning("Cycle %d timed out after %ds", cycle_count, watch_config.cycle_timeout_seconds)
                 await db.set_watch_state("last_response", f"[timeout after {watch_config.cycle_timeout_seconds}s]")
                 await _dispatch(notifier, "watch.error", f"Watch cycle {cycle_count} timed out.")
             except Exception as e:
+                last_cycle_error = f"{type(e).__name__}: {e}"
                 logger.error("Cycle %d failed: %s", cycle_count, e, exc_info=True)
                 await db.set_watch_state("last_response", f"[error: {e}]")
                 await _dispatch(notifier, "watch.error", f"Watch cycle {cycle_count} failed.")
