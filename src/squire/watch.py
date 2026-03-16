@@ -6,7 +6,6 @@ are denied outright; notifications are dispatched for actions and blocks.
 """
 
 import asyncio
-import json
 import logging
 import os
 import signal
@@ -160,17 +159,20 @@ async def start_watch() -> None:
 
     # Persist initial watch state
     started_at = datetime.now(UTC).isoformat()
-    await _update_watch_state(db, {
-        "status": "running",
-        "started_at": started_at,
-        "pid": str(os.getpid()),
-        "cycle": "0",
-        "last_cycle_at": "",
-        "last_response": "",
-        "session_id": session.id,
-        "interval_minutes": str(watch_config.interval_minutes),
-        "risk_tolerance": str(watch_config.risk_tolerance),
-    })
+    await _update_watch_state(
+        db,
+        {
+            "status": "running",
+            "started_at": started_at,
+            "pid": str(os.getpid()),
+            "cycle": "0",
+            "last_cycle_at": "",
+            "last_response": "",
+            "session_id": session.id,
+            "interval_minutes": str(watch_config.interval_minutes),
+            "risk_tolerance": str(watch_config.risk_tolerance),
+        },
+    )
 
     # Dispatch lifecycle notification
     await _dispatch(notifier, "watch.start", "Squire watch mode started.")
@@ -213,7 +215,7 @@ async def start_watch() -> None:
                     await db.save_message(session_id=session.id, role="assistant", content=response_text)
                     await db.set_watch_state("last_response", response_text[:500])
                     logger.info("Cycle %d:\n%s", cycle_count, response_text)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("Cycle %d timed out after %ds", cycle_count, watch_config.cycle_timeout_seconds)
                 await db.set_watch_state("last_response", f"[timeout after {watch_config.cycle_timeout_seconds}s]")
                 await _dispatch(notifier, "watch.error", f"Watch cycle {cycle_count} timed out.")
@@ -228,13 +230,15 @@ async def start_watch() -> None:
                 try:
                     summary = await asyncio.wait_for(
                         _run_cycle(
-                            runner, session, agent,
+                            runner,
+                            session,
+                            agent,
                             "Summarize your observations and actions from this session in a few sentences.",
                             app_config,
                         ),
                         timeout=60,
                     )
-                except (asyncio.TimeoutError, Exception):
+                except (TimeoutError, Exception):
                     summary = "(session summary unavailable)"
 
                 session = await runner.session_service.create_session(
@@ -261,7 +265,7 @@ async def start_watch() -> None:
             # Sleep until next cycle (interruptible by shutdown signal)
             try:
                 await asyncio.wait_for(shutdown.wait(), timeout=watch_config.interval_minutes * 60)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass  # Normal — timeout means it's time for the next cycle
 
     finally:

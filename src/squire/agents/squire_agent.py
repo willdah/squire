@@ -61,11 +61,11 @@ def _create_multi_agent(
     risk_gate_factory: RiskGateFactory | None,
 ) -> Agent:
     """Create the multi-agent hierarchy with sub-agent routing."""
+    from ..instructions.router_agent import build_instruction as build_router_instruction
     from .admin_agent import create_admin_agent
     from .container_agent import create_container_agent
     from .monitor_agent import create_monitor_agent
     from .notifier_agent import create_notifier_agent
-    from ..instructions.router_agent import build_instruction as build_router_instruction
 
     if risk_gate_factory is None:
         raise ValueError("risk_gate_factory is required when multi_agent=True")

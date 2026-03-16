@@ -358,9 +358,15 @@ class DatabaseService:
         await conn.commit()
         return cursor.rowcount > 0
 
-    _UPDATABLE_ALERT_FIELDS = frozenset({
-        "condition", "host", "severity", "cooldown_minutes", "enabled",
-    })
+    _UPDATABLE_ALERT_FIELDS = frozenset(
+        {
+            "condition",
+            "host",
+            "severity",
+            "cooldown_minutes",
+            "enabled",
+        }
+    )
 
     async def update_alert_rule(self, name: str, **fields) -> bool:
         """Update fields of an alert rule by name.

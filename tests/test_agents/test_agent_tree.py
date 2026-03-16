@@ -4,7 +4,7 @@ import pytest
 
 from squire.agents.squire_agent import create_squire_agent
 from squire.callbacks.risk_gate import create_risk_gate
-from squire.config import AppConfig, LLMConfig
+from squire.config import AppConfig
 from squire.tools import TOOL_RISK_LEVELS
 
 

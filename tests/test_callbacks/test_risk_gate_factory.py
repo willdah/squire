@@ -3,7 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from agent_risk_engine import GateResult, RiskEvaluator, RuleGate
+from agent_risk_engine import RiskEvaluator, RuleGate
 
 from squire.approval import ApprovalProvider, DenyAllApproval
 from squire.callbacks.risk_gate import create_risk_gate
@@ -17,12 +17,16 @@ def _make_tool(name: str):
 
 class _FakeState:
     """Dict-like state that supports both .get() and [] access."""
+
     def __init__(self, data):
         self._data = data
+
     def get(self, key, default=None):
         return self._data.get(key, default)
+
     def __getitem__(self, key):
         return self._data[key]
+
     def __setitem__(self, key, value):
         self._data[key] = value
 

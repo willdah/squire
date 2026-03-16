@@ -21,9 +21,7 @@ _OPS = {
     "!=": operator.ne,
 }
 
-_CONDITION_RE = re.compile(
-    r"^\s*(?P<field>[\w.]+)\s*(?P<op>>=|<=|!=|==|>|<)\s*(?P<value>.+?)\s*$"
-)
+_CONDITION_RE = re.compile(r"^\s*(?P<field>[\w.]+)\s*(?P<op>>=|<=|!=|==|>|<)\s*(?P<value>.+?)\s*$")
 
 
 class ConditionError(ValueError):
@@ -60,9 +58,7 @@ def parse_condition(condition: str) -> ParsedCondition:
     match = _CONDITION_RE.match(condition)
     if not match:
         raise ConditionError(
-            f"Invalid condition: {condition!r}. "
-            f"Expected format: <field> <op> <value> "
-            f"(e.g., 'cpu_percent > 90')"
+            f"Invalid condition: {condition!r}. Expected format: <field> <op> <value> (e.g., 'cpu_percent > 90')"
         )
 
     field = match.group("field")

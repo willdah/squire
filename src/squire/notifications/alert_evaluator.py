@@ -65,10 +65,7 @@ async def evaluate_alerts(
 
             if evaluate_condition(condition, host_snapshot):
                 severity = rule.get("severity", "warning")
-                summary = (
-                    f"[{severity.upper()}] Alert '{rule['name']}' triggered on {host_name}: "
-                    f"{rule['condition']}"
-                )
+                summary = f"[{severity.upper()}] Alert '{rule['name']}' triggered on {host_name}: {rule['condition']}"
                 await _dispatch_alert(notifier, summary, rule, host_name)
                 await db.update_alert_last_fired(rule["name"])
                 fired += 1

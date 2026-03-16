@@ -20,9 +20,11 @@ logger = logging.getLogger(__name__)
 
 # ADK framework tools that should bypass the risk gate.
 # These are auto-injected by ADK and are not user-facing tools.
-_ADK_INTERNAL_TOOLS = frozenset({
-    "transfer_to_agent",
-})
+_ADK_INTERNAL_TOOLS = frozenset(
+    {
+        "transfer_to_agent",
+    }
+)
 
 
 def create_risk_gate(
@@ -92,9 +94,7 @@ def create_risk_gate(
                 return {"error": f"Watch mode denied '{tool_name}': above risk threshold."}
 
             if approval_provider is not None:
-                approved = approval_provider.request_approval(
-                    tool_name, args, result.risk_score.level
-                )
+                approved = approval_provider.request_approval(tool_name, args, result.risk_score.level)
                 if not approved:
                     return {"error": f"User declined to approve '{tool_name}'."}
             else:

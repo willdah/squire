@@ -197,7 +197,7 @@ def alerts_add(
         raise typer.Exit(1)
 
     if severity not in ("info", "warning", "critical"):
-        typer.echo(f"Error: severity must be 'info', 'warning', or 'critical'.", err=True)
+        typer.echo("Error: severity must be 'info', 'warning', or 'critical'.", err=True)
         raise typer.Exit(1)
 
     async def _run():
@@ -205,8 +205,11 @@ def alerts_add(
         db = DatabaseService(db_config.path)
         try:
             return await db.save_alert_rule(
-                name=name, condition=condition, host=host,
-                severity=severity, cooldown_minutes=cooldown,
+                name=name,
+                condition=condition,
+                host=host,
+                severity=severity,
+                cooldown_minutes=cooldown,
             )
         finally:
             await db.close()

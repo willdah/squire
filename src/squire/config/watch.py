@@ -4,7 +4,7 @@ Loaded from [watch] section in squire.toml and/or SQUIRE_WATCH_ env vars.
 """
 
 from functools import partial
-from typing import Annotated, Any
+from typing import Annotated
 
 from pydantic import BeforeValidator, Field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict

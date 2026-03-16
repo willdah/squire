@@ -31,8 +31,7 @@ class AlertsPanel(Static):
             severity = r.get("severity", "warning")
             sev_style = {"critical": "red", "warning": "yellow", "info": "blue"}.get(severity, "white")
             lines.append(
-                f"  {status} [{sev_style}]{r['name']}[/{sev_style}]: "
-                f"{r['condition']} ({r.get('host', 'all')})"
+                f"  {status} [{sev_style}]{r['name']}[/{sev_style}]: {r['condition']} ({r.get('host', 'all')})"
             )
 
         self.update("\n".join(lines))

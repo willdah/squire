@@ -1,6 +1,7 @@
 """Shared type aliases used across the Squire codebase."""
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext

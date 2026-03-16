@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 from agent_risk_engine import RiskEvaluator, RuleGate
 from dotenv import load_dotenv

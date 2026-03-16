@@ -67,9 +67,7 @@ class TestAlertEvaluation:
     @pytest.mark.asyncio
     async def test_respects_cooldown(self, mock_db, mock_notifier):
         recent = (datetime.now(UTC) - timedelta(minutes=5)).isoformat()
-        mock_db.get_active_alert_rules.return_value = [
-            _make_rule(cooldown_minutes=30, last_fired_at=recent)
-        ]
+        mock_db.get_active_alert_rules.return_value = [_make_rule(cooldown_minutes=30, last_fired_at=recent)]
         snapshot = {"local": {"cpu_percent": 95}}
         fired = await evaluate_alerts(mock_db, mock_notifier, snapshot)
         assert fired == 0
@@ -77,18 +75,14 @@ class TestAlertEvaluation:
     @pytest.mark.asyncio
     async def test_fires_after_cooldown_expires(self, mock_db, mock_notifier):
         old = (datetime.now(UTC) - timedelta(minutes=60)).isoformat()
-        mock_db.get_active_alert_rules.return_value = [
-            _make_rule(cooldown_minutes=30, last_fired_at=old)
-        ]
+        mock_db.get_active_alert_rules.return_value = [_make_rule(cooldown_minutes=30, last_fired_at=old)]
         snapshot = {"local": {"cpu_percent": 95}}
         fired = await evaluate_alerts(mock_db, mock_notifier, snapshot)
         assert fired == 1
 
     @pytest.mark.asyncio
     async def test_host_specific_rule(self, mock_db, mock_notifier):
-        mock_db.get_active_alert_rules.return_value = [
-            _make_rule(host="media-server")
-        ]
+        mock_db.get_active_alert_rules.return_value = [_make_rule(host="media-server")]
         snapshot = {
             "local": {"cpu_percent": 95},
             "media-server": {"cpu_percent": 50},
@@ -108,9 +102,7 @@ class TestAlertEvaluation:
 
     @pytest.mark.asyncio
     async def test_skips_invalid_condition(self, mock_db, mock_notifier):
-        mock_db.get_active_alert_rules.return_value = [
-            _make_rule(condition="not valid")
-        ]
+        mock_db.get_active_alert_rules.return_value = [_make_rule(condition="not valid")]
         snapshot = {"local": {"cpu_percent": 95}}
         fired = await evaluate_alerts(mock_db, mock_notifier, snapshot)
         assert fired == 0

@@ -40,6 +40,7 @@ set_notifier(_notifier)
 _app_config = AppConfig()
 _llm_config = LLMConfig()
 
+
 def _make_risk_gate(tool_risk_levels: dict[str, int]):
     return create_risk_gate(tool_risk_levels=tool_risk_levels)
 
