@@ -10,15 +10,15 @@ class TestAppConfig:
         monkeypatch.setattr(loader_mod, "_cached", {})
         config = AppConfig()
         assert config.app_name == "Squire"
-        assert config.risk_threshold == "cautious"
+        assert config.risk_tolerance == "cautious"
         assert config.history_limit == 50
         assert config.max_tool_rounds == 10
 
     def test_env_override(self, monkeypatch):
         monkeypatch.setattr(loader_mod, "_cached", {})
-        monkeypatch.setenv("SQUIRE_RISK_THRESHOLD", "full-trust")
+        monkeypatch.setenv("SQUIRE_RISK_TOLERANCE", "full-trust")
         config = AppConfig()
-        assert config.risk_threshold == "full-trust"
+        assert config.risk_tolerance == "full-trust"
 
 
 class TestLLMConfig:
@@ -62,9 +62,9 @@ class TestTomlLoading:
         monkeypatch.setattr(loader_mod, "_cached", data)
 
     def test_app_config_from_toml(self, monkeypatch):
-        self._patch_toml(monkeypatch, {"risk_threshold": "full-trust", "history_limit": 100})
+        self._patch_toml(monkeypatch, {"risk_tolerance": "full-trust", "history_limit": 100})
         config = AppConfig()
-        assert config.risk_threshold == "full-trust"
+        assert config.risk_tolerance == "full-trust"
         assert config.history_limit == 100
 
     def test_llm_config_from_toml(self, monkeypatch):
@@ -90,10 +90,10 @@ class TestTomlLoading:
 
     def test_env_overrides_toml(self, monkeypatch):
         """Env vars should take precedence over TOML values."""
-        self._patch_toml(monkeypatch, {"risk_threshold": "full-trust"})
-        monkeypatch.setenv("SQUIRE_RISK_THRESHOLD", "read-only")
+        self._patch_toml(monkeypatch, {"risk_tolerance": "full-trust"})
+        monkeypatch.setenv("SQUIRE_RISK_TOLERANCE", "read-only")
         config = AppConfig()
-        assert config.risk_threshold == "read-only"
+        assert config.risk_tolerance == "read-only"
 
     def test_unknown_toml_keys_ignored(self, monkeypatch):
         self._patch_toml(monkeypatch, {"bogus_key": "value", "llm": {"bogus_nested": 42}})

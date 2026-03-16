@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from collections.abc import Callable
 
 from agent_risk_engine import RiskEvaluator, RuleGate
 from dotenv import load_dotenv
@@ -12,16 +13,18 @@ from google.adk.runners import InMemoryRunner
 from google.genai import types
 
 from .agents import create_squire_agent
+from .callbacks.risk_gate import create_risk_gate
 from .config import AppConfig, DatabaseConfig, LLMConfig, NotificationsConfig, RiskOverridesConfig
 from .config.hosts import HostConfig
 from .config.loader import get_list_section
 from .database.service import DatabaseService
 from .notifications.webhook import WebhookDispatcher
 from .system.registry import BackendRegistry
-from .tools import set_registry
+from .tools import TOOL_RISK_LEVELS, set_db, set_notifier, set_registry
 from .tools.docker_ps import docker_ps
 from .tools.system_info import system_info
 from .tui.app import SquireApp
+from .tui.approval_bridge import ApprovalBridge
 
 # Load environment variables before instantiating settings
 load_dotenv()
@@ -100,12 +103,17 @@ async def _collect_all_snapshots(registry: BackendRegistry) -> dict[str, dict]:
 async def _background_snapshots(
     db: DatabaseService,
     interval_minutes: int,
-    tui: SquireApp,
     registry: BackendRegistry,
+    on_snapshot: Callable[[dict], None] | None = None,
 ) -> None:
     """Periodically collect and persist system snapshots.
 
-    Also updates the TUI status panel and ADK session state.
+    Args:
+        db: Database service for persisting snapshots.
+        interval_minutes: Interval between snapshot collections.
+        registry: Backend registry for host access.
+        on_snapshot: Optional callback invoked with the snapshot dict after collection.
+            Used by the TUI to update the status panel.
     """
     while True:
         await asyncio.sleep(interval_minutes * 60)
@@ -113,8 +121,8 @@ async def _background_snapshots(
             snapshot = await _collect_all_snapshots(registry)
             if "local" in snapshot:
                 await db.save_snapshot(snapshot["local"])
-            # Update TUI status panel from main thread
-            tui.call_from_thread(tui.update_status_snapshot, snapshot)
+            if on_snapshot is not None:
+                on_snapshot(snapshot)
         except Exception:
             logging.getLogger(__name__).debug("Background snapshot failed", exc_info=True)
 
@@ -139,16 +147,42 @@ async def start_chat(resume_session_id: str | None = None) -> None:
     # Initialize database and webhook dispatcher
     db = DatabaseService(db_config.path)
     notifier = WebhookDispatcher(notif_config)
+    set_db(db)
+    set_notifier(notifier)
 
-    # Build the agent and ADK runner
-    agent = create_squire_agent(app_config=app_config, llm_config=llm_config)
+    # Build the approval provider
+    approval_bridge = ApprovalBridge()
+
+    # Build the agent — multi-agent mode uses a factory for per-agent risk gates
+    def _make_risk_gate(tool_risk_levels: dict[str, int]):
+        return create_risk_gate(
+            tool_risk_levels=tool_risk_levels,
+            approval_provider=approval_bridge,
+        )
+
+    if app_config.multi_agent:
+        agent = create_squire_agent(
+            app_config=app_config,
+            llm_config=llm_config,
+            risk_gate_factory=_make_risk_gate,
+        )
+    else:
+        risk_gate_callback = create_risk_gate(
+            tool_risk_levels=TOOL_RISK_LEVELS,
+            approval_provider=approval_bridge,
+        )
+        agent = create_squire_agent(
+            app_config=app_config,
+            llm_config=llm_config,
+            before_tool_callback=risk_gate_callback,
+        )
     adk_app = App(name=app_config.app_name, root_agent=agent)
     runner = InMemoryRunner(app_name=app_config.app_name, app=adk_app)
 
     # Build the risk evaluation pipeline
     risk_overrides = RiskOverridesConfig()
     rule_gate = RuleGate(
-        threshold=app_config.risk_threshold,
+        threshold=app_config.risk_tolerance,
         strict=app_config.risk_strict,
         allowed_tools=set(risk_overrides.allow),
         approve_tools=set(risk_overrides.approve),
@@ -164,7 +198,7 @@ async def start_chat(resume_session_id: str | None = None) -> None:
 
     session_state = {
         "risk_evaluator": risk_evaluator,
-        "risk_threshold": rule_gate.threshold,
+        "risk_tolerance": rule_gate.threshold,
         "latest_snapshot": snapshot,
         "house": app_config.house,
         "squire_name": app_config.squire_name,
@@ -216,10 +250,16 @@ async def start_chat(resume_session_id: str | None = None) -> None:
         notifier=notifier,
         initial_snapshot=snapshot,
         prior_messages=prior_messages if prior_messages else None,
+        approval_bridge=approval_bridge,
     )
 
-    # Start background snapshot task
-    snapshot_task = asyncio.create_task(_background_snapshots(db, db_config.snapshot_interval_minutes, tui, registry))
+    # Start background snapshot task with callback to update TUI
+    def _on_snapshot(snap: dict) -> None:
+        tui.call_from_thread(tui.update_status_snapshot, snap)
+
+    snapshot_task = asyncio.create_task(
+        _background_snapshots(db, db_config.snapshot_interval_minutes, registry, on_snapshot=_on_snapshot)
+    )
 
     try:
         await tui.run_async()

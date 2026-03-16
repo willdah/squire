@@ -1,0 +1,170 @@
+# CLI Reference
+
+Squire is operated through the `squire` command-line interface.
+
+```
+squire [COMMAND] [OPTIONS]
+```
+
+## Commands
+
+### `squire chat`
+
+Start an interactive chat session with the TUI.
+
+```bash
+squire chat                  # new session
+squire chat --resume <id>    # resume a previous session
+```
+
+| Option | Short | Description |
+|---|---|---|
+| `--resume` | `-r` | Session ID to resume |
+
+The TUI provides a chat pane, system status panel, activity log, and approval modals for high-risk tool calls.
+
+**Keyboard shortcuts:**
+
+| Key | Action |
+|---|---|
+| `Ctrl+Q` | Quit |
+| `Ctrl+L` | Clear chat |
+| `Ctrl+G` | Toggle activity log |
+| `Ctrl+S` | Toggle status panel |
+
+---
+
+### `squire watch`
+
+Start autonomous watch mode -- a headless monitoring loop.
+
+```bash
+squire watch                 # start monitoring
+squire watch status          # check status from another terminal
+```
+
+Watch mode periodically:
+1. Collects system snapshots from all configured hosts
+2. Injects a check-in prompt into the agent
+3. Lets the agent reason about system state and take action
+4. Persists responses and dispatches webhook notifications
+
+Tools above the configured risk tolerance are auto-denied (no interactive approval). Session state is rotated after a configurable number of cycles to bound memory.
+
+Logs to stdout in structured format, suitable for systemd/journald.
+
+**Configuration** (`[watch]` section in `squire.toml`):
+
+| Field | Default | Description |
+|---|---|---|
+| `interval_minutes` | `5` | Minutes between watch cycles |
+| `risk_tolerance` | `read-only` | Risk tolerance for watch mode |
+| `max_tool_calls_per_cycle` | `15` | Tool call budget per cycle |
+| `cycle_timeout_seconds` | `300` | Max wall-clock time per cycle |
+| `cycles_per_session` | `50` | Rotate ADK session after this many cycles |
+| `checkin_prompt` | *(built-in)* | Prompt injected each cycle |
+| `notify_on_action` | `true` | Notify when agent takes corrective action |
+| `notify_on_blocked` | `true` | Notify when a tool call is blocked |
+| `allow` | `[]` | Tools always auto-allowed in watch mode |
+| `deny` | `[]` | Tools always denied in watch mode |
+
+**Notification categories:**
+
+| Category | Description |
+|---|---|
+| `watch.start` | Watch mode started |
+| `watch.stop` | Watch mode stopped |
+| `watch.action` | Agent took a corrective action |
+| `watch.blocked` | Tool call denied by risk policy |
+| `watch.alert` | Alert rule triggered |
+| `watch.error` | Exception during a cycle |
+
+---
+
+### `squire alerts`
+
+Manage alert rules that trigger notifications when system metrics cross thresholds.
+
+#### `squire alerts list`
+
+List all configured alert rules with their status.
+
+```bash
+squire alerts list
+```
+
+#### `squire alerts add`
+
+Create a new alert rule.
+
+```bash
+squire alerts add --name "disk-full" --condition "cpu_percent > 90" --severity warning
+squire alerts add -n "high-mem" -c "memory_used_mb > 14000" --host prod-apps-01 -s critical --cooldown 60
+```
+
+| Option | Short | Required | Default | Description |
+|---|---|---|---|---|
+| `--name` | `-n` | Yes | | Human-readable rule name (must be unique) |
+| `--condition` | `-c` | Yes | | Condition expression (see below) |
+| `--host` | | No | `all` | Host to monitor (`all` or a specific host name) |
+| `--severity` | `-s` | No | `warning` | `info`, `warning`, or `critical` |
+| `--cooldown` | | No | `30` | Minimum minutes between repeated alerts |
+
+**Condition syntax:** `<field> <op> <value>`
+
+- **field** -- dot-path into the snapshot (e.g., `cpu_percent`, `memory_used_mb`, `disk_percent`)
+- **op** -- `>`, `<`, `>=`, `<=`, `==`, `!=`
+- **value** -- number or string literal
+
+Examples:
+```
+cpu_percent > 90
+memory_used_mb >= 14000
+disk_percent > 85
+```
+
+#### `squire alerts remove`
+
+Delete an alert rule by name.
+
+```bash
+squire alerts remove disk-full
+```
+
+#### `squire alerts enable`
+
+Enable a previously disabled alert rule.
+
+```bash
+squire alerts enable disk-full
+```
+
+#### `squire alerts disable`
+
+Disable an alert rule without deleting it.
+
+```bash
+squire alerts disable disk-full
+```
+
+---
+
+### `squire sessions`
+
+List recent chat sessions.
+
+```bash
+squire sessions
+```
+
+Displays a table with session ID, creation time, last activity, and a preview of the conversation.
+
+---
+
+### `squire version`
+
+Show the installed Squire version.
+
+```bash
+squire version
+```

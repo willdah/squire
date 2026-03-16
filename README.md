@@ -6,12 +6,31 @@
 
 ---
 
+- [Features](#features)
+- [Quickstart](#quickstart)
+- [Configuration](#configuration)
+  - [LLM Setup](#llm-setup)
+  - [Risk Tolerance](#risk-tolerance)
+  - [Personalization](#personalization)
+  - [Remote Hosts](#remote-hosts)
+  - [Multi-Agent Mode](#multi-agent-mode)
+  - [Autonomous Watch Mode](#autonomous-watch-mode)
+    - [Running watch mode](#running-watch-mode)
+  - [Alert Rules](#alert-rules)
+- [CLI](#cli)
+- [Development](#development)
+- [License](#license)
+
+
 ## Features
 
+- **Multi-agent architecture** — Squire decomposes into specialized sub-agents (Monitor, Container, Admin, Notifier) that collaborate via [Google ADK](https://google.github.io/adk-docs/)'s transfer pattern — while maintaining a single unified persona
+- **Autonomous watch mode** — `squire watch` runs a headless monitoring loop that checks your systems on a schedule, takes corrective action within risk limits, and sends notifications
+- **Alert rules** — Define conditions like `cpu_percent > 90` and get notified when they trigger. Manage via conversation, CLI, or TUI
 - **Multi-machine management** — Connect to remote hosts over SSH and manage your entire homelab from one Squire instance
 - **Interactive TUI** — Chat with your Squire in a terminal interface with status panel, log viewer, and approval modals
 - **Built-in tools** — System info, Docker management, log reading, network diagnostics, config inspection, and guarded command execution — all targetable at any configured host
-- **Risk profiles** — Control what your Squire can do: `read-only`, `cautious`, `standard`, `full-trust`, or `custom`
+- **Risk profiles** — Control what your Squire can do: `read-only`, `cautious`, `standard`, `full-trust` — globally or per sub-agent
 - **Multi-model LLM** — Powered by [LiteLLM](https://github.com/BerriAI/litellm) — use Ollama, Anthropic, OpenAI, Gemini, or any supported provider. Latest functionality tested with Qwen 3.5 (35B) on Ollama
 - **Session persistence** — SQLite-backed chat history with session resume
 - **Webhook notifications** — Get alerts on Discord, ntfy.sh, or any HTTP endpoint
@@ -30,10 +49,12 @@ uv run squire chat
 
 ## Configuration
 
+See [docs/configuration.md](docs/configuration.md) for the full configuration reference with all fields, env vars, and examples.
+
 Settings are resolved in order of precedence (highest first):
 
-1. **Environment variables** (`SQUIRE_*`) — always win
-2. **TOML config file** — first found from:
+1. **Environment variables**, prefixed with `SQUIRE_*`
+2. **TOML config file**, first found from:
    - `./squire.toml` (project directory)
    - `~/.config/squire/squire.toml` (user config)
    - `/etc/squire/squire.toml` (system-wide)
@@ -51,17 +72,16 @@ model = "ollama_chat/llama3.1:8b"
 api_base = "http://localhost:11434"
 ```
 
-### Risk Profiles
+### Risk Tolerance
 
-Control tool permissions with `risk_profile`:
+Control tool permissions with `risk_tolerance`:
 
-| Profile | Read | Low-risk mutations | High-risk actions |
+| Tolerance | Level | Auto-allows | Needs approval |
 |---|---|---|---|
-| `read-only` | Allowed | Blocked | Blocked |
-| `cautious` | Allowed | Allowed | Needs approval |
-| `standard` | Allowed | Allowed | Needs approval |
-| `full-trust` | Allowed | Allowed | Allowed |
-| `custom` | Per-tool configuration | | |
+| `read-only` | 1 | System info, network info, container listing | Logs, config reads, all mutations |
+| `cautious` | 2 | + log viewing, config reads | Compose, systemctl, commands |
+| `standard` | 3 | + compose, systemctl | Arbitrary command execution |
+| `full-trust` | 5 | Everything | Nothing |
 
 ### Personalization
 
@@ -86,28 +106,89 @@ Connect Squire to other machines in your homelab via SSH:
 [[hosts]]
 name = "media-server"
 address = "192.168.1.10"
-user = "will"
+user = "test_user"
 
 [[hosts]]
 name = "nas"
 address = "192.168.1.20"
-user = "will"
+user = "test_user"
 port = 2222
 tags = ["storage"]
 ```
 
-Squire connects lazily on first use via SSH key authentication (uses your ssh-agent or a configured `key_file`). Once configured, just mention a host by name in conversation — Squire will target the right machine automatically. Every tool also accepts an explicit `host` parameter.
+Squire connects lazily on first use via SSH key authentication (uses your ssh-agent or a configured `key_file`). Once configured, just mention a host by name in conversation and Squire will target the right machine automatically. Every tool also accepts an explicit `host` parameter to determine where it runs.
 
-Remote tool calls receive a +1 risk bump, so `docker_ps` on a remote host becomes risk level 2 instead of 1.
+> [!NOTE]
+> Remote tool calls receive a **+1 risk bump**.
+>
+> For example, `docker_ps` on a remote host becomes risk level 2 instead of 1.
+
+### Multi-Agent Mode
+
+Enable sub-agent decomposition for better tool scoping and risk isolation:
+
+```toml
+multi_agent = true
+```
+
+Squire splits into multiple specialist sub-agents.
+
+See below for the currently built-in sub-agents.
+
+| Sub Agent | Role | Risk Tolerance | Example Tools |
+|---|---|---|---|
+| Monitor | Read-only observation | `read-only` | `docker_ps`, `systemctl_status` |
+| Container | Docker lifecycle | `cautious` | `docker_build`, `docker_run` |
+| Admin | Systemd and commands | `standard` | `systemctl_start`, `ls` |
+| Notifier | Alerts | `read-only` | `send_notification` |
+
+The LLM routes requests to the right specialist automatically, while the user always interacts with the main Squire persona.
+
+### Autonomous Watch Mode
+
+> [!WARNING]
+> Watch mode is **experimental** and can take actions on your system. Start with `watch.risk_tolerance = "read-only"` and confirm alert rules before enabling any corrective behavior.
+>
+> Always watch the logs and notifications while you tune the system. If you’re unsure, keep the risk level low and require manual approval before making changes.
+
+Turn Squire into a full‑time guardian for your homelab.
+
+Watch mode runs a headless monitoring loop that:
+
+- gathers system snapshots (CPU, memory, disk, Docker, services, etc.)
+- evaluates configured alert rules and triggers notifications when thresholds are crossed
+- optionally takes corrective action (within configured risk limits)
+- logs activity to stdout (ideal for systemd/journald) and sends webhook notifications for actions, blocks, and alerts
+
+Watch mode uses the same risk tolerance settings as interactive mode. If a tool call exceeds the configured `watch.risk_tolerance`, it is auto‑denied, and the event is logged and notified.
+
+#### Running watch mode
+
+```bash
+squire watch              # start watch mode
+squire watch status       # check current status
+```
+
+Watch mode is designed for unattended operation: it keeps an eye on your systems, acts within safe boundaries, and surfaces anything that needs your attention.
+### Alert Rules
+
+Define conditions that trigger notifications when system metrics cross thresholds:
+
+```bash
+squire alerts add --name "disk-full" --condition "disk_percent > 90" --severity warning
+squire alerts add --name "high-cpu" --condition "cpu_percent > 85" --host all
+squire alerts list
+squire alerts disable disk-full
+squire alerts remove high-cpu
+```
+
+Or manage them conversationally. Ask Squire to "alert me if disk usage exceeds 90%".
+
+Conditions use a safe DSL: `<field> <op> <value>` where field is a snapshot metric (`cpu_percent`, `memory_used_mb`, etc.) and op is `>`, `<`, `>=`, `<=`, `==`, `!=`.
 
 ## CLI
 
-```
-squire chat                  # Start a chat session
-squire chat --resume <id>    # Resume a previous session
-squire sessions              # List recent sessions
-squire version               # Show version
-```
+See [docs/cli.md](docs/cli.md) for the full CLI reference including all options, watch mode configuration, and alert rule syntax.
 
 ## Development
 
