@@ -1,58 +1,119 @@
-"""Risk gate callback — ADK adapter for the risk evaluation pipeline.
+"""Risk gate callback factory — creates ADK before_tool_callbacks for the risk pipeline.
 
-Wired into the ADK Agent as a before_tool_callback. Translates between
-the framework-agnostic RiskEvaluator and ADK's callback signature.
+Produces callbacks that translate between the framework-agnostic RiskEvaluator
+and ADK's callback signature. Supports both interactive (with ApprovalProvider)
+and headless (auto-deny + optional notification) modes.
 """
 
-from __future__ import annotations
-
+import logging
 from typing import Any
 
 from agent_risk_engine import GateResult, RiskEvaluator, RuleGate
 from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
 
+from ..approval import ApprovalProvider
 from ..tools import TOOL_RISK_LEVELS
-from ..tui.approval_bridge import approval_bridge
+from ..types import BeforeToolCallback
+
+logger = logging.getLogger(__name__)
+
+# ADK framework tools that should bypass the risk gate.
+# These are auto-injected by ADK and are not user-facing tools.
+_ADK_INTERNAL_TOOLS = frozenset({
+    "transfer_to_agent",
+})
 
 
-async def risk_gate_callback(
-    tool: BaseTool,
-    args: dict[str, Any],
-    tool_context: ToolContext,
-) -> dict | None:
-    """ADK before_tool_callback that runs the risk evaluation pipeline.
+def create_risk_gate(
+    tool_risk_levels: dict[str, int] | None = None,
+    approval_provider: ApprovalProvider | None = None,
+    default_threshold: int | None = None,
+    headless: bool = False,
+    notifier: Any | None = None,
+) -> BeforeToolCallback:
+    """Create a before_tool_callback for the risk evaluation pipeline.
 
     Args:
-        tool: The ADK BaseTool instance about to be executed.
-        args: Arguments that will be passed to the tool.
-        tool_context: ADK ToolContext with access to session state.
+        tool_risk_levels: Tool-to-risk-level mapping for this scope.
+            Defaults to the global TOOL_RISK_LEVELS if not provided.
+        approval_provider: Provider for interactive approval requests.
+            If None, NEEDS_APPROVAL results are auto-denied.
+        default_threshold: Optional risk threshold override. When set,
+            used instead of the session state's global threshold.
+        headless: If True, NEEDS_APPROVAL is denied and a notification
+            is dispatched via ``notifier`` (watch mode behavior).
+        notifier: WebhookDispatcher instance for headless notifications.
+            Only used when ``headless=True``.
 
     Returns:
-        None to allow execution, or a dict response to block it.
+        An async callback matching ADK's before_tool_callback signature.
     """
-    tool_name = tool.name
-    tool_risk = TOOL_RISK_LEVELS.get(tool_name, 5)
+    scoped_risk_levels = tool_risk_levels or TOOL_RISK_LEVELS
 
-    # Bump risk for remote host operations
-    host = args.get("host", "local")
-    if host != "local":
-        tool_risk = min(tool_risk + 1, 5)
+    async def _risk_gate_callback(
+        tool: BaseTool,
+        args: dict[str, Any],
+        tool_context: ToolContext,
+    ) -> dict | None:
+        tool_name = tool.name
 
-    # Load the risk evaluator from session state
-    evaluator = tool_context.state.get("risk_evaluator")
-    if not evaluator or not isinstance(evaluator, RiskEvaluator):
-        evaluator = RiskEvaluator(rule_gate=RuleGate())
+        # Allow ADK framework tools that are auto-injected (e.g., agent transfer)
+        if tool_name in _ADK_INTERNAL_TOOLS:
+            return None
 
-    result = await evaluator.evaluate(tool_name, args, tool_risk)
+        # Unknown tools (not in our scope and not ADK internal) are denied
+        if tool_name not in scoped_risk_levels:
+            return {"error": f"Blocked: unknown tool '{tool_name}'."}
 
-    if result.decision == GateResult.DENIED:
-        return {"error": f"Blocked: {result.reasoning}"}
+        tool_risk = scoped_risk_levels[tool_name]
 
-    if result.decision == GateResult.NEEDS_APPROVAL:
-        approved = approval_bridge.request_approval(tool_name, args, result.risk_score.level)
-        if not approved:
-            return {"error": f"User declined to approve '{tool_name}'."}
+        # Bump risk for remote host operations
+        host = args.get("host", "local")
+        if host != "local":
+            tool_risk = min(tool_risk + 1, 5)
 
-    # GateResult.ALLOWED — proceed
-    return None
+        # Load the risk evaluator from session state
+        evaluator = tool_context.state.get("risk_evaluator")
+        if not evaluator or not isinstance(evaluator, RiskEvaluator):
+            evaluator = RiskEvaluator(rule_gate=RuleGate())
+
+        result = await evaluator.evaluate(tool_name, args, tool_risk)
+
+        if result.decision == GateResult.DENIED:
+            if headless and notifier:
+                await _notify_blocked(notifier, tool_name, args, result.reasoning)
+            return {"error": f"Blocked: {result.reasoning}"}
+
+        if result.decision == GateResult.NEEDS_APPROVAL:
+            if headless:
+                if notifier:
+                    await _notify_blocked(notifier, tool_name, args, result.reasoning)
+                return {"error": f"Watch mode denied '{tool_name}': above risk threshold."}
+
+            if approval_provider is not None:
+                approved = approval_provider.request_approval(
+                    tool_name, args, result.risk_score.level
+                )
+                if not approved:
+                    return {"error": f"User declined to approve '{tool_name}'."}
+            else:
+                return {"error": f"No approval provider — auto-denied '{tool_name}'."}
+
+        # GateResult.ALLOWED — proceed
+        return None
+
+    return _risk_gate_callback
+
+
+async def _notify_blocked(notifier: Any, tool_name: str, args: dict, reasoning: str) -> None:
+    """Dispatch a watch.blocked notification for a denied tool call."""
+    try:
+        await notifier.dispatch(
+            category="watch.blocked",
+            summary=f"Denied tool '{tool_name}': {reasoning}",
+            tool_name=tool_name,
+            details=str(args),
+        )
+    except Exception:
+        logger.debug("Failed to dispatch watch.blocked notification", exc_info=True)

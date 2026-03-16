@@ -20,8 +20,10 @@ class RiskThreshold(StrEnum):
 _INT_TO_ALIAS: dict[int, str] = {1: "read-only", 2: "cautious", 3: "standard", 5: "full-trust"}
 
 
-def _coerce_risk_threshold(value: Any) -> str:
+def _coerce_risk_threshold(value: Any) -> str | None:
     """Accept int (1-3, 5) or string alias; normalise to a RiskThreshold value."""
+    if value is None:
+        return None
     if isinstance(value, int):
         if value in _INT_TO_ALIAS:
             return _INT_TO_ALIAS[value]
@@ -94,6 +96,26 @@ class AppConfig(BaseSettings):
         default=10,
         ge=1,
         description="Maximum tool-call rounds per user message",
+    )
+    multi_agent: bool = Field(
+        default=False,
+        description="Enable sub-agent decomposition (Monitor, Container, Admin, Notifier)",
+    )
+    monitor_risk_threshold: Annotated[RiskThreshold | None, BeforeValidator(_coerce_risk_threshold)] = Field(
+        default=None,
+        description="Per-agent risk threshold for Monitor (falls back to global risk_threshold)",
+    )
+    container_risk_threshold: Annotated[RiskThreshold | None, BeforeValidator(_coerce_risk_threshold)] = Field(
+        default=None,
+        description="Per-agent risk threshold for Container (falls back to global risk_threshold)",
+    )
+    admin_risk_threshold: Annotated[RiskThreshold | None, BeforeValidator(_coerce_risk_threshold)] = Field(
+        default=None,
+        description="Per-agent risk threshold for Admin (falls back to global risk_threshold)",
+    )
+    notifier_risk_threshold: Annotated[RiskThreshold | None, BeforeValidator(_coerce_risk_threshold)] = Field(
+        default=None,
+        description="Per-agent risk threshold for Notifier (falls back to global risk_threshold)",
     )
 
 

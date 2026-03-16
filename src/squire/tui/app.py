@@ -1,12 +1,14 @@
 """Squire TUI — Textual application with chat pane and status panels."""
 
+import logging
+
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Header
 
 from ..instructions.profiles import get_profile
-from .approval_bridge import ApprovalRequest, approval_bridge
+from .approval_bridge import ApprovalBridge, ApprovalRequest
 from .approval_modal import ApprovalModal
 from .chat_pane import ChatPane
 from .log_viewer import LogViewer
@@ -71,6 +73,7 @@ class SquireApp(App):
         notifier=None,
         initial_snapshot=None,
         prior_messages=None,
+        approval_bridge: ApprovalBridge | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -83,6 +86,7 @@ class SquireApp(App):
         self._notifier = notifier
         self._initial_snapshot = initial_snapshot
         self._prior_messages = prior_messages
+        self._approval_bridge = approval_bridge
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -103,7 +107,8 @@ class SquireApp(App):
 
     def on_mount(self) -> None:
         # Register this app with the approval bridge
-        approval_bridge.set_app(self)
+        if self._approval_bridge:
+            self._approval_bridge.set_app(self)
 
         if self._initial_snapshot:
             status_panel = self.query_one(StatusPanel)
@@ -136,7 +141,7 @@ class SquireApp(App):
             status_panel = self.query_one(StatusPanel)
             status_panel.update_snapshot(snapshot)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Failed to update status snapshot", exc_info=True)
 
     def add_log_entry(self, text: str, category: str = "event") -> None:
         """Add an entry to the log viewer panel."""
@@ -144,7 +149,7 @@ class SquireApp(App):
             log_viewer = self.query_one(LogViewer)
             log_viewer.add_entry(text, category=category)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Failed to add log entry", exc_info=True)
 
     def action_toggle_log(self) -> None:
         log_viewer = self.query_one(LogViewer)

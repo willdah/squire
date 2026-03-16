@@ -74,6 +74,31 @@ CREATE TABLE IF NOT EXISTS sessions (
 )
 """
 
+_CREATE_WATCH_STATE = """
+CREATE TABLE IF NOT EXISTS watch_state (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+)
+"""
+
+_CREATE_ALERT_RULES = """
+CREATE TABLE IF NOT EXISTS alert_rules (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    name             TEXT NOT NULL UNIQUE,
+    condition        TEXT NOT NULL,
+    host             TEXT NOT NULL DEFAULT 'all',
+    severity         TEXT NOT NULL DEFAULT 'warning',
+    cooldown_minutes INTEGER NOT NULL DEFAULT 30,
+    last_fired_at    TEXT,
+    enabled          INTEGER NOT NULL DEFAULT 1,
+    created_at       TEXT NOT NULL
+)
+"""
+
+_CREATE_ALERT_RULES_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled ON alert_rules(enabled)
+"""
+
 
 class DatabaseService:
     """Async wrapper around aiosqlite for Squire persistence.
@@ -98,7 +123,8 @@ class DatabaseService:
 
     async def _ensure_schema(self) -> None:
         """Idempotently create all tables and indexes."""
-        assert self._conn is not None
+        if self._conn is None:
+            raise RuntimeError("Database connection not initialized")
         for stmt in (
             _CREATE_SNAPSHOTS,
             _CREATE_SNAPSHOTS_INDEX,
@@ -108,6 +134,9 @@ class DatabaseService:
             _CREATE_CONVERSATIONS,
             _CREATE_CONVERSATIONS_INDEX,
             _CREATE_SESSIONS,
+            _CREATE_WATCH_STATE,
+            _CREATE_ALERT_RULES,
+            _CREATE_ALERT_RULES_INDEX,
         ):
             await self._conn.execute(stmt)
         await self._conn.commit()
@@ -252,6 +281,116 @@ class DatabaseService:
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+    # --- Watch State ---
+
+    async def set_watch_state(self, key: str, value: str) -> None:
+        """Set a watch state key-value pair (upsert)."""
+        conn = await self._get_conn()
+        await conn.execute(
+            "INSERT OR REPLACE INTO watch_state (key, value) VALUES (?, ?)",
+            (key, value),
+        )
+        await conn.commit()
+
+    async def get_watch_state(self, key: str) -> str | None:
+        """Get a watch state value by key."""
+        conn = await self._get_conn()
+        cursor = await conn.execute("SELECT value FROM watch_state WHERE key = ?", (key,))
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+    async def get_all_watch_state(self) -> dict[str, str]:
+        """Get all watch state key-value pairs."""
+        conn = await self._get_conn()
+        cursor = await conn.execute("SELECT key, value FROM watch_state")
+        rows = await cursor.fetchall()
+        return {row[0]: row[1] for row in rows}
+
+    async def clear_watch_state(self) -> None:
+        """Clear all watch state (on shutdown)."""
+        conn = await self._get_conn()
+        await conn.execute("DELETE FROM watch_state")
+        await conn.commit()
+
+    # --- Alert Rules ---
+
+    async def save_alert_rule(
+        self,
+        *,
+        name: str,
+        condition: str,
+        host: str = "all",
+        severity: str = "warning",
+        cooldown_minutes: int = 30,
+    ) -> int:
+        """Create a new alert rule. Returns the rule ID."""
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        cursor = await conn.execute(
+            """
+            INSERT INTO alert_rules (name, condition, host, severity, cooldown_minutes, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (name, condition, host, severity, cooldown_minutes, now),
+        )
+        await conn.commit()
+        return cursor.lastrowid
+
+    async def list_alert_rules(self, enabled_only: bool = False) -> list[dict]:
+        """List alert rules, optionally filtered to enabled only."""
+        conn = await self._get_conn()
+        if enabled_only:
+            cursor = await conn.execute("SELECT * FROM alert_rules WHERE enabled = 1 ORDER BY created_at")
+        else:
+            cursor = await conn.execute("SELECT * FROM alert_rules ORDER BY created_at")
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_active_alert_rules(self) -> list[dict]:
+        """Get all enabled alert rules."""
+        return await self.list_alert_rules(enabled_only=True)
+
+    async def delete_alert_rule(self, name: str) -> bool:
+        """Delete an alert rule by name. Returns True if a rule was deleted."""
+        conn = await self._get_conn()
+        cursor = await conn.execute("DELETE FROM alert_rules WHERE name = ?", (name,))
+        await conn.commit()
+        return cursor.rowcount > 0
+
+    _UPDATABLE_ALERT_FIELDS = frozenset({
+        "condition", "host", "severity", "cooldown_minutes", "enabled",
+    })
+
+    async def update_alert_rule(self, name: str, **fields) -> bool:
+        """Update fields of an alert rule by name.
+
+        Only fields in ``_UPDATABLE_ALERT_FIELDS`` are accepted.
+        """
+        if not fields:
+            return False
+        invalid = set(fields) - self._UPDATABLE_ALERT_FIELDS
+        if invalid:
+            raise ValueError(f"Invalid alert rule fields: {invalid}")
+        conn = await self._get_conn()
+        set_clause = ", ".join(f"{k} = ?" for k in fields)
+        values = list(fields.values()) + [name]
+        cursor = await conn.execute(
+            f"UPDATE alert_rules SET {set_clause} WHERE name = ?",
+            values,
+        )
+        await conn.commit()
+        return cursor.rowcount > 0
+
+    async def update_alert_last_fired(self, name: str) -> None:
+        """Update the last_fired_at timestamp for a rule."""
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        await conn.execute(
+            "UPDATE alert_rules SET last_fired_at = ? WHERE name = ?",
+            (now, name),
+        )
+        await conn.commit()
 
     async def close(self) -> None:
         """Close the database connection."""

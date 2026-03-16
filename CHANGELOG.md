@@ -7,9 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Multi-agent architecture** — Squire can now be decomposed into 4 specialized sub-agents (Monitor, Container, Admin, Notifier) using Google ADK's transfer pattern. Enable with `multi_agent = true` in config. The LLM routes requests to the appropriate specialist while maintaining a single unified persona. Each sub-agent has scoped tools and its own risk gate callback. (#1)
+- `ApprovalProvider` protocol (`src/squire/approval.py`) — frontend-agnostic interface for tool approval, decoupling the risk gate from the TUI. Includes `DenyAllApproval` for headless modes.
+- `create_risk_gate()` factory (`callbacks/risk_gate.py`) — creates before_tool_callbacks with support for interactive (with ApprovalProvider), headless (auto-deny + notify), and scoped (per-agent tool sets) modes.
+- Tool groupings (`tools/groups.py`) — `MONITOR_TOOLS`, `CONTAINER_TOOLS`, `ADMIN_TOOLS` with matching risk level dicts for sub-agent scoping.
+- Shared instruction helpers (`instructions/shared.py`) — reusable section builders (identity, conversation style, risk, hosts, system state, watch mode addendum) for consistent persona across all agents.
+- Notification tool stubs (`tools/notifications/`) — `send_notification`, `list_alert_rules`, `create_alert_rule`, `delete_alert_rule` for the Notifier sub-agent.
+- Service registry extensions (`tools/_registry.py`) — `get_db()`/`set_db()` and `get_notifier()`/`set_notifier()` for notification tool dependencies.
+- ADK web/CLI entry point (`agent.py`) — exposes `root_agent` for `adk web` and `adk run` discovery. Respects `multi_agent` config. Tools above risk threshold are auto-denied (no interactive approval in ADK dev server).
+- **Autonomous watch mode** (`squire watch`) — headless monitoring loop that periodically injects check-in prompts into the agent. Tools above the watch risk threshold are denied outright with notifications. Session rotation bounds memory. Configurable via `[watch]` TOML section. (#2)
+- `WatchConfig` (`config/watch.py`) — pydantic-settings for watch mode: interval, threshold, tool budget, cycle timeout, session rotation, allow/deny overrides.
+- **Alert rule management** — three interfaces for managing alert rules, all backed by SQLite:
+  - Agent tools: `create_alert_rule`, `delete_alert_rule`, `list_alert_rules`, `send_notification` (via Notifier sub-agent)
+  - CLI: `squire alerts list|add|remove|enable|disable`
+  - TUI: read-only `AlertsPanel` showing active rules and status
+- `ConditionEvaluator` (`notifications/conditions.py`) — safe `<field> <op> <value>` DSL for alert conditions. No `eval()` — parsed at creation time, evaluated against snapshot fields.
+- `alert_evaluator` (`notifications/alert_evaluator.py`) — background evaluator that checks alert rules against snapshots and fires notifications respecting cooldown periods.
+- Per-agent risk thresholds — optional `monitor_risk_threshold`, `container_risk_threshold`, `admin_risk_threshold`, `notifier_risk_threshold` config fields that fall back to the global threshold.
+
 ### Changed
 
 - **`risk_threshold` config uses `RiskThreshold` enum** — replaced untyped `Any` field with a `StrEnum` (`read-only`, `cautious`, `standard`, `full-trust`). Integer and digit-string inputs are coerced via a `BeforeValidator`, so existing TOML and env var values continue to work.
+- **Risk gate callback refactored to factory pattern** — `risk_gate_callback` replaced by `create_risk_gate()` which accepts `ApprovalProvider` via closure instead of importing a TUI singleton. Core agent logic no longer imports from `tui/`.
+- **Approval bridge singleton removed** — `ApprovalBridge` is now instantiated in `main.py` and injected into the risk gate factory and TUI via constructor parameters.
+- **Background snapshots decoupled from TUI** — `_background_snapshots()` accepts an `on_snapshot` callback instead of a TUI reference.
+- **Risk gate allowlists ADK internal tools** — `transfer_to_agent` is explicitly allowlisted; unknown tools are denied. Prevents both blocking ADK routing and passing through unrecognized tools.
+- **Host info fallback in instructions** — `build_hosts_section` falls back to loading from config when session state is empty (fixes host awareness in `adk web`).
 
 ## [0.1.1] - 2026-03-14
 

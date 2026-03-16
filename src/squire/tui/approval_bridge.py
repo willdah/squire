@@ -4,13 +4,7 @@ The risk gate callback runs inside a Textual worker thread. When it needs
 user approval, it posts an approval request to the Textual app (which runs
 on the main thread) and blocks until the user responds via the modal.
 
-Flow:
-1. risk_gate_callback calls approval_bridge.request_approval(tool_name, args, risk_level)
-2. request_approval posts a custom message to the Textual app via call_from_thread
-3. The Textual app shows the ApprovalModal
-4. User clicks Approve or Deny
-5. The modal's callback sets the result on a threading.Event
-6. request_approval unblocks and returns the boolean result
+Implements the ApprovalProvider protocol for use with the risk gate factory.
 """
 
 import threading
@@ -42,7 +36,11 @@ class ApprovalRequest:
 
 
 class ApprovalBridge:
-    """Singleton bridge between the risk gate callback and the TUI."""
+    """Thread-safe bridge between the risk gate callback and the TUI.
+
+    Satisfies the ApprovalProvider protocol. Instantiated in main.py
+    and passed to the risk gate factory via closure.
+    """
 
     def __init__(self):
         self._app = None  # Set to the Textual App instance on startup
@@ -69,7 +67,3 @@ class ApprovalBridge:
 
         # Block until the user responds
         return request.wait()
-
-
-# Module-level singleton
-approval_bridge = ApprovalBridge()
