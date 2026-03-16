@@ -146,6 +146,11 @@ The LLM routes requests to the right specialist automatically, while the user al
 
 ### Autonomous Watch Mode
 
+> [!WARNING]
+> Watch mode is **experimental** and can take actions on your system. Start with `watch.risk_tolerance = "read-only"` and confirm alert rules before enabling any corrective behavior.
+>
+> Always watch the logs and notifications while you tune the system. If you’re unsure, keep the risk level low and require manual approval before making changes.
+
 Turn Squire into a full‑time guardian for your homelab.
 
 Watch mode runs a headless monitoring loop that:

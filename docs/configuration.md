@@ -252,14 +252,14 @@ Connect Squire to other machines via SSH. Each entry defines a remote host.
 [[hosts]]
 name = "media-server"
 address = "192.168.1.10"
-user = "will"
+user = "test_user"
 services = ["plex", "sonarr", "radarr"]
 service_root = "/opt/stacks"
 
 [[hosts]]
 name = "nas"
 address = "192.168.1.20"
-user = "will"
+user = "test_user"
 port = 2222
 tags = ["storage"]
 ```
