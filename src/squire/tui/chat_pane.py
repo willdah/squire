@@ -202,10 +202,20 @@ class ChatPane(Static):
                 await self._db.update_session_active(session_id)
 
         except Exception as e:
-            error_text = f"Error: {e}"
+            logger = logging.getLogger(__name__)
+            logger.exception("Agent error in _send_message")
+            error_text = f"Something went wrong: {e}"
             self.app.call_from_thread(self._add_message, error_text, "system")
-            self.app.call_from_thread(self.app.add_log_entry, error_text, "error")
-            await self._log_event(session_id, "error", str(e))
+            self.app.call_from_thread(self.app.add_log_entry, f"Error: {e}", "error")
+            try:
+                sid = session_id  # noqa: F841 — guard against UnboundLocalError
+            except UnboundLocalError:
+                sid = None
+            if sid:
+                import traceback
+
+                tb = traceback.format_exc()
+                await self._log_event(sid, "error", str(e), details=tb)
         finally:
             self._processing = False
 

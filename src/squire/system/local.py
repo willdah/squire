@@ -19,11 +19,31 @@ class LocalBackend:
         Returns:
             CommandResult with returncode, stdout, and stderr.
         """
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError:
+            return CommandResult(
+                returncode=-1,
+                stdout="",
+                stderr=f"Command not found: {cmd[0]}",
+            )
+        except PermissionError:
+            return CommandResult(
+                returncode=-1,
+                stdout="",
+                stderr=f"Permission denied: {cmd[0]}",
+            )
+        except OSError as exc:
+            return CommandResult(
+                returncode=-1,
+                stdout="",
+                stderr=f"Failed to execute {cmd[0]}: {exc}",
+            )
+
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         except TimeoutError:

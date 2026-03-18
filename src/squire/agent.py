@@ -41,15 +41,11 @@ _app_config = AppConfig()
 _llm_config = LLMConfig()
 
 
-def _make_risk_gate(tool_risk_levels: dict[str, int]):
-    return create_risk_gate(tool_risk_levels=tool_risk_levels)
-
-
 if _app_config.multi_agent:
     root_agent = create_squire_agent(
         app_config=_app_config,
         llm_config=_llm_config,
-        risk_gate_factory=_make_risk_gate,
+        risk_gate_factory=create_risk_gate,
     )
 else:
     _risk_gate_callback = create_risk_gate(
