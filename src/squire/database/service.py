@@ -282,6 +282,14 @@ class DatabaseService:
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
+    async def delete_session(self, session_id: str) -> bool:
+        """Delete a session and its messages. Returns True if a session was deleted."""
+        conn = await self._get_conn()
+        await conn.execute("DELETE FROM conversations WHERE session_id = ?", (session_id,))
+        cursor = await conn.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
+        await conn.commit()
+        return cursor.rowcount > 0
+
     # --- Watch State ---
 
     async def set_watch_state(self, key: str, value: str) -> None:

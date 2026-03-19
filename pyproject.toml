@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "squire"
-version = "0.3.0"
+version = "0.4.0"
 description = "An AI agent that monitors and manages your homelab."
 authors = [{name = "Will Ahern"}]
 readme = "README.md"
@@ -36,6 +36,8 @@ dependencies = [
     "httpx>=0.27.0",
     "asyncssh>=2.17.0",
     "agent-risk-engine",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
 ]
 
 [project.scripts]

@@ -117,6 +117,25 @@ def watch_status() -> None:
 
 
 @app.command()
+def web(
+    port: Annotated[int, typer.Option("--port", "-p", help="Port to listen on")] = 8420,
+    host: Annotated[str, typer.Option("--host", "-H", help="Host to bind to")] = "0.0.0.0",
+    reload: Annotated[bool, typer.Option("--reload", help="Enable auto-reload for development")] = False,
+) -> None:
+    """Start the Squire web interface."""
+    import uvicorn
+
+    uvicorn.run(
+        "squire.api.app:create_app",
+        factory=True,
+        host=host,
+        port=port,
+        reload=reload,
+        log_level="info",
+    )
+
+
+@app.command()
 def version() -> None:
     """Show the Squire version."""
     from . import __version__
