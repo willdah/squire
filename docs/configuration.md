@@ -80,17 +80,6 @@ You can also pass integer values (1--5) or set via env var:
 export SQUIRE_RISK_TOLERANCE=standard
 ```
 
-### Per-Tool Overrides
-
-The `[risk]` section lets you override behavior for specific tools, regardless of the global tolerance:
-
-```toml
-[risk]
-allow = ["docker_logs"]          # always auto-allow
-approve = ["docker_compose"]     # always prompt, even if tolerance would allow
-deny = ["run_command"]           # hard block, never execute
-```
-
 ### Built-In Tool Risk Levels
 
 | Tool | Risk Level | Description |
@@ -111,6 +100,105 @@ deny = ["run_command"]           # hard block, never execute
 
 ---
 
+## Guardrails -- `[guardrails]`
+
+The `[guardrails]` section consolidates all safety policy in one place: tool-level overrides, per-agent tolerances, command/path guards, and watch-mode risk overrides.
+
+Env vars use the `SQUIRE_GUARDRAILS_` prefix.
+
+### Tool-Level Overrides
+
+Override risk behavior for specific tools, regardless of the global tolerance:
+
+```toml
+[guardrails]
+tools_allow = ["docker_logs"]            # bypass risk check, auto-run
+tools_require_approval = ["docker_compose"]  # always prompt, even if tolerance allows
+tools_deny = ["run_command"]             # hard block, never execute
+```
+
+| Key | Default | Env Var | Description |
+|---|---|---|---|
+| `tools_allow` | `[]` | `SQUIRE_GUARDRAILS_TOOLS_ALLOW` | Tool names that bypass risk check |
+| `tools_require_approval` | `[]` | `SQUIRE_GUARDRAILS_TOOLS_REQUIRE_APPROVAL` | Tool names that always require approval |
+| `tools_deny` | `[]` | `SQUIRE_GUARDRAILS_TOOLS_DENY` | Tool names that are hard-blocked |
+
+### Command Guards
+
+Controls which commands `run_command` can execute:
+
+```toml
+[guardrails]
+commands_allow = ["ping", "traceroute", "df", "free", "uptime", "cat", "head", "tail"]
+commands_block = ["rm", "mkfs", "dd", "shutdown", "reboot"]
+```
+
+| Key | Default | Env Var | Description |
+|---|---|---|---|
+| `commands_allow` | *(see below)* | `SQUIRE_GUARDRAILS_COMMANDS_ALLOW` | Commands that `run_command` can execute |
+| `commands_block` | *(see below)* | `SQUIRE_GUARDRAILS_COMMANDS_BLOCK` | Commands that are always blocked (checked first) |
+
+**Default command allowlist:** `ping`, `traceroute`, `dig`, `nslookup`, `df`, `free`, `uptime`, `ip`, `ss`, `cat`, `head`, `tail`
+
+**Default command blocklist:** `rm`, `mkfs`, `dd`, `fdisk`, `parted`, `shutdown`, `reboot`, `init`, `bash`, `sh`, `zsh`, `fish`, `csh`, `tcsh`, `dash`, `python`, `python3`, `perl`, `ruby`, `node`, `lua`
+
+The blocklist is checked first -- a command on both lists is blocked.
+
+### Config Path Guards
+
+Controls which directories `read_config` can access:
+
+```toml
+[guardrails]
+config_paths = ["/etc/nginx/", "/opt/stacks/"]
+```
+
+| Key | Default | Env Var | Description |
+|---|---|---|---|
+| `config_paths` | `[]` | `SQUIRE_GUARDRAILS_CONFIG_PATHS` | Directories that `read_config` can access |
+
+### Per-Agent Tolerance Overrides
+
+Each sub-agent can have its own risk tolerance (only relevant when `multi_agent = true`), falling back to the global setting if unset:
+
+```toml
+risk_tolerance = "cautious"                # global default
+
+[guardrails]
+monitor_tolerance = "standard"            # auto-allow all monitor tools
+container_tolerance = "cautious"          # prompt for compose mutations
+admin_tolerance = "read-only"             # prompt for everything
+notifier_tolerance = "cautious"           # prompt for delete_alert_rule
+```
+
+| Key | Env Var | Description |
+|---|---|---|
+| `monitor_tolerance` | `SQUIRE_GUARDRAILS_MONITOR_TOLERANCE` | Monitor sub-agent tolerance |
+| `container_tolerance` | `SQUIRE_GUARDRAILS_CONTAINER_TOLERANCE` | Container sub-agent tolerance |
+| `admin_tolerance` | `SQUIRE_GUARDRAILS_ADMIN_TOLERANCE` | Admin sub-agent tolerance |
+| `notifier_tolerance` | `SQUIRE_GUARDRAILS_NOTIFIER_TOLERANCE` | Notifier sub-agent tolerance |
+
+### Watch-Mode Risk Overrides -- `[guardrails.watch]`
+
+Risk policy for watch mode lives in a sub-table under `[guardrails]`:
+
+```toml
+[guardrails.watch]
+tolerance = "read-only"            # overrides global risk_tolerance for watch
+tools_allow = []                   # additional tools to auto-allow in watch
+tools_deny = []                    # additional tools to deny in watch
+```
+
+| Key | Env Var | Description |
+|---|---|---|
+| `tolerance` | `SQUIRE_GUARDRAILS_WATCH_TOLERANCE` | Risk tolerance for watch mode |
+| `tools_allow` | `SQUIRE_GUARDRAILS_WATCH_TOOLS_ALLOW` | Additional tools to auto-allow in watch |
+| `tools_deny` | `SQUIRE_GUARDRAILS_WATCH_TOOLS_DENY` | Additional tools to deny in watch |
+
+Watch mode is always strict (deny, never prompt) since there's no interactive approval provider.
+
+---
+
 ## Multi-Agent Mode
 
 When `multi_agent = true`, Squire decomposes into specialized sub-agents. The LLM routes requests automatically while maintaining a single persona.
@@ -125,26 +213,6 @@ multi_agent = true
 | **Container** | `docker_logs`, `docker_compose` | 2--3 |
 | **Admin** | `systemctl`, `run_command` | 3--5 |
 | **Notifier** | `send_notification`, `list_alert_rules`, `create_alert_rule`, `delete_alert_rule` | 1--3 |
-
-### Per-Agent Risk Tolerance
-
-Each sub-agent can have its own risk tolerance, falling back to the global setting if unset:
-
-```toml
-risk_tolerance = "cautious"                # global default
-
-monitor_risk_tolerance = "standard"        # auto-allow all monitor tools
-container_risk_tolerance = "cautious"      # prompt for compose mutations
-admin_risk_tolerance = "read-only"         # prompt for everything
-notifier_risk_tolerance = "cautious"       # prompt for delete_alert_rule
-```
-
-| Key | Env Var | Description |
-|---|---|---|
-| `monitor_risk_tolerance` | `SQUIRE_MONITOR_RISK_TOLERANCE` | Monitor sub-agent tolerance |
-| `container_risk_tolerance` | `SQUIRE_CONTAINER_RISK_TOLERANCE` | Container sub-agent tolerance |
-| `admin_risk_tolerance` | `SQUIRE_ADMIN_RISK_TOLERANCE` | Admin sub-agent tolerance |
-| `notifier_risk_tolerance` | `SQUIRE_NOTIFIER_RISK_TOLERANCE` | Notifier sub-agent tolerance |
 
 ---
 
@@ -208,31 +276,6 @@ snapshot_interval_minutes = 15
 
 ---
 
-## Security -- `[security]`
-
-Controls which commands `run_command` can execute and which paths `read_config` can access.
-
-| Key | Default | Env Var | Description |
-|---|---|---|---|
-| `config_allowlist` | `[]` | `SQUIRE_SECURITY_CONFIG_ALLOWLIST` | Directories that `read_config` can access |
-| `command_allowlist` | *(see below)* | `SQUIRE_SECURITY_COMMAND_ALLOWLIST` | Commands that `run_command` can execute |
-| `command_denylist` | *(see below)* | `SQUIRE_SECURITY_COMMAND_DENYLIST` | Commands that are always blocked (checked first) |
-
-**Default command allowlist:** `ping`, `traceroute`, `dig`, `nslookup`, `df`, `free`, `uptime`, `ip`, `ss`, `cat`, `head`, `tail`
-
-**Default command denylist:** `rm`, `mkfs`, `dd`, `fdisk`, `parted`, `shutdown`, `reboot`, `init`, `bash`, `sh`, `zsh`, `fish`, `csh`, `tcsh`, `dash`, `python`, `python3`, `perl`, `ruby`, `node`, `lua`
-
-```toml
-[security]
-config_allowlist = ["/etc/nginx/", "/opt/stacks/"]
-command_allowlist = ["ping", "traceroute", "df", "free", "uptime", "cat", "head", "tail"]
-command_denylist = ["rm", "mkfs", "dd", "shutdown", "reboot"]
-```
-
-The denylist is checked first -- a command on both lists is denied.
-
----
-
 ## Remote Hosts -- `[[hosts]]`
 
 Connect Squire to other machines via SSH. Each entry defines a remote host.
@@ -270,25 +313,23 @@ Squire connects lazily on first use. Remote tool calls receive a **+1 risk bump*
 
 ## Watch Mode -- `[watch]`
 
-Configuration for autonomous watch mode (`squire watch`). See [CLI reference](cli.md) for full details.
+Operational configuration for autonomous watch mode (`squire watch`). See [CLI reference](cli.md) for full details.
+
+Risk policy for watch mode is configured under `[guardrails.watch]`, not here.
 
 | Key | Default | Env Var | Description |
 |---|---|---|---|
 | `interval_minutes` | `5` | `SQUIRE_WATCH_INTERVAL_MINUTES` | Minutes between watch cycles |
-| `risk_tolerance` | `"read-only"` | `SQUIRE_WATCH_RISK_TOLERANCE` | Risk tolerance (conservative default) |
 | `max_tool_calls_per_cycle` | `15` | `SQUIRE_WATCH_MAX_TOOL_CALLS_PER_CYCLE` | Tool call budget per cycle |
 | `cycle_timeout_seconds` | `300` | `SQUIRE_WATCH_CYCLE_TIMEOUT_SECONDS` | Max wall-clock time per cycle |
 | `cycles_per_session` | `50` | `SQUIRE_WATCH_CYCLES_PER_SESSION` | Rotate session after N cycles |
 | `checkin_prompt` | *(built-in)* | `SQUIRE_WATCH_CHECKIN_PROMPT` | Prompt injected each cycle |
 | `notify_on_action` | `true` | `SQUIRE_WATCH_NOTIFY_ON_ACTION` | Notify on corrective actions |
 | `notify_on_blocked` | `true` | `SQUIRE_WATCH_NOTIFY_ON_BLOCKED` | Notify on blocked tool calls |
-| `allow` | `[]` | `SQUIRE_WATCH_ALLOW` | Tools always auto-allowed in watch mode |
-| `deny` | `[]` | `SQUIRE_WATCH_DENY` | Tools always denied in watch mode |
 
 ```toml
 [watch]
 interval_minutes = 5
-risk_tolerance = "cautious"
 max_tool_calls_per_cycle = 15
 cycle_timeout_seconds = 300
 cycles_per_session = 50

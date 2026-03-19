@@ -88,10 +88,9 @@ export function ConfigEditor({ config }: ConfigEditorProps) {
     { key: "app", label: "App", data: config.app },
     { key: "llm", label: "LLM", data: config.llm },
     { key: "database", label: "Database", data: config.database },
-    { key: "security", label: "Security", data: config.security },
+    { key: "guardrails", label: "Guardrails", data: config.guardrails },
     { key: "watch", label: "Watch", data: config.watch },
     { key: "notifications", label: "Notifications", data: config.notifications },
-    { key: "risk", label: "Risk", data: config.risk },
     { key: "hosts", label: "Hosts", data: config.hosts },
   ];
 

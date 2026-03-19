@@ -1,20 +1,19 @@
-from .app import AppConfig, RiskOverridesConfig, RiskTolerance
+from .app import AppConfig, RiskTolerance
 from .database import DatabaseConfig
+from .guardrails import GuardrailsConfig
 from .hosts import HostConfig
 from .llm import LLMConfig
 from .notifications import NotificationsConfig, WebhookConfig
-from .security import SecurityConfig
 from .watch import WatchConfig
 
 __all__ = [
     "AppConfig",
-    "RiskOverridesConfig",
+    "GuardrailsConfig",
     "RiskTolerance",
     "DatabaseConfig",
     "HostConfig",
     "LLMConfig",
     "NotificationsConfig",
-    "SecurityConfig",
     "WatchConfig",
     "WebhookConfig",
 ]

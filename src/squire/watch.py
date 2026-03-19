@@ -24,9 +24,9 @@ from .callbacks.risk_gate import create_risk_gate
 from .config import (
     AppConfig,
     DatabaseConfig,
+    GuardrailsConfig,
     LLMConfig,
     NotificationsConfig,
-    RiskOverridesConfig,
     WatchConfig,
 )
 from .config.hosts import HostConfig
@@ -85,13 +85,15 @@ async def start_watch() -> None:
     set_notifier(notifier)
 
     # Build the risk evaluation pipeline with CallTracker for loop detection
-    risk_overrides = RiskOverridesConfig()
+    guardrails = GuardrailsConfig()
     call_tracker = CallTracker()
+    watch_tolerance = guardrails.watch_tolerance or app_config.risk_tolerance
     rule_gate = RuleGate(
-        threshold=watch_config.risk_tolerance,
+        threshold=watch_tolerance,
         strict=True,  # Always strict in watch mode — deny, don't prompt
-        allowed_tools=set(watch_config.allow) | set(risk_overrides.allow),
-        denied_tools=set(watch_config.deny) | set(risk_overrides.deny),
+        allowed_tools=set(guardrails.tools_allow) | set(guardrails.watch_tools_allow),
+        # tools_require_approval intentionally omitted — watch mode has no approval provider
+        denied_tools=set(guardrails.tools_deny) | set(guardrails.watch_tools_deny),
     )
     risk_evaluator = RiskEvaluator(rule_gate=rule_gate, state_monitor=call_tracker)
 
@@ -170,7 +172,7 @@ async def start_watch() -> None:
             "last_response": "",
             "session_id": session.id,
             "interval_minutes": str(watch_config.interval_minutes),
-            "risk_tolerance": str(watch_config.risk_tolerance),
+            "risk_tolerance": str(watch_tolerance),
         },
     )
 
@@ -179,7 +181,7 @@ async def start_watch() -> None:
     logger.info(
         "Watch mode started — interval=%dm, threshold=%s, cycles_per_session=%d",
         watch_config.interval_minutes,
-        watch_config.risk_tolerance,
+        watch_tolerance,
         watch_config.cycles_per_session,
     )
 

@@ -122,9 +122,8 @@ class ConfigResponse(BaseModel):
     llm: dict
     database: dict
     notifications: dict
-    security: dict
+    guardrails: dict
     watch: dict
-    risk: dict
     hosts: list[dict]
 
 

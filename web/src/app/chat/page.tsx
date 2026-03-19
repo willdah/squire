@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { apiGet, apiPost } from "@/lib/api";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { MessageList, type ChatMessage, type AgentState } from "@/components/chat/message-list";
-import { ChatInput } from "@/components/chat/chat-input";
+import { ChatInput, type ChatInputHandle } from "@/components/chat/chat-input";
 import { ApprovalDialog } from "@/components/chat/approval-dialog";
 import type { MessageInfo, WsApprovalRequest } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -107,6 +107,7 @@ function ChatPageInner() {
   const [activeToolName, setActiveToolName] = useState<string | undefined>();
 
   // Track streaming state with a ref to avoid closure staleness
+  const chatInputRef = useRef<ChatInputHandle>(null);
   const streamingRef = useRef({ text: "", id: "", finalized: false });
   const msgIdCounter = useRef(0);
   const nextId = () => `msg-${++msgIdCounter.current}`;
@@ -317,6 +318,7 @@ function ChatPageInner() {
     setHistoryLoaded(false);
     streamingRef.current = { text: "", id: "", finalized: false };
     router.replace("/chat");
+    requestAnimationFrame(() => chatInputRef.current?.focus());
   }, [router]);
 
   if (!sessionId) {
@@ -345,6 +347,7 @@ function ChatPageInner() {
         <WelcomeState onSuggestion={handleSend} />
       )}
       <ChatInput
+        ref={chatInputRef}
         onSend={handleSend}
         disabled={status !== "connected"}
         isGenerating={agentState !== null}
