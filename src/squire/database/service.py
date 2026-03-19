@@ -290,6 +290,17 @@ class DatabaseService:
         await conn.commit()
         return cursor.rowcount > 0
 
+    async def delete_all_sessions(self) -> int:
+        """Delete all sessions and their messages. Returns the number of sessions deleted."""
+        conn = await self._get_conn()
+        cursor = await conn.execute("SELECT COUNT(*) FROM sessions")
+        row = await cursor.fetchone()
+        count = row[0] if row else 0
+        await conn.execute("DELETE FROM conversations")
+        await conn.execute("DELETE FROM sessions")
+        await conn.commit()
+        return count
+
     # --- Watch State ---
 
     async def set_watch_state(self, key: str, value: str) -> None:

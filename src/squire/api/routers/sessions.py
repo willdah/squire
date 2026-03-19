@@ -31,6 +31,13 @@ async def get_messages(
     return [MessageInfo(**r) for r in rows]
 
 
+@router.delete("")
+async def delete_all_sessions(db=Depends(get_db)):
+    """Delete all sessions and their messages."""
+    count = await db.delete_all_sessions()
+    return {"deleted": count}
+
+
 @router.delete("/{session_id}")
 async def delete_session(session_id: str, db=Depends(get_db)):
     """Delete a session and its messages."""

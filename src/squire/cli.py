@@ -27,8 +27,12 @@ def chat(
     run_chat(resume_session_id=resume)
 
 
-@app.command()
-def sessions() -> None:
+sessions_app = typer.Typer(name="sessions", help="Manage chat sessions.")
+app.add_typer(sessions_app)
+
+
+@sessions_app.command("list")
+def sessions_list() -> None:
     """List recent chat sessions."""
     from .main import list_sessions
 
@@ -55,6 +59,29 @@ def sessions() -> None:
         )
 
     console.print(table)
+
+
+@sessions_app.command("clear")
+def sessions_clear(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+) -> None:
+    """Delete all chat sessions and their messages."""
+    from .config import DatabaseConfig
+    from .database.service import DatabaseService
+
+    if not yes and not typer.confirm("Delete ALL sessions and their messages? This cannot be undone."):
+        raise typer.Abort()
+
+    async def _run() -> int:
+        db_config = DatabaseConfig()
+        db = DatabaseService(db_config.path)
+        try:
+            return await db.delete_all_sessions()
+        finally:
+            await db.close()
+
+    count = asyncio.run(_run())
+    typer.echo(f"Deleted {count} session(s).")
 
 
 watch_app = typer.Typer(name="watch", help="Autonomous watch mode.", invoke_without_command=True)
