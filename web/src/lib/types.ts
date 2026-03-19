@@ -91,9 +91,8 @@ export interface ConfigResponse {
   llm: Record<string, unknown>;
   database: Record<string, unknown>;
   notifications: Record<string, unknown>;
-  security: Record<string, unknown>;
+  guardrails: Record<string, unknown>;
   watch: Record<string, unknown>;
-  risk: Record<string, unknown>;
   hosts: Record<string, unknown>[];
 }
 

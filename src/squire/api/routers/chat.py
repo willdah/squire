@@ -15,7 +15,7 @@ from google.genai import types
 
 from ...agents import create_squire_agent
 from ...callbacks.risk_gate import create_risk_gate
-from ...config import RiskOverridesConfig
+from ...config import GuardrailsConfig
 from ...tools import TOOL_RISK_LEVELS
 from ..dependencies import get_app_config, get_db, get_llm_config, get_registry
 from ..schemas import ChatSessionResponse
@@ -100,13 +100,13 @@ async def create_chat_session(
     runner = InMemoryRunner(app_name=app_config.app_name, app=adk_app)
 
     # Build risk evaluation pipeline
-    risk_overrides = RiskOverridesConfig()
+    guardrails = GuardrailsConfig()
     rule_gate = RuleGate(
         threshold=app_config.risk_tolerance,
         strict=app_config.risk_strict,
-        allowed_tools=set(risk_overrides.allow),
-        approve_tools=set(risk_overrides.approve),
-        denied_tools=set(risk_overrides.deny),
+        allowed_tools=set(guardrails.tools_allow),
+        approve_tools=set(guardrails.tools_require_approval),
+        denied_tools=set(guardrails.tools_deny),
     )
     risk_evaluator = RiskEvaluator(rule_gate=rule_gate)
 
@@ -180,13 +180,13 @@ async def chat_websocket(
     runner = InMemoryRunner(app_name=app_config.app_name, app=adk_app)
 
     # Build session state
-    risk_overrides = RiskOverridesConfig()
+    guardrails = GuardrailsConfig()
     rule_gate = RuleGate(
         threshold=app_config.risk_tolerance,
         strict=app_config.risk_strict,
-        allowed_tools=set(risk_overrides.allow),
-        approve_tools=set(risk_overrides.approve),
-        denied_tools=set(risk_overrides.deny),
+        allowed_tools=set(guardrails.tools_allow),
+        approve_tools=set(guardrails.tools_require_approval),
+        denied_tools=set(guardrails.tools_deny),
     )
     risk_evaluator = RiskEvaluator(rule_gate=rule_gate)
     snapshot = await get_latest_snapshot()
@@ -373,15 +373,11 @@ async def _stream_response(
                     streamed = "".join(response_parts)
                     if final_text and final_text != streamed:
                         delta = (
-                            final_text[len(streamed):]
-                            if streamed and final_text.startswith(streamed)
-                            else final_text
+                            final_text[len(streamed) :] if streamed and final_text.startswith(streamed) else final_text
                         )
                         if delta.strip():
                             response_parts.append(delta)
-                            await websocket.send_json(
-                                {"type": "token", "content": delta}
-                            )
+                            await websocket.send_json({"type": "token", "content": delta})
 
         full_response = final_text or "".join(response_parts)
         await websocket.send_json({"type": "message_complete", "content": full_response})

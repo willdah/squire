@@ -5,13 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] — 2026-03-18
 
 ### Added
 
+- **Makefile** — standardized development commands (`make install`, `make lint`, `make test`, `make ci`, `make web-dev`, `make docker-build`, `make clean`, etc.). Run `make help` for the full list.
+- **CLAUDE.md** — project context file for Claude Code with overview, tech stack, directory structure, commands, code conventions, and CI details.
 - **Stop generation** — red stop button appears while the agent is responding, allowing users to cancel mid-stream. Partial responses are preserved in the chat and persisted to the database. Also dismisses any pending approval dialog.
 
+### Fixed
+
+- **Chat input focus** — the message input now retains focus after sending a message and after clicking the "New Chat" button, so users can keep typing without clicking back into the field.
+
 ### Changed
+
+- **Consolidated guardrails config** — merged `[security]`, `[risk]`, and watch-mode risk fields into a single `[guardrails]` section. All safety policy (tool overrides, command/path guards, per-agent tolerances, watch-mode risk) now lives in one place. The old `[security]` and `[risk]` TOML sections are removed. Watch-mode risk overrides moved to `[guardrails.watch]` sub-table; `[watch]` now contains only operational settings (interval, timeout, prompt, notifications). Renamed fields: `command_allowlist` → `commands_allow`, `command_denylist` → `commands_block`, `config_allowlist` → `config_paths`, `allow`/`approve`/`deny` → `tools_allow`/`tools_require_approval`/`tools_deny`. Per-agent tolerances moved from top-level to `[guardrails]` with shorter names (e.g., `monitor_risk_tolerance` → `monitor_tolerance`). Env prefix changed from `SQUIRE_SECURITY_`/`SQUIRE_RISK_` to `SQUIRE_GUARDRAILS_`. This is a breaking change — existing `squire.toml` files need to be updated.
 
 - **Sticky chat top bar with icon button** — the chat header (title, connection dot, new chat) now uses `shrink-0 bg-card` so it stays pinned at the top of the flex column during long conversations. Replaced the "New Chat" text link with a `SquarePen` icon button for a cleaner look.
 - **Web UI restructure: chat-first identity** — Squire is the brain, not the eyes. Removed dashboard and alert rule CRUD in favor of a chat-first experience that leans on dedicated homelab tools (Beszel, Grafana, Portainer) for metrics and container management.

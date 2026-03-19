@@ -1,11 +1,10 @@
 from enum import StrEnum
-from functools import partial
 from typing import Annotated, Any
 
 from pydantic import BeforeValidator, Field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
-from .loader import TomlSectionSource, get_section, get_top_level
+from .loader import TomlSectionSource, get_top_level
 
 
 class RiskTolerance(StrEnum):
@@ -100,56 +99,4 @@ class AppConfig(BaseSettings):
     multi_agent: bool = Field(
         default=False,
         description="Enable sub-agent decomposition (Monitor, Container, Admin, Notifier)",
-    )
-    monitor_risk_tolerance: Annotated[RiskTolerance | None, BeforeValidator(_coerce_risk_tolerance)] = Field(
-        default=None,
-        description="Per-agent risk tolerance for Monitor (falls back to global risk_tolerance)",
-    )
-    container_risk_tolerance: Annotated[RiskTolerance | None, BeforeValidator(_coerce_risk_tolerance)] = Field(
-        default=None,
-        description="Per-agent risk tolerance for Container (falls back to global risk_tolerance)",
-    )
-    admin_risk_tolerance: Annotated[RiskTolerance | None, BeforeValidator(_coerce_risk_tolerance)] = Field(
-        default=None,
-        description="Per-agent risk tolerance for Admin (falls back to global risk_tolerance)",
-    )
-    notifier_risk_tolerance: Annotated[RiskTolerance | None, BeforeValidator(_coerce_risk_tolerance)] = Field(
-        default=None,
-        description="Per-agent risk tolerance for Notifier (falls back to global risk_tolerance)",
-    )
-
-
-class RiskOverridesConfig(BaseSettings):
-    """Per-tool risk overrides from [risk] section in squire.toml."""
-
-    model_config = SettingsConfigDict(env_prefix="SQUIRE_RISK_", case_sensitive=False, extra="ignore")
-
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> tuple[PydanticBaseSettingsSource, ...]:
-        return (
-            init_settings,
-            env_settings,
-            dotenv_settings,
-            TomlSectionSource(settings_cls, partial(get_section, "risk")),
-            file_secret_settings,
-        )
-
-    allow: list[str] = Field(
-        default_factory=list,
-        description="Tool names that are always auto-allowed regardless of tolerance",
-    )
-    approve: list[str] = Field(
-        default_factory=list,
-        description="Tool names that always require approval even if tolerance would allow",
-    )
-    deny: list[str] = Field(
-        default_factory=list,
-        description="Tool names that are always denied",
     )

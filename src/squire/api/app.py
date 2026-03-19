@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from ..config import AppConfig, DatabaseConfig, LLMConfig, NotificationsConfig, RiskOverridesConfig, WatchConfig
+from ..config import AppConfig, DatabaseConfig, GuardrailsConfig, LLMConfig, NotificationsConfig, WatchConfig
 from ..config.hosts import HostConfig
 from ..config.loader import get_list_section
 from ..database.service import DatabaseService
@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     deps.db_config = DatabaseConfig()
     deps.notif_config = NotificationsConfig()
     deps.watch_config = WatchConfig()
-    deps.risk_overrides = RiskOverridesConfig()
+    deps.guardrails = GuardrailsConfig()
 
     # Load host configs
     host_dicts = get_list_section("hosts")
