@@ -8,12 +8,14 @@ from squire.config import AppConfig, DatabaseConfig, GuardrailsConfig, LLMConfig
 from squire.config.hosts import HostConfig
 from squire.database.service import DatabaseService
 from squire.notifications.webhook import WebhookDispatcher
+from squire.skills import SkillService
 from squire.system.registry import BackendRegistry
 
 # Singletons — populated by the lifespan context manager in app.py
 db: DatabaseService | None = None
 registry: BackendRegistry | None = None
 notifier: WebhookDispatcher | None = None
+skills_service: SkillService | None = None
 
 # Configs — loaded once at startup
 app_config: AppConfig | None = None
@@ -41,6 +43,12 @@ def get_notifier() -> WebhookDispatcher:
     if notifier is None:
         raise RuntimeError("WebhookDispatcher not initialized")
     return notifier
+
+
+def get_skills_service() -> SkillService:
+    if skills_service is None:
+        raise RuntimeError("SkillService not initialized")
+    return skills_service
 
 
 def get_app_config() -> AppConfig:

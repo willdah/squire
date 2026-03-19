@@ -7,6 +7,12 @@ import { cn } from "@/lib/utils";
 import type { ChatMessage } from "./message-list";
 import { User, Wrench } from "lucide-react";
 
+const SKILL_MARKER_RE = /^\[SKILL\s+COMPLETE\]\s*$/gim;
+
+function stripSkillMarkers(text: string): string {
+  return text.replace(SKILL_MARKER_RE, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 interface MessageBubbleProps {
   message: ChatMessage;
 }
@@ -96,7 +102,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 },
               }}
             >
-              {content}
+              {stripSkillMarkers(content)}
             </ReactMarkdown>
           </div>
         )}

@@ -12,18 +12,27 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from ..config import AppConfig, DatabaseConfig, GuardrailsConfig, LLMConfig, NotificationsConfig, WatchConfig
+from ..config import (
+    AppConfig,
+    DatabaseConfig,
+    GuardrailsConfig,
+    LLMConfig,
+    NotificationsConfig,
+    SkillsConfig,
+    WatchConfig,
+)
 from ..config.hosts import HostConfig
 from ..config.loader import get_list_section
 from ..database.service import DatabaseService
 from ..main import _collect_all_snapshots
 from ..notifications.webhook import WebhookDispatcher
+from ..skills import SkillService
 from ..system.registry import BackendRegistry
 from ..tools import set_db as tools_set_db
 from ..tools import set_notifier as tools_set_notifier
 from ..tools import set_registry as tools_set_registry
 from . import dependencies as deps
-from .routers import alerts, chat, config, events, hosts, sessions, system, watch
+from .routers import alerts, chat, config, events, hosts, sessions, skills, system, watch
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -67,6 +76,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     deps.notif_config = NotificationsConfig()
     deps.watch_config = WatchConfig()
     deps.guardrails = GuardrailsConfig()
+    skills_config = SkillsConfig()
 
     # Load host configs
     host_dicts = get_list_section("hosts")
@@ -76,6 +86,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     deps.registry = BackendRegistry(deps.host_configs)
     deps.db = DatabaseService(deps.db_config.path)
     deps.notifier = WebhookDispatcher(deps.notif_config)
+    deps.skills_service = SkillService(skills_config.path)
 
     # Wire up tool registry
     tools_set_registry(deps.registry)
@@ -150,6 +161,7 @@ def create_app() -> FastAPI:
     app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
     app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
     app.include_router(alerts.router, prefix="/api/alerts", tags=["alerts"])
+    app.include_router(skills.router, prefix="/api/skills", tags=["skills"])
     app.include_router(events.router, prefix="/api/events", tags=["events"])
     app.include_router(config.router, prefix="/api/config", tags=["config"])
     app.include_router(watch.router, prefix="/api/watch", tags=["watch"])

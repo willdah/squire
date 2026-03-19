@@ -101,6 +101,34 @@ class AlertRuleUpdate(BaseModel):
     cooldown_minutes: int | None = None
 
 
+# --- Skills ---
+
+
+class Skill(BaseModel):
+    name: str
+    description: str = ""
+    host: str = "all"
+    trigger: str = "manual"
+    enabled: bool = True
+    instructions: str = ""
+
+
+class SkillCreate(BaseModel):
+    name: str
+    description: str
+    host: str = "all"
+    trigger: str = "manual"
+    instructions: str
+
+
+class SkillUpdate(BaseModel):
+    description: str | None = None
+    host: str | None = None
+    trigger: str | None = None
+    enabled: bool | None = None
+    instructions: str | None = None
+
+
 # --- Events ---
 
 

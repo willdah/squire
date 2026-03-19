@@ -37,11 +37,12 @@ Squire is an AI-powered homelab monitoring and management agent. It uses Google 
 ```
 src/squire/              Main application
   agents/                ADK agent definitions
-  api/                   FastAPI routers (chat, system, sessions, alerts, etc.)
+  api/                   FastAPI routers (chat, system, sessions, alerts, skills, etc.)
   callbacks/             Risk gate implementation
-  config/                Config loaders (app, llm, database, hosts)
+  config/                Config loaders (app, llm, database, hosts, skills)
   database/              SQLite service
   instructions/          Dynamic system prompts for agents
+  skills/                File-based skill service (Open Agent Skills spec)
   notifications/         Webhook dispatcher & alert evaluator
   schemas/               Pydantic models
   system/                Backend registry (local/SSH execution)
@@ -57,7 +58,7 @@ packages/
   agent-risk-engine/     Standalone risk evaluation library
 
 web/                     Next.js frontend
-  src/app/               Pages (chat, sessions, hosts, notifications, config, activity)
+  src/app/               Pages (chat, skills, sessions, hosts, notifications, config, activity)
   src/components/        UI components
   src/hooks/             Custom React hooks
   src/lib/               API client, types, utilities

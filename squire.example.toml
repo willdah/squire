@@ -65,6 +65,10 @@
 # tools_allow = []                   # additional tools to auto-allow in watch
 # tools_deny = []                    # additional tools to deny in watch
 
+# --- Skills (file-based, Open Agent Skills spec) ---
+[skills]
+# path = "~/.local/share/squire/skills"  # Directory containing NAME/SKILL.md subdirectories
+
 # --- Watch mode (operational settings only — risk policy is in [guardrails.watch]) ---
 [watch]
 # interval_minutes = 5

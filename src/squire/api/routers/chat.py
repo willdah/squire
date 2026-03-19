@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 import uuid
 from typing import Any
 
@@ -22,6 +23,13 @@ from ..schemas import ChatSessionResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+_SKILL_COMPLETE_RE = re.compile(r"\[SKILL\s+COMPLETE\]", re.IGNORECASE)
+
+
+def _is_skill_complete(text: str) -> bool:
+    """Check whether [SKILL COMPLETE] marker is present in text."""
+    return bool(_SKILL_COMPLETE_RE.search(text))
 
 
 class WebApprovalBridge:
@@ -140,6 +148,10 @@ async def chat_websocket(
     """Bidirectional chat WebSocket with streaming responses."""
     await websocket.accept()
 
+    # Read skill name from query params directly (more reliable than
+    # FastAPI parameter injection for WebSocket endpoints).
+    skill_name = websocket.query_params.get("skill") or None
+
     from .. import dependencies as deps
     from ..app import get_latest_snapshot
 
@@ -159,7 +171,12 @@ async def chat_websocket(
             approval_provider=approval_bridge,
         )
 
-    if app_config.multi_agent:
+    # Skills require direct tool access, so always use single-agent mode
+    # when executing a skill.  In multi-agent mode the root agent has no
+    # tools and cannot carry out skill instructions itself.
+    use_multi_agent = app_config.multi_agent and not skill_name
+
+    if use_multi_agent:
         agent = create_squire_agent(
             app_config=app_config,
             llm_config=llm_config,
@@ -170,8 +187,11 @@ async def chat_websocket(
             tool_risk_levels=TOOL_RISK_LEVELS,
             approval_provider=approval_bridge,
         )
+        # Override multi_agent so create_squire_agent takes the
+        # single-agent path even when the global config says otherwise.
+        agent_config = app_config.model_copy(update={"multi_agent": False})
         agent = create_squire_agent(
-            app_config=app_config,
+            app_config=agent_config,
             llm_config=llm_config,
             before_tool_callback=risk_gate_callback,
         )
@@ -201,6 +221,23 @@ async def chat_websocket(
         "available_hosts": registry.host_names,
         "host_configs": {name: cfg.model_dump() for name, cfg in registry.host_configs.items()},
     }
+
+    # Load skill context into session state if a skill name was provided.
+    # This MUST happen before create_session because InMemorySessionService
+    # deep-copies the state dict — later mutations won't be visible.
+    skill_active = False
+    if skill_name and deps.skills_service:
+        skill_data = deps.skills_service.get_skill(skill_name)
+        if skill_data and skill_data.instructions:
+            skill_active = True
+            session_state["active_skill"] = {
+                "skill_name": skill_data.name,
+                "host": skill_data.host,
+                "instructions": skill_data.instructions,
+            }
+            logger.info("Loaded skill '%s' into session %s", skill_name, session_id)
+        else:
+            logger.warning("Skill '%s' not found or has no instructions", skill_name)
 
     session = await runner.session_service.create_session(
         app_name=app_config.app_name,
@@ -277,8 +314,12 @@ async def chat_websocket(
                         app_config=app_config,
                         db=db,
                         notifier=notifier,
+                        skill_active=skill_active,
                     )
                 )
+                # Only auto-continue for the first message (skill execution).
+                # Subsequent user messages are normal chat turns.
+                skill_active = False
                 continue
 
             await websocket.send_json({"type": "error", "message": f"Unknown message type: {msg_type}"})
@@ -301,103 +342,62 @@ async def _stream_response(
     app_config,
     db,
     notifier,
+    skill_active: bool = False,
 ) -> None:
-    """Run the agent and stream response tokens over WebSocket."""
-    message = types.Content(parts=[types.Part(text=user_text)])
-    response_parts = []
-    run_config = RunConfig(streaming_mode=StreamingMode.SSE)
+    """Run the agent and stream response tokens over WebSocket.
+
+    When ``skill_active`` is set, the agent is automatically re-prompted
+    after each turn so it works through the skill instructions without the
+    user having to send "continue" manually.
+    """
+    max_turns = 15 if skill_active else 1
+    current_text = user_text
 
     try:
-        final_text = ""
+        all_response_text = ""
+        prev_response = ""
 
-        async for event in runner.run_async(
-            user_id=app_config.user_id,
-            session_id=session.id,
-            new_message=message,
-            run_config=run_config,
-        ):
-            if not event.content or not event.content.parts:
-                continue
+        for turn in range(max_turns):
+            turn_response, tools_used = await _run_single_turn(
+                websocket=websocket,
+                runner=runner,
+                session=session,
+                agent=agent,
+                user_text=current_text,
+                app_config=app_config,
+                db=db,
+            )
 
-            for part in event.content.parts:
-                if getattr(part, "thought", False):
-                    continue
+            # Persist assistant response
+            if db and turn_response:
+                await db.save_message(session_id=session.id, role="assistant", content=turn_response)
+                await db.update_session_active(session.id)
 
-                if part.function_call:
-                    fc = part.function_call
-                    # Reset so response_parts only tracks the text
-                    # segment *after* this tool call (prevents
-                    # concatenating prior sub-agent text into
-                    # message_complete).
-                    response_parts = []
-                    if fc.name in ADK_INTERNAL_TOOLS:
-                        continue
-                    request_id = str(uuid.uuid4())
-                    await websocket.send_json(
-                        {
-                            "type": "tool_call",
-                            "name": fc.name,
-                            "args": fc.args or {},
-                            "request_id": request_id,
-                        }
-                    )
-                    if db:
-                        await db.log_event(
-                            category="tool_call",
-                            summary=f"Called {fc.name}",
-                            session_id=session.id,
-                            tool_name=fc.name,
-                            details=json.dumps(fc.args or {}),
-                        )
+            # If this is not a skill session or we've exhausted turns, stop.
+            if not skill_active or turn >= max_turns - 1:
+                await websocket.send_json({"type": "message_complete", "content": turn_response})
+                break
 
-                elif part.function_response:
-                    fr = part.function_response
-                    response_parts = []
-                    if fr.name in ADK_INTERNAL_TOOLS:
-                        continue
-                    await websocket.send_json(
-                        {
-                            "type": "tool_result",
-                            "name": fr.name,
-                            "output": str(fr.response)[:500],
-                            "request_id": "",
-                        }
-                    )
+            await websocket.send_json({"type": "message_complete", "content": turn_response})
 
-                elif part.text and event.partial:
-                    response_parts.append(part.text)
-                    await websocket.send_json({"type": "token", "content": part.text})
+            all_response_text += "\n" + turn_response
 
-                elif part.text and event.is_final_response():
-                    final_text = part.text
-                    # In multi-agent mode, partial tokens may have streamed
-                    # the root agent's text while the sub-agent's response
-                    # arrives only in the final event.  Send any genuinely
-                    # new content as a token so the frontend displays it.
-                    streamed = "".join(response_parts)
-                    if final_text and final_text != streamed:
-                        delta = (
-                            final_text[len(streamed) :] if streamed and final_text.startswith(streamed) else final_text
-                        )
-                        if delta.strip():
-                            response_parts.append(delta)
-                            await websocket.send_json({"type": "token", "content": delta})
+            # Stop if [SKILL COMPLETE] marker detected (only when tools were used).
+            if tools_used and _is_skill_complete(all_response_text):
+                break
 
-        full_response = final_text or "".join(response_parts)
-        await websocket.send_json({"type": "message_complete", "content": full_response})
+            # Safety: stop if the agent repeated itself verbatim.
+            if turn > 0 and turn_response == prev_response:
+                break
+            prev_response = turn_response
 
-        # Persist assistant response
-        if db and full_response:
-            await db.save_message(session_id=session.id, role="assistant", content=full_response)
-            await db.update_session_active(session.id)
+            current_text = "Continue executing the skill. Use your tools."
+            if db:
+                await db.save_message(session_id=session.id, role="user", content=current_text)
 
     except asyncio.CancelledError:
-        partial = final_text or "".join(response_parts)
         try:
-            await websocket.send_json({"type": "message_complete", "content": partial, "stopped": True})
-            if db and partial:
-                await db.save_message(session_id=session.id, role="assistant", content=partial)
-                await db.update_session_active(session.id)
+            await websocket.send_json({"type": "message_complete", "content": "", "stopped": True})
         except Exception:
             pass
     except WebSocketDisconnect:
@@ -408,3 +408,94 @@ async def _stream_response(
             await websocket.send_json({"type": "error", "message": str(e)})
         except Exception:
             pass
+
+
+async def _run_single_turn(
+    websocket: WebSocket,
+    runner: InMemoryRunner,
+    session,
+    agent,
+    user_text: str,
+    app_config,
+    db,
+) -> tuple[str, bool]:
+    """Run one agent turn and stream events over the WebSocket.
+
+    Returns:
+        A tuple of (response_text, tools_were_called).
+    """
+    message = types.Content(parts=[types.Part(text=user_text)])
+    response_parts: list[str] = []
+    run_config = RunConfig(streaming_mode=StreamingMode.SSE)
+    final_text = ""
+    tools_called = False
+
+    async for event in runner.run_async(
+        user_id=app_config.user_id,
+        session_id=session.id,
+        new_message=message,
+        run_config=run_config,
+    ):
+        if not event.content or not event.content.parts:
+            continue
+
+        for part in event.content.parts:
+            if getattr(part, "thought", False):
+                continue
+
+            if part.function_call:
+                fc = part.function_call
+                # Reset so response_parts only tracks the text
+                # segment *after* this tool call (prevents
+                # concatenating prior sub-agent text into
+                # message_complete).
+                response_parts = []
+                if fc.name in ADK_INTERNAL_TOOLS:
+                    continue
+                tools_called = True
+                request_id = str(uuid.uuid4())
+                await websocket.send_json(
+                    {
+                        "type": "tool_call",
+                        "name": fc.name,
+                        "args": fc.args or {},
+                        "request_id": request_id,
+                    }
+                )
+                if db:
+                    await db.log_event(
+                        category="tool_call",
+                        summary=f"Called {fc.name}",
+                        session_id=session.id,
+                        tool_name=fc.name,
+                        details=json.dumps(fc.args or {}),
+                    )
+
+            elif part.function_response:
+                fr = part.function_response
+                response_parts = []
+                if fr.name in ADK_INTERNAL_TOOLS:
+                    continue
+                await websocket.send_json(
+                    {
+                        "type": "tool_result",
+                        "name": fr.name,
+                        "output": str(fr.response)[:500],
+                        "request_id": "",
+                    }
+                )
+
+            elif part.text and event.partial:
+                response_parts.append(part.text)
+                await websocket.send_json({"type": "token", "content": part.text})
+
+            elif part.text and event.is_final_response():
+                final_text = part.text
+                streamed = "".join(response_parts)
+                if final_text and final_text != streamed:
+                    delta = final_text[len(streamed) :] if streamed and final_text.startswith(streamed) else final_text
+                    if delta.strip():
+                        response_parts.append(delta)
+                        await websocket.send_json({"type": "token", "content": delta})
+
+    return final_text or "".join(response_parts), tools_called

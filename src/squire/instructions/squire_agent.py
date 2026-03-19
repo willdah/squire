@@ -11,6 +11,7 @@ from .shared import (
     build_hosts_section,
     build_identity_section,
     build_risk_section,
+    build_skill_section,
     build_system_state_section,
     build_watch_mode_addendum,
 )
@@ -49,4 +50,5 @@ def build_instruction(ctx: ReadonlyContext) -> str:
 {build_risk_section(ctx)}
 {build_hosts_section(ctx)}\
 {build_system_state_section(ctx)}
-{build_watch_mode_addendum(ctx)}"""
+{build_watch_mode_addendum(ctx)}\
+{build_skill_section(ctx)}"""

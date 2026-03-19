@@ -149,15 +149,91 @@ squire alerts disable disk-full
 
 ---
 
+### `squire skills`
+
+Manage file-based skills (Open Agent Skills spec). Skills are stored as `SKILL.md` files in the configured skills directory (default `~/.local/share/squire/skills`).
+
+#### `squire skills list`
+
+List all configured skills.
+
+```bash
+squire skills list
+```
+
+#### `squire skills show`
+
+Display a skill's metadata and instructions.
+
+```bash
+squire skills show restart-on-error
+```
+
+#### `squire skills add`
+
+Create a new skill from a Markdown instructions file.
+
+```bash
+squire skills add --name restart-on-error --description "Restart errored containers" --instructions-file instructions.md
+squire skills add -n my-check -d "Health check" -f check.md --host prod-01 --trigger watch
+```
+
+| Option | Short | Required | Default | Description |
+|---|---|---|---|---|
+| `--name` | `-n` | Yes | | Skill name — lowercase letters, numbers, hyphens (max 64 chars) |
+| `--description` | `-d` | Yes | | What the skill does and when to use it |
+| `--instructions-file` | `-f` | Yes | | Path to Markdown file with instructions |
+| `--host` | | No | `all` | Target host (`all` or a specific host name) |
+| `--trigger` | `-t` | No | `manual` | `manual` or `watch` |
+
+#### `squire skills remove`
+
+Delete a skill and its directory.
+
+```bash
+squire skills remove restart-on-error
+```
+
+#### `squire skills enable`
+
+Enable a previously disabled skill.
+
+```bash
+squire skills enable restart-on-error
+```
+
+#### `squire skills disable`
+
+Disable a skill without deleting it.
+
+```bash
+squire skills disable restart-on-error
+```
+
+---
+
 ### `squire sessions`
+
+Manage chat sessions.
+
+#### `squire sessions list`
 
 List recent chat sessions.
 
 ```bash
-squire sessions
+squire sessions list
 ```
 
 Displays a table with session ID, creation time, last activity, and a preview of the conversation.
+
+#### `squire sessions clear`
+
+Delete all chat sessions and their messages.
+
+```bash
+squire sessions clear         # prompts for confirmation
+squire sessions clear --yes   # skip confirmation
+```
 
 ---
 

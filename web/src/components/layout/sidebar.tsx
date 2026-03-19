@@ -9,6 +9,7 @@ import {
   Settings,
   Activity,
   History,
+  ListChecks,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,7 @@ const mainNav = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/sessions", label: "Sessions", icon: History },
+  { href: "/skills", label: "Skills", icon: ListChecks },
 ];
 
 const systemNav = [

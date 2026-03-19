@@ -259,6 +259,52 @@ model = "gemini/gemini-2.0-flash"
 
 ---
 
+## Skills -- `[skills]`
+
+Skills are file-based instruction sets aligned with the [Open Agent Skills spec](https://agentskills.io/specification). Each skill lives in a `NAME/SKILL.md` subdirectory under the configured skills path.
+
+| Key | Default | Env Var | Description |
+|---|---|---|---|
+| `path` | `~/.local/share/squire/skills` | `SQUIRE_SKILLS_PATH` | Directory containing skill definitions |
+
+```toml
+[skills]
+path = "~/.local/share/squire/skills"
+```
+
+### SKILL.md Format
+
+Each skill is a directory containing a `SKILL.md` file with YAML frontmatter and Markdown instructions:
+
+```yaml
+---
+name: restart-on-error
+description: Check container health and restart errored containers.
+metadata:
+  host: prod-apps-01
+  trigger: manual
+---
+
+Check the status of all Docker containers on the target host.
+If any containers are in an errored state, check their logs and restart them.
+```
+
+The format follows the [Open Agent Skills spec](https://agentskills.io/specification). `name` and `description` are spec-required top-level fields. Squire-specific fields live under `metadata`:
+
+| Key | Required | Default | Description |
+|---|---|---|---|
+| `name` | Yes | | Skill name — lowercase letters, numbers, hyphens, max 64 chars. Must match directory name. |
+| `description` | Yes | | What the skill does and when to use it (max 1024 chars). |
+| `metadata.host` | No | `all` | Target host (`all` or a specific host name) |
+| `metadata.trigger` | No | `manual` | `manual` (on-demand) or `watch` (each watch cycle) |
+| `metadata.enabled` | No | `true` | Whether the skill is active |
+
+The `metadata` key is omitted entirely when all Squire-specific fields are at their defaults.
+
+Skills with `trigger: watch` are appended to the watch mode check-in prompt each cycle. Manual skills can be executed from the web UI or CLI.
+
+---
+
 ## Database -- `[db]`
 
 Squire persists chat history, system snapshots, events, and alert rules to SQLite.
