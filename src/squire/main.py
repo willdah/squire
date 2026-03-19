@@ -14,7 +14,7 @@ from google.genai import types
 
 from .agents import create_squire_agent
 from .callbacks.risk_gate import create_risk_gate
-from .config import AppConfig, DatabaseConfig, LLMConfig, NotificationsConfig, RiskOverridesConfig
+from .config import AppConfig, DatabaseConfig, GuardrailsConfig, LLMConfig, NotificationsConfig
 from .config.hosts import HostConfig
 from .config.loader import get_list_section
 from .database.service import DatabaseService
@@ -180,13 +180,13 @@ async def start_chat(resume_session_id: str | None = None) -> None:
     runner = InMemoryRunner(app_name=app_config.app_name, app=adk_app)
 
     # Build the risk evaluation pipeline
-    risk_overrides = RiskOverridesConfig()
+    guardrails = GuardrailsConfig()
     rule_gate = RuleGate(
         threshold=app_config.risk_tolerance,
         strict=app_config.risk_strict,
-        allowed_tools=set(risk_overrides.allow),
-        approve_tools=set(risk_overrides.approve),
-        denied_tools=set(risk_overrides.deny),
+        allowed_tools=set(guardrails.tools_allow),
+        approve_tools=set(guardrails.tools_require_approval),
+        denied_tools=set(guardrails.tools_deny),
     )
     risk_evaluator = RiskEvaluator(rule_gate=rule_gate)
 

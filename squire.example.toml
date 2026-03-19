@@ -31,24 +31,48 @@
 # path = "~/.local/share/squire/squire.db"
 # snapshot_interval_minutes = 15
 
-# --- Tool security: path and command lists ---
-[security]
-# config_allowlist = ["/etc/nginx/", "/opt/stacks/"]
-# command_allowlist = [
+# --- Guardrails: tool overrides, command/path guards, per-agent tolerances ---
+[guardrails]
+# tools_allow = ["docker_logs"]            # bypass risk check, auto-run
+# tools_require_approval = ["docker_compose"]  # always ask user first
+# tools_deny = ["run_command"]             # hard block, never run
+
+# Per-agent tolerance overrides (only relevant when multi_agent = true)
+# monitor_tolerance = "standard"
+# container_tolerance = "cautious"
+# admin_tolerance = "read-only"
+# notifier_tolerance = "cautious"
+
+# run_command argument guards
+# commands_allow = [
 #     "ping", "traceroute", "dig", "nslookup",
 #     "df", "free", "uptime", "ip", "ss",
 #     "cat", "head", "tail",
 # ]
-# command_denylist = [
+# commands_block = [
 #     "rm", "mkfs", "dd", "fdisk", "parted",
 #     "shutdown", "reboot", "init",
+#     "bash", "sh", "zsh", "fish", "csh", "tcsh", "dash",
+#     "python", "python3", "perl", "ruby", "node", "lua",
 # ]
 
-# --- Per-tool risk overrides ---
-[risk]
-# allow = ["docker_logs"]          # Always auto-allow, regardless of threshold
-# approve = ["docker_compose"]     # Always prompt, even if threshold would allow
-# deny = ["run_command"]           # Hard block, never execute
+# read_config path guards
+# config_paths = ["/etc/nginx/", "/opt/stacks/"]
+
+# Watch-mode risk overrides
+[guardrails.watch]
+# tolerance = "read-only"            # overrides global risk_tolerance for watch
+# tools_allow = []                   # additional tools to auto-allow in watch
+# tools_deny = []                    # additional tools to deny in watch
+
+# --- Watch mode (operational settings only — risk policy is in [guardrails.watch]) ---
+[watch]
+# interval_minutes = 5
+# max_tool_calls_per_cycle = 15
+# cycle_timeout_seconds = 300
+# cycles_per_session = 50
+# notify_on_action = true
+# notify_on_blocked = true
 
 # --- Remote hosts (multi-machine management) ---
 # Define remote hosts that Squire can connect to via SSH.

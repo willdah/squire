@@ -2,10 +2,9 @@
 
 from fastapi import APIRouter, Depends
 
-from ...config import SecurityConfig
+from .. import dependencies as deps
 from ..dependencies import get_app_config, get_llm_config
 from ..schemas import ConfigResponse
-from .. import dependencies as deps
 
 router = APIRouter()
 
@@ -36,17 +35,12 @@ async def get_config(
     llm_config=Depends(get_llm_config),
 ):
     """Current effective configuration (all sections), with sensitive values redacted."""
-    sec = SecurityConfig()
-
     return ConfigResponse(
         app=app_config.model_dump(mode="json"),
         llm=_redact_llm(llm_config.model_dump(mode="json")),
         database=deps.db_config.model_dump(mode="json") if deps.db_config else {},
-        notifications=_redact_notifications(
-            deps.notif_config.model_dump(mode="json") if deps.notif_config else {}
-        ),
-        security=sec.model_dump(mode="json"),
+        notifications=_redact_notifications(deps.notif_config.model_dump(mode="json") if deps.notif_config else {}),
+        guardrails=deps.guardrails.model_dump(mode="json") if deps.guardrails else {},
         watch=deps.watch_config.model_dump(mode="json") if deps.watch_config else {},
-        risk=deps.risk_overrides.model_dump(mode="json") if deps.risk_overrides else {},
         hosts=[h.model_dump(mode="json") for h in deps.host_configs],
     )

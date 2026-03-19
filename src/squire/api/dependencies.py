@@ -4,7 +4,7 @@ These are set during the app lifespan and retrieved via FastAPI's dependency
 injection. Tools also receive these via the global tool registry.
 """
 
-from squire.config import AppConfig, DatabaseConfig, LLMConfig, NotificationsConfig, RiskOverridesConfig, WatchConfig
+from squire.config import AppConfig, DatabaseConfig, GuardrailsConfig, LLMConfig, NotificationsConfig, WatchConfig
 from squire.config.hosts import HostConfig
 from squire.database.service import DatabaseService
 from squire.notifications.webhook import WebhookDispatcher
@@ -21,7 +21,7 @@ llm_config: LLMConfig | None = None
 db_config: DatabaseConfig | None = None
 notif_config: NotificationsConfig | None = None
 watch_config: WatchConfig | None = None
-risk_overrides: RiskOverridesConfig | None = None
+guardrails: GuardrailsConfig | None = None
 host_configs: list[HostConfig] = []
 
 

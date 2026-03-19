@@ -43,10 +43,23 @@ def _load_toml() -> dict:
 
 
 def get_section(name: str) -> dict:
-    """Get a TOML section by name, returning {} if not found."""
+    """Get a TOML section by name, returning {} if not found.
+
+    Nested sub-tables are flattened with underscore-joined keys.
+    For example, ``[guardrails.watch]`` with ``tolerance = "read-only"``
+    becomes ``{"watch_tolerance": "read-only"}`` in the returned dict.
+    """
     data = _load_toml()
     section = data.get(name, {})
-    return section if isinstance(section, dict) else {}
+    if not isinstance(section, dict):
+        return {}
+    section = dict(section)  # shallow copy to avoid mutating cache
+    for sub_key in list(section):
+        if isinstance(section[sub_key], dict):
+            nested = section.pop(sub_key)
+            for k, v in nested.items():
+                section[f"{sub_key}_{k}"] = v
+    return section
 
 
 def get_list_section(name: str) -> list[dict]:

@@ -1,23 +1,22 @@
 """Watch mode configuration.
 
 Loaded from [watch] section in squire.toml and/or SQUIRE_WATCH_ env vars.
+Risk policy for watch mode is now in [guardrails.watch].
 """
 
 from functools import partial
-from typing import Annotated
 
-from pydantic import BeforeValidator, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
-from .app import RiskTolerance, _coerce_risk_tolerance
 from .loader import TomlSectionSource, get_section
 
 
 class WatchConfig(BaseSettings):
-    """Configuration for autonomous watch mode (``squire watch``).
+    """Operational configuration for autonomous watch mode (``squire watch``).
 
-    Watch mode runs headless — no TUI, no interactive approval. Tools above
-    the risk threshold are denied outright and a notification is dispatched.
+    Watch mode runs headless — no TUI, no interactive approval. Risk policy
+    (tolerance, tool allow/deny) is configured under ``[guardrails.watch]``.
     """
 
     model_config = SettingsConfigDict(env_prefix="SQUIRE_WATCH_", case_sensitive=False, extra="ignore")
@@ -43,14 +42,6 @@ class WatchConfig(BaseSettings):
         default=5,
         ge=1,
         description="Minutes between watch cycles",
-    )
-    risk_tolerance: Annotated[RiskTolerance, BeforeValidator(_coerce_risk_tolerance)] = Field(
-        default=RiskTolerance.READ_ONLY,
-        description="Risk tolerance for watch mode (conservative default)",
-    )
-    risk_strict: bool = Field(
-        default=True,
-        description="Deny (not prompt) for tools above threshold — always True in watch mode",
     )
     max_tool_calls_per_cycle: int = Field(
         default=15,
@@ -82,12 +73,4 @@ class WatchConfig(BaseSettings):
         default=50,
         ge=1,
         description="Rotate ADK session after this many cycles to bound memory",
-    )
-    allow: list[str] = Field(
-        default_factory=list,
-        description="Tool names that are always auto-allowed in watch mode",
-    )
-    deny: list[str] = Field(
-        default_factory=list,
-        description="Tool names that are always denied in watch mode",
     )

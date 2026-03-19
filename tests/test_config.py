@@ -1,7 +1,7 @@
 """Tests for configuration classes."""
 
 import squire.config.loader as loader_mod
-from squire.config import AppConfig, DatabaseConfig, HostConfig, LLMConfig, NotificationsConfig, SecurityConfig
+from squire.config import AppConfig, DatabaseConfig, GuardrailsConfig, HostConfig, LLMConfig, NotificationsConfig
 from squire.config.loader import get_list_section
 
 
@@ -34,17 +34,35 @@ class TestDatabaseConfig:
         assert "squire.db" in str(config.path)
 
 
-class TestSecurityConfig:
+class TestGuardrailsConfig:
     def test_defaults(self, monkeypatch):
         monkeypatch.setattr(loader_mod, "_cached", {})
-        config = SecurityConfig()
-        assert "ping" in config.command_allowlist
-        assert "rm" in config.command_denylist
+        config = GuardrailsConfig()
+        assert "ping" in config.commands_allow
+        assert "rm" in config.commands_block
+        assert config.tools_allow == []
+        assert config.tools_require_approval == []
+        assert config.tools_deny == []
 
-    def test_config_allowlist_empty_by_default(self, monkeypatch):
+    def test_config_paths_empty_by_default(self, monkeypatch):
         monkeypatch.setattr(loader_mod, "_cached", {})
-        config = SecurityConfig()
-        assert config.config_allowlist == []
+        config = GuardrailsConfig()
+        assert config.config_paths == []
+
+    def test_per_agent_tolerances_default_none(self, monkeypatch):
+        monkeypatch.setattr(loader_mod, "_cached", {})
+        config = GuardrailsConfig()
+        assert config.monitor_tolerance is None
+        assert config.container_tolerance is None
+        assert config.admin_tolerance is None
+        assert config.notifier_tolerance is None
+
+    def test_watch_fields_default(self, monkeypatch):
+        monkeypatch.setattr(loader_mod, "_cached", {})
+        config = GuardrailsConfig()
+        assert config.watch_tolerance is None
+        assert config.watch_tools_allow == []
+        assert config.watch_tools_deny == []
 
 
 class TestNotificationsConfig:
@@ -78,10 +96,49 @@ class TestTomlLoading:
         config = DatabaseConfig()
         assert config.snapshot_interval_minutes == 30
 
-    def test_security_config_from_toml(self, monkeypatch):
-        self._patch_toml(monkeypatch, {"security": {"config_allowlist": ["/etc/nginx/", "/opt/stacks/"]}})
-        config = SecurityConfig()
-        assert config.config_allowlist == ["/etc/nginx/", "/opt/stacks/"]
+    def test_guardrails_config_from_toml(self, monkeypatch):
+        self._patch_toml(monkeypatch, {"guardrails": {"config_paths": ["/etc/nginx/", "/opt/stacks/"]}})
+        config = GuardrailsConfig()
+        assert config.config_paths == ["/etc/nginx/", "/opt/stacks/"]
+
+    def test_guardrails_tool_overrides_from_toml(self, monkeypatch):
+        self._patch_toml(
+            monkeypatch,
+            {
+                "guardrails": {
+                    "tools_allow": ["docker_logs"],
+                    "tools_require_approval": ["docker_compose"],
+                    "tools_deny": ["run_command"],
+                    "monitor_tolerance": "standard",
+                }
+            },
+        )
+        config = GuardrailsConfig()
+        assert config.tools_allow == ["docker_logs"]
+        assert config.tools_require_approval == ["docker_compose"]
+        assert config.tools_deny == ["run_command"]
+        assert config.monitor_tolerance == "standard"
+
+    def test_guardrails_watch_subtable_flattened(self, monkeypatch):
+        """[guardrails.watch] sub-table is flattened into watch_ prefixed fields."""
+        self._patch_toml(
+            monkeypatch,
+            {
+                "guardrails": {
+                    "tools_allow": ["docker_logs"],
+                    "watch": {
+                        "tolerance": "read-only",
+                        "tools_allow": ["system_info"],
+                        "tools_deny": ["run_command"],
+                    },
+                }
+            },
+        )
+        config = GuardrailsConfig()
+        assert config.tools_allow == ["docker_logs"]
+        assert config.watch_tolerance == "read-only"
+        assert config.watch_tools_allow == ["system_info"]
+        assert config.watch_tools_deny == ["run_command"]
 
     def test_notifications_config_from_toml(self, monkeypatch):
         self._patch_toml(monkeypatch, {"notifications": {"enabled": True}})

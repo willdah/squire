@@ -1,28 +1,28 @@
-"""read_config tool — read configuration files with path allowlist enforcement."""
+"""read_config tool — read configuration files with path guard enforcement."""
 
 import os
 import posixpath
 
-from ..config import SecurityConfig
+from ..config import GuardrailsConfig
 from ._registry import get_registry
 
 RISK_LEVEL = 2  # Low
 
-_security_config: SecurityConfig | None = None
+_guardrails_config: GuardrailsConfig | None = None
 
 
-def _get_security_config() -> SecurityConfig:
-    global _security_config
-    if _security_config is None:
-        _security_config = SecurityConfig()
-    return _security_config
+def _get_guardrails_config() -> GuardrailsConfig:
+    global _guardrails_config
+    if _guardrails_config is None:
+        _guardrails_config = GuardrailsConfig()
+    return _guardrails_config
 
 
 async def read_config(path: str, head: int | None = None, host: str = "local") -> str:
     """Read a configuration file from the system.
 
     The file must be within one of the allowed directories configured in
-    the paths allowlist. This prevents reading sensitive files outside
+    the paths guard. This prevents reading sensitive files outside
     approved locations.
 
     Args:
@@ -32,9 +32,9 @@ async def read_config(path: str, head: int | None = None, host: str = "local") -
 
     Returns the file contents as text.
     """
-    # Resolve and check allowlist
-    security = _get_security_config()
-    allowlist = security.config_allowlist
+    # Resolve and check path guards
+    guardrails = _get_guardrails_config()
+    allowlist = guardrails.config_paths
     if allowlist:
         if host == "local":
             # Local: resolve symlinks then check prefix

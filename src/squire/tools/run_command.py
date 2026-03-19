@@ -1,27 +1,27 @@
-"""run_command tool — guarded shell execution with command allowlist/denylist."""
+"""run_command tool — guarded shell execution with command allow/block lists."""
 
 import shlex
 
-from ..config import SecurityConfig
+from ..config import GuardrailsConfig
 from ._registry import get_registry
 
 RISK_LEVEL = 5  # Critical
 
-_security_config: SecurityConfig | None = None
+_guardrails_config: GuardrailsConfig | None = None
 
 
-def _get_security_config() -> SecurityConfig:
-    global _security_config
-    if _security_config is None:
-        _security_config = SecurityConfig()
-    return _security_config
+def _get_guardrails_config() -> GuardrailsConfig:
+    global _guardrails_config
+    if _guardrails_config is None:
+        _guardrails_config = GuardrailsConfig()
+    return _guardrails_config
 
 
 async def run_command(command: str, timeout: float = 30.0, host: str = "local") -> str:
     """Execute a shell command on the system.
 
     This is a guarded tool — the command is checked against an allowlist
-    and denylist before execution. Denied commands are blocked entirely.
+    and blocklist before execution. Blocked commands are denied entirely.
     Commands not on the allowlist require approval via the risk profile.
 
     Args:
@@ -41,17 +41,17 @@ async def run_command(command: str, timeout: float = 30.0, host: str = "local") 
 
     base_cmd = parts[0]
 
-    security = _get_security_config()
+    guardrails = _get_guardrails_config()
 
-    # Check denylist first
-    if base_cmd in security.command_denylist:
-        return f"DENIED: '{base_cmd}' is on the command denylist. Tell the user this command is not allowed."
+    # Check blocklist first
+    if base_cmd in guardrails.commands_block:
+        return f"DENIED: '{base_cmd}' is on the command blocklist. Tell the user this command is not allowed."
 
     # Check allowlist
-    if security.command_allowlist and base_cmd not in security.command_allowlist:
+    if guardrails.commands_allow and base_cmd not in guardrails.commands_allow:
         return (
             f"DENIED: '{base_cmd}' is not on the command allowlist. Tell the user this command is not allowed.\n"
-            f"Allowed commands: {', '.join(sorted(security.command_allowlist))}"
+            f"Allowed commands: {', '.join(sorted(guardrails.commands_allow))}"
         )
 
     backend = get_registry().get(host)
