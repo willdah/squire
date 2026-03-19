@@ -27,6 +27,7 @@ from .config import (
     GuardrailsConfig,
     LLMConfig,
     NotificationsConfig,
+    SkillsConfig,
     WatchConfig,
 )
 from .config.hosts import HostConfig
@@ -71,6 +72,7 @@ async def start_watch() -> None:
     db_config = DatabaseConfig()
     notif_config = NotificationsConfig()
     watch_config = WatchConfig()
+    skills_config = SkillsConfig()
 
     # Load host configuration and create backend registry
     host_dicts = get_list_section("hosts")
@@ -216,6 +218,27 @@ async def start_watch() -> None:
                     "Adjust your approach if needed (e.g. skip unavailable tools).\n\n"
                     f"{prompt}"
                 )
+
+            # Append watch-triggered skills
+            try:
+                from .skills import SkillService
+
+                skill_service = SkillService(skills_config.path)
+                watch_skills = skill_service.list_skills(enabled_only=True, trigger="watch")
+                if watch_skills:
+                    skill_sections = []
+                    for sk in watch_skills:
+                        if not sk.instructions:
+                            continue
+                        host_label = sk.host
+                        skill_sections.append(f"### Skill: {sk.name} (host: {host_label})\n{sk.instructions}")
+                    if skill_sections:
+                        prompt += (
+                            "\n\nIn addition to your routine check-in, execute the following skills:\n\n"
+                            + "\n\n".join(skill_sections)
+                        )
+            except Exception:
+                logger.debug("Failed to load watch skills", exc_info=True)
 
             # Run the watch cycle
             try:

@@ -17,6 +17,7 @@
   - [Autonomous Watch Mode](#autonomous-watch-mode)
     - [Running watch mode](#running-watch-mode)
   - [Alert Rules](#alert-rules)
+  - [Skills](#skills)
 - [CLI](#cli)
 - [Development](#development)
 - [License](#license)
@@ -25,6 +26,7 @@
 ## Features
 
 - **Multi-agent architecture** — Squire decomposes into specialized sub-agents (Monitor, Container, Admin, Notifier) that collaborate via [Google ADK](https://google.github.io/adk-docs/)'s transfer pattern — while maintaining a single unified persona
+- **Skills** — file-based instructions ([Open Agent Skills spec](https://agentskills.io/specification)) that give Squire guided, repeatable behavior. Each skill is a `SKILL.md` file with YAML frontmatter + Markdown instructions — version-controllable, editable with any text editor, no database required. Execute manually or attach to watch mode for automated checks
 - **Autonomous watch mode** — `squire watch` runs a headless monitoring loop that checks your systems on a schedule, takes corrective action within risk limits, and sends notifications
 - **Alert rules** — Define conditions like `cpu_percent > 90` and get notified when they trigger. Manage via conversation, CLI, or TUI
 - **Multi-machine management** — Connect to remote hosts over SSH and manage your entire homelab from one Squire instance
@@ -185,6 +187,62 @@ squire alerts remove high-cpu
 Or manage them conversationally. Ask Squire to "alert me if disk usage exceeds 90%".
 
 Conditions use a safe DSL: `<field> <op> <value>` where field is a snapshot metric (`cpu_percent`, `memory_used_mb`, etc.) and op is `>`, `<`, `>=`, `<=`, `==`, `!=`.
+
+### Skills
+
+Define reusable instructions for Squire to follow. Each skill is a directory with a `SKILL.md` file:
+
+```
+skills/
+  restart-on-error/
+    SKILL.md
+```
+
+A `SKILL.md` uses YAML frontmatter for metadata and freeform Markdown for instructions:
+
+```yaml
+---
+name: restart-on-error
+description: Check container health and restart errored containers.
+metadata:
+  host: prod-apps-01
+  trigger: manual
+---
+
+Check the status of all Docker containers on the target host.
+If any containers are in an errored state, check their logs for
+the root cause and restart them.
+Verify the containers come back healthy after restart.
+```
+
+The `name` and `description` fields are required by the [Open Agent Skills spec](https://agentskills.io/specification). Names must be lowercase letters, numbers, and hyphens (max 64 chars). Squire-specific fields (`host`, `trigger`, `enabled`) go under `metadata`.
+
+Manage skills via CLI:
+
+```bash
+squire skills list
+squire skills show restart-on-error
+squire skills add --name my-skill --description "What this skill does" --instructions-file instructions.md
+squire skills remove my-skill
+squire skills enable my-skill
+squire skills disable my-skill
+```
+
+#### Web UI
+
+The Skills page (`/skills`) in the web interface provides full management:
+
+- **Browse** all skills in a table with name, description, host, trigger, and enabled status
+- **Create/edit** skills with a form dialog — metadata fields plus a Markdown textarea for instructions
+- **Toggle** enabled/disabled state and **delete** skills inline
+- **Execute** a skill by clicking the play button, which opens a new chat session with the skill pre-loaded. Squire automatically begins following the instructions using its tools — no manual prompting needed. The chat stops when the agent emits `[SKILL COMPLETE]` (stripped from the display)
+
+#### Triggers
+
+- **`manual`** — execute on demand from the web UI, CLI, or API
+- **`watch`** — automatically appended to the check-in prompt during each watch mode cycle
+
+The skills directory is configurable via `[skills]` in `squire.toml` (default `~/.local/share/squire/skills`).
 
 ## CLI
 

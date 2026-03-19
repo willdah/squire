@@ -4,6 +4,7 @@ from .guardrails import GuardrailsConfig
 from .hosts import HostConfig
 from .llm import LLMConfig
 from .notifications import NotificationsConfig, WebhookConfig
+from .skills import SkillsConfig
 from .watch import WatchConfig
 
 __all__ = [
@@ -14,6 +15,7 @@ __all__ = [
     "HostConfig",
     "LLMConfig",
     "NotificationsConfig",
+    "SkillsConfig",
     "WatchConfig",
     "WebhookConfig",
 ]

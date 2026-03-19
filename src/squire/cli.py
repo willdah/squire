@@ -343,5 +343,191 @@ def alerts_disable(
         raise typer.Exit(1)
 
 
+# --- Skill management ---
+
+skills_app = typer.Typer(name="skills", help="Manage skills.")
+app.add_typer(skills_app)
+
+
+@skills_app.command("list")
+def skills_list() -> None:
+    """List all skills."""
+    from .config import SkillsConfig
+    from .skills import SkillService
+
+    skills_config = SkillsConfig()
+    service = SkillService(skills_config.path)
+    skills = service.list_skills()
+
+    if not skills:
+        typer.echo("No skills configured.")
+        return
+
+    console = Console()
+    table = Table(title="Skills")
+    table.add_column("Name", style="cyan", no_wrap=True)
+    table.add_column("Description", style="white")
+    table.add_column("Host", style="blue")
+    table.add_column("Trigger", style="yellow")
+    table.add_column("Status", style="green")
+
+    for s in skills:
+        status = "enabled" if s.enabled else "disabled"
+        table.add_row(
+            s.name,
+            (s.description or "")[:40],
+            s.host,
+            s.trigger,
+            status,
+        )
+
+    console.print(table)
+
+
+@skills_app.command("show")
+def skills_show(
+    name: Annotated[str, typer.Argument(help="Name of the skill to show")],
+) -> None:
+    """Show a skill's SKILL.md content."""
+    from .config import SkillsConfig
+    from .skills import SkillService
+
+    skills_config = SkillsConfig()
+    service = SkillService(skills_config.path)
+    skill = service.get_skill(name)
+
+    if not skill:
+        typer.echo(f"Error: no skill named '{name}' found.", err=True)
+        raise typer.Exit(1)
+
+    console = Console()
+    status = "enabled" if skill.enabled else "disabled"
+    console.print(f"[bold cyan]{skill.name}[/bold cyan]  [{status}]")
+    if skill.description:
+        console.print(f"  {skill.description}")
+    console.print(f"  Host: {skill.host}  |  Trigger: {skill.trigger}")
+    console.print()
+
+    if skill.instructions:
+        console.print("[bold]Instructions:[/bold]")
+        console.print(f"  {skill.instructions}")
+    else:
+        console.print("  (no instructions)")
+
+
+@skills_app.command("add")
+def skills_add(
+    name: Annotated[str, typer.Option("--name", "-n", help="Skill name (lowercase, hyphens, max 64 chars)")],
+    description: Annotated[str, typer.Option("--description", "-d", help="Skill description (required)")],
+    instructions_file: Annotated[
+        str | None, typer.Option("--instructions-file", "-f", help="Markdown file with skill instructions")
+    ] = None,
+    host: Annotated[str, typer.Option("--host", help="Target host ('all' or specific name)")] = "all",
+    trigger: Annotated[str, typer.Option("--trigger", "-t", help="'manual' or 'watch'")] = "manual",
+) -> None:
+    """Add a new skill."""
+    from pathlib import Path
+
+    from .config import SkillsConfig
+    from .skills import Skill, SkillService
+
+    if trigger not in ("manual", "watch"):
+        typer.echo("Error: trigger must be 'manual' or 'watch'.", err=True)
+        raise typer.Exit(1)
+
+    if not description.strip():
+        typer.echo("Error: --description is required.", err=True)
+        raise typer.Exit(1)
+
+    instructions = ""
+    if instructions_file:
+        path = Path(instructions_file)
+        if not path.exists():
+            typer.echo(f"Error: file not found: {instructions_file}", err=True)
+            raise typer.Exit(1)
+        instructions = path.read_text().strip()
+
+    if not instructions:
+        typer.echo("Error: provide instructions via --instructions-file.", err=True)
+        raise typer.Exit(1)
+
+    skills_config = SkillsConfig()
+    service = SkillService(skills_config.path)
+
+    if service.get_skill(name):
+        typer.echo(f"Error: a skill named '{name}' already exists.", err=True)
+        raise typer.Exit(1)
+
+    try:
+        skill = Skill(
+            name=name,
+            description=description,
+            host=host,
+            trigger=trigger,
+            instructions=instructions,
+        )
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+    service.save_skill(skill)
+    typer.echo(f"Skill '{name}' created.")
+
+
+@skills_app.command("remove")
+def skills_remove(
+    name: Annotated[str, typer.Argument(help="Name of the skill to remove")],
+) -> None:
+    """Remove a skill by name."""
+    from .config import SkillsConfig
+    from .skills import SkillService
+
+    skills_config = SkillsConfig()
+    service = SkillService(skills_config.path)
+    deleted = service.delete_skill(name)
+    if deleted:
+        typer.echo(f"Skill '{name}' removed.")
+    else:
+        typer.echo(f"Error: no skill named '{name}' found.", err=True)
+        raise typer.Exit(1)
+
+
+@skills_app.command("enable")
+def skills_enable(
+    name: Annotated[str, typer.Argument(help="Name of the skill to enable")],
+) -> None:
+    """Enable a skill."""
+    from .config import SkillsConfig
+    from .skills import SkillService
+
+    skills_config = SkillsConfig()
+    service = SkillService(skills_config.path)
+    skill = service.get_skill(name)
+    if not skill:
+        typer.echo(f"Error: no skill named '{name}' found.", err=True)
+        raise typer.Exit(1)
+    updated = skill.model_copy(update={"enabled": True})
+    service.save_skill(updated)
+    typer.echo(f"Skill '{name}' enabled.")
+
+
+@skills_app.command("disable")
+def skills_disable(
+    name: Annotated[str, typer.Argument(help="Name of the skill to disable")],
+) -> None:
+    """Disable a skill."""
+    from .config import SkillsConfig
+    from .skills import SkillService
+
+    skills_config = SkillsConfig()
+    service = SkillService(skills_config.path)
+    skill = service.get_skill(name)
+    if not skill:
+        typer.echo(f"Error: no skill named '{name}' found.", err=True)
+        raise typer.Exit(1)
+    updated = skill.model_copy(update={"enabled": False})
+    service.save_skill(updated)
+    typer.echo(f"Skill '{name}' disabled.")
+
+
 if __name__ == "__main__":
     app()

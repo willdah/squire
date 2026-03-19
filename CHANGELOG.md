@@ -7,18 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **Hide internal ADK tool calls from web UI chat** — `transfer_to_agent` (and any future ADK-internal tools) are no longer streamed to the WebSocket client. Previously, agent routing events appeared as unhelpful `🔧 transfer_to_agent: {'result': None}` messages that exposed internal sub-agent names. `ADK_INTERNAL_TOOLS` is now a public constant in `callbacks/risk_gate.py` shared by both the risk gate and the chat router.
-
 ### Added
 
+- **Skills** (replaces Runbooks) — file-based skill definitions aligned with the [Open Agent Skills spec](https://agentskills.io/specification). Each skill is a `SKILL.md` file with YAML frontmatter + freeform Markdown instructions, stored in a configurable directory (default `~/.local/share/squire/skills`). No database required — skills are version-controllable and editable with any text editor.
+  - **SkillService** (`src/squire/skills/`) — file-based CRUD: `list_skills`, `get_skill`, `save_skill`, `delete_skill`. Parses YAML frontmatter with `yaml.safe_load()` and renders back to spec-compliant SKILL.md format (`name`/`description` at top level, Squire-specific fields under `metadata`). Names are validated per the spec (lowercase alphanumeric + hyphens, max 64 chars).
+  - **SkillsConfig** (`src/squire/config/skills.py`) — configurable via `[skills]` in `squire.toml` or `SQUIRE_SKILLS_` env vars. Default path: `~/.local/share/squire/skills`.
+  - **API** — `GET/POST /api/skills`, `GET/PUT/DELETE /api/skills/{name}`, `POST /api/skills/{name}/toggle`, `POST /api/skills/{name}/execute`. Execute returns skill metadata for the frontend to start a chat session.
+  - **CLI** — `squire skills list|show|add|remove|enable|disable`. Create from Markdown file with `--instructions-file`.
+  - **Agent integration** — `build_skill_section()` reads `active_skill` from session state and injects freeform instructions into the system prompt. Single `[SKILL COMPLETE]` marker replaces per-step tracking.
+  - **Watch mode** — skills with `trigger=watch` are appended to the check-in prompt each cycle.
+  - **Web UI** — Skills page (`/skills`) with table listing, create/edit dialog (Markdown textarea for instructions), toggle, delete, and execute (opens in chat). Sidebar updated with Skills link.
 - **Clear all sessions** — bulk-delete all chat sessions at once instead of removing them one by one.
   - `DELETE /api/sessions` — new API endpoint; returns `{"deleted": <count>}`.
   - **Web UI** — "Clear All" button (with browser confirmation dialog) on the Sessions page; only shown when sessions exist.
   - **CLI** — `squire sessions clear` command with a `--yes/-y` flag to skip the confirmation prompt. The existing `squire sessions` command is now a sub-command group (`squire sessions list` / `squire sessions clear`).
   - **TUI** — `Ctrl+X` binding opens a confirmation modal and deletes all sessions from the database.
 - `DatabaseService.delete_all_sessions()` — deletes all rows from `sessions` and `conversations`, returns the session count.
+
+### Changed
+
+- **Runbooks replaced by Skills** — the database-backed runbook system (ordered steps in `runbooks` + `runbook_steps` tables) has been replaced by file-based skills. This simplifies the data model (no numbered steps, no per-step tracking), makes skills version-controllable, and aligns with the Open Agent Skills spec. The `[STEP N COMPLETE]` / `[RUNBOOK COMPLETE]` markers are replaced by a single `[SKILL COMPLETE]` marker. Existing runbook tables in the database are left in place but no longer queried. The WebSocket `?runbook=` query param is now `?skill=`. CLI commands changed from `squire runbooks` to `squire skills`. Added `pyyaml>=6.0` as an explicit dependency (was already a transitive dep).
+
+### Fixed
+
+- **Hide internal ADK tool calls from web UI chat** — `transfer_to_agent` (and any future ADK-internal tools) are no longer streamed to the WebSocket client. Previously, agent routing events appeared as unhelpful `🔧 transfer_to_agent: {'result': None}` messages that exposed internal sub-agent names. `ADK_INTERNAL_TOOLS` is now a public constant in `callbacks/risk_gate.py` shared by both the risk gate and the chat router.
 
 ## [0.5.0] — 2026-03-18
 

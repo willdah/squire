@@ -63,6 +63,15 @@ export interface AlertRule {
   created_at?: string;
 }
 
+export interface Skill {
+  name: string;
+  description: string;
+  host: string;
+  trigger: string;
+  enabled: boolean;
+  instructions: string;
+}
+
 export interface EventInfo {
   id?: number;
   timestamp: string;

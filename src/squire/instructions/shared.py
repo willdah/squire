@@ -73,6 +73,37 @@ def build_system_state_section(ctx: ReadonlyContext) -> str:
     return f"## Current System State\n{system_context}"
 
 
+def build_skill_section(ctx: ReadonlyContext) -> str:
+    """Return the active skill section if a skill is loaded, else empty string."""
+    active_skill = ctx.state.get("active_skill")
+    if not active_skill:
+        return ""
+
+    skill_name = active_skill.get("skill_name", "unnamed")
+    instructions = active_skill.get("instructions", "")
+    if not instructions:
+        return ""
+
+    host = active_skill.get("host", "all")
+    host_line = ""
+    if host != "all":
+        host_line = f"\n**Target host:** `{host}` — pass this as the `host` parameter to every tool call."
+
+    return f"""
+## Active Skill: "{skill_name}"
+You are executing a skill. Follow the instructions below.{host_line}
+
+### Instructions
+{instructions}
+
+### Execution Rules
+- You MUST execute the instructions by calling your tools. Do NOT tell the user how to do it.
+- Work through the instructions methodically, calling tools as needed.
+- If a condition doesn't apply, explain why and move on.
+- If a tool call is blocked, note it and continue.
+- When you have completed all instructions, provide a summary, then emit [SKILL COMPLETE]."""
+
+
 def build_watch_mode_addendum(ctx: ReadonlyContext) -> str:
     """Return watch-mode instructions if watch_mode is active, else empty string."""
     if not ctx.state.get("watch_mode"):

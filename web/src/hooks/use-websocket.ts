@@ -9,7 +9,7 @@ export type WsStatus = "connecting" | "connected" | "disconnected";
 const MAX_RETRIES = 5;
 const BASE_DELAY_MS = 1000;
 
-export function useWebSocket(sessionId: string | null) {
+export function useWebSocket(sessionId: string | null, queryParams?: Record<string, string>) {
   const wsRef = useRef<WebSocket | null>(null);
   const [status, setStatus] = useState<WsStatus>("disconnected");
   const onMessageRef = useRef<((msg: WsServerMessage) => void) | null>(null);
@@ -18,13 +18,22 @@ export function useWebSocket(sessionId: string | null) {
   // Track intentional close to avoid reconnecting on unmount
   const intentionalCloseRef = useRef(false);
 
+  // Serialize queryParams to a stable string for the dependency array
+  const queryString = queryParams
+    ? Object.entries(queryParams)
+        .filter(([, v]) => v)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join("&")
+    : "";
+
   useEffect(() => {
     if (!sessionId) return;
 
     intentionalCloseRef.current = false;
 
     function connect() {
-      const ws = new WebSocket(wsUrl(`/api/chat/ws/${sessionId}`));
+      const qs = queryString ? `?${queryString}` : "";
+      const ws = new WebSocket(wsUrl(`/api/chat/ws/${sessionId}${qs}`));
       wsRef.current = ws;
       setStatus("connecting");
 
@@ -75,7 +84,7 @@ export function useWebSocket(sessionId: string | null) {
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [sessionId]);
+  }, [sessionId, queryString]);
 
   const send = useCallback(
     (data: Record<string, unknown>) => {

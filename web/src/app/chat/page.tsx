@@ -90,9 +90,12 @@ function ChatPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const resumeSessionId = searchParams.get("session");
+  const skillName = searchParams.get("skill");
 
-  // Restore session from sessionStorage if no explicit session param
+  // Restore session from sessionStorage if no explicit session param.
+  // When executing a skill, always start fresh (don't reuse old session).
   const [sessionId, setSessionId] = useState<string | null>(() => {
+    if (skillName) return null;
     if (resumeSessionId) return resumeSessionId;
     if (typeof window !== "undefined") {
       return sessionStorage.getItem(SESSION_KEY);
@@ -143,7 +146,8 @@ function ChatPageInner() {
       });
   }, [sessionId, historyLoaded]);
 
-  const { status, send, setOnMessage } = useWebSocket(sessionId);
+  const wsQueryParams = skillName ? { skill: skillName } : undefined;
+  const { status, send, setOnMessage } = useWebSocket(sessionId, wsQueryParams);
 
   // Handle incoming WS messages
   useEffect(() => {
@@ -255,6 +259,21 @@ function ChatPageInner() {
       }
     });
   }, [setOnMessage]);
+
+  // Auto-send initial message for skill execution once WebSocket connects.
+  const skillSentRef = useRef(false);
+  useEffect(() => {
+    if (!skillName || skillSentRef.current || status !== "connected") return;
+    skillSentRef.current = true;
+    const text = `Execute your active skill "${skillName}" now. Use your tools.`;
+    const displayText = `Execute skill "${skillName}"`;
+    setMessages((prev) => [
+      ...prev,
+      { id: nextId(), role: "user", content: displayText },
+    ]);
+    setAgentState("thinking");
+    send({ type: "message", content: text });
+  }, [skillName, status, send]);
 
   // Create a new session if needed
   useEffect(() => {
