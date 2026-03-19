@@ -35,6 +35,7 @@ export default function SessionsPage() {
   );
 
   const handleDelete = async (sessionId: string) => {
+    if (!confirm("Delete this session and all its messages?")) return;
     await apiDelete(`/api/sessions/${sessionId}`);
     mutate();
   };

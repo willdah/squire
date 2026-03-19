@@ -26,25 +26,30 @@ host_configs: list[HostConfig] = []
 
 
 def get_db() -> DatabaseService:
-    assert db is not None, "DatabaseService not initialized"
+    if db is None:
+        raise RuntimeError("DatabaseService not initialized")
     return db
 
 
 def get_registry() -> BackendRegistry:
-    assert registry is not None, "BackendRegistry not initialized"
+    if registry is None:
+        raise RuntimeError("BackendRegistry not initialized")
     return registry
 
 
 def get_notifier() -> WebhookDispatcher:
-    assert notifier is not None, "WebhookDispatcher not initialized"
+    if notifier is None:
+        raise RuntimeError("WebhookDispatcher not initialized")
     return notifier
 
 
 def get_app_config() -> AppConfig:
-    assert app_config is not None, "AppConfig not loaded"
+    if app_config is None:
+        raise RuntimeError("AppConfig not loaded")
     return app_config
 
 
 def get_llm_config() -> LLMConfig:
-    assert llm_config is not None, "LLMConfig not loaded"
+    if llm_config is None:
+        raise RuntimeError("LLMConfig not loaded")
     return llm_config

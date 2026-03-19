@@ -14,14 +14,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Sticky chat top bar with icon button** — the chat header (title, connection dot, new chat) now uses `shrink-0 bg-card` so it stays pinned at the top of the flex column during long conversations. Replaced the "New Chat" text link with a `SquarePen` icon button for a cleaner look.
-
-### Fixed
-
-- **Chat response duplication in multi-agent mode** — when a sub-agent's response arrived via the ADK final response event (not as streaming tokens), the full accumulated text from all agents was sent as `message_complete`, causing the previous agent's response to be repeated in a new chat bubble. Two fixes: (1) `response_parts` is now reset after each tool call/result so `message_complete` only contains the current text segment, not prior sub-agents' text; (2) the `is_final_response` handler detects and sends only genuinely new content as a delta token.
-- **Approval dialog overflow** — the tool approval modal was too narrow (`max-w-sm`), causing long command arguments and footer buttons to spill outside the dialog. Widened to `max-w-lg` with `whitespace-pre-wrap` and `break-all` on the arguments block.
-
-### Changed
-
 - **Web UI restructure: chat-first identity** — Squire is the brain, not the eyes. Removed dashboard and alert rule CRUD in favor of a chat-first experience that leans on dedicated homelab tools (Beszel, Grafana, Portainer) for metrics and container management.
   - Removed Dashboard page and all dashboard components (stat cards, container grid, trend chart) — for live metrics, use Beszel or Grafana.
   - Root (`/`) now redirects to `/chat` instead of `/dashboard`.
@@ -49,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Mobile nav sheet closes on link click.
   - Session table shows relative time ("2h ago") with full timestamp on hover.
   - Events page wraps filters in a Card with event count badge.
+
+### Fixed
+
+- **Chat response duplication in multi-agent mode** — when a sub-agent's response arrived via the ADK final response event (not as streaming tokens), the full accumulated text from all agents was sent as `message_complete`, causing the previous agent's response to be repeated in a new chat bubble. Two fixes: (1) `response_parts` is now reset after each tool call/result so `message_complete` only contains the current text segment, not prior sub-agents' text; (2) the `is_final_response` handler detects and sends only genuinely new content as a delta token.
+- **Approval dialog overflow** — the tool approval modal was too narrow (`max-w-sm`), causing long command arguments and footer buttons to spill outside the dialog. Widened to `max-w-lg` with `whitespace-pre-wrap` and `break-all` on the arguments block.
 
 ## [0.4.0] - 2026-03-18
 

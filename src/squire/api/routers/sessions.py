@@ -34,10 +34,7 @@ async def get_messages(
 @router.delete("/{session_id}")
 async def delete_session(session_id: str, db=Depends(get_db)):
     """Delete a session and its messages."""
-    conn = await db._get_conn()
-    await conn.execute("DELETE FROM conversations WHERE session_id = ?", (session_id,))
-    cursor = await conn.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
-    await conn.commit()
-    if cursor.rowcount == 0:
+    deleted = await db.delete_session(session_id)
+    if not deleted:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
     return {"deleted": True}

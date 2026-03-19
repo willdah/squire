@@ -23,10 +23,6 @@ from ..schemas import ChatSessionResponse
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Active chat sessions: session_id -> (runner, session, agent)
-_active_sessions: dict[str, tuple[InMemoryRunner, Any, Any]] = {}
-_sessions_lock = asyncio.Lock()
-
 
 class WebApprovalBridge:
     """WebSocket-based approval provider for the risk gate.
@@ -132,9 +128,6 @@ async def create_chat_session(
         state=session_state,
     )
     await db.create_session(session.id)
-
-    async with _sessions_lock:
-        _active_sessions[session.id] = (runner, session, agent)
 
     return ChatSessionResponse(session_id=session.id)
 
@@ -297,8 +290,6 @@ async def chat_websocket(
     finally:
         if streaming_task and not streaming_task.done():
             streaming_task.cancel()
-        async with _sessions_lock:
-            _active_sessions.pop(session_id, None)
 
 
 async def _stream_response(
