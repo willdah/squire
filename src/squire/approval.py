@@ -29,6 +29,19 @@ class ApprovalProvider(Protocol):
         ...
 
 
+@runtime_checkable
+class AsyncApprovalProvider(Protocol):
+    """Async approval provider for event-loop-based frontends (e.g. web).
+
+    The risk gate callback detects this protocol and awaits the coroutine
+    instead of calling it synchronously, avoiding event loop deadlocks.
+    """
+
+    async def request_approval_async(self, tool_name: str, args: dict[str, Any], risk_level: int) -> bool:
+        """Request approval asynchronously."""
+        ...
+
+
 class DenyAllApproval:
     """ApprovalProvider that denies all requests.
 

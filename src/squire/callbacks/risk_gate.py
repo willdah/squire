@@ -12,7 +12,7 @@ from agent_risk_engine import GateResult, RiskEvaluator, RuleGate
 from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
 
-from ..approval import ApprovalProvider
+from ..approval import ApprovalProvider, AsyncApprovalProvider
 from ..tools import TOOL_RISK_LEVELS
 from ..types import BeforeToolCallback
 
@@ -94,7 +94,10 @@ def create_risk_gate(
                 return {"error": f"Watch mode denied '{tool_name}': above risk threshold."}
 
             if approval_provider is not None:
-                approved = approval_provider.request_approval(tool_name, args, result.risk_score.level)
+                if isinstance(approval_provider, AsyncApprovalProvider):
+                    approved = await approval_provider.request_approval_async(tool_name, args, result.risk_score.level)
+                else:
+                    approved = approval_provider.request_approval(tool_name, args, result.risk_score.level)
                 if not approved:
                     return {"error": f"User declined to approve '{tool_name}'."}
             else:

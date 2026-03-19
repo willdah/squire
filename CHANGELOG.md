@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Stop generation** — red stop button appears while the agent is responding, allowing users to cancel mid-stream. Partial responses are preserved in the chat and persisted to the database. Also dismisses any pending approval dialog.
+
+### Changed
+
+- **Sticky chat top bar with icon button** — the chat header (title, connection dot, new chat) now uses `shrink-0 bg-card` so it stays pinned at the top of the flex column during long conversations. Replaced the "New Chat" text link with a `SquarePen` icon button for a cleaner look.
+
+### Fixed
+
+- **Chat response duplication in multi-agent mode** — when a sub-agent's response arrived via the ADK final response event (not as streaming tokens), the full accumulated text from all agents was sent as `message_complete`, causing the previous agent's response to be repeated in a new chat bubble. Two fixes: (1) `response_parts` is now reset after each tool call/result so `message_complete` only contains the current text segment, not prior sub-agents' text; (2) the `is_final_response` handler detects and sends only genuinely new content as a delta token.
+- **Approval dialog overflow** — the tool approval modal was too narrow (`max-w-sm`), causing long command arguments and footer buttons to spill outside the dialog. Widened to `max-w-lg` with `whitespace-pre-wrap` and `break-all` on the arguments block.
+
+### Changed
+
+- **Web UI restructure: chat-first identity** — Squire is the brain, not the eyes. Removed dashboard and alert rule CRUD in favor of a chat-first experience that leans on dedicated homelab tools (Beszel, Grafana, Portainer) for metrics and container management.
+  - Removed Dashboard page and all dashboard components (stat cards, container grid, trend chart) — for live metrics, use Beszel or Grafana.
+  - Root (`/`) now redirects to `/chat` instead of `/dashboard`.
+  - Events renamed to **Activity** (`/activity`) — Squire's own tool calls, watch mode actions, and denied requests.
+  - Alerts reframed as **Notifications** (`/notifications`) — removed alert rule CRUD form; shows notification category cards (watch events, risk gate denials, webhook destination) and recent notification history. Alert rules are now managed conversationally.
+  - Hosts page simplified to a **host registry** — shows name, address, user, services, tags, and reachable/unreachable status. No more live CPU/memory stats or container grids.
+  - Sidebar reorganized: Chat, Activity, Sessions | Hosts, Notifications, Config.
+  - Removed `use-system-status` hook, `stat-card`, `container-grid`, `trend-chart` components, and `alert-form` component.
+- **Web UI modernization** — visual polish pass across the entire web frontend:
+  - Typography overhaul — Plus Jakarta Sans for UI text, JetBrains Mono for code/config; semibold tracking-tight headings, relaxed body line-height.
+  - Indigo primary accent color (`oklch(0.45 0.24 265)` light / `oklch(0.68 0.2 265)` dark) replaces colorless gray.
+  - Blue-purple tint on all neutral OKLCH values for a cool premium feel instead of flat gray.
+  - Theme persistence — dark/light choice saved to `localStorage` and applied before first paint (no flash-of-wrong-theme).
+  - Skeleton shimmer loading states replace plain text on Dashboard, Hosts, and Config pages.
+  - Chat markdown rendering — assistant messages render headings, code blocks, lists, bold, and links via `react-markdown` + `remark-gfm`.
+  - Soft streaming indicator — glow border + bouncing dots replace the harsh yellow border and spinner.
+  - Welcome empty state in chat with suggestion chips ("Show system status", "Check containers", "List alerts").
+  - Connection status shown as colored dot (green/yellow/red) instead of plain text.
+  - Theme-aware gauge colors (`--gauge-ok`, `--gauge-warn`, `--gauge-crit`) with gradient progress bars on stat cards.
+  - Warm empty states with icons on all pages (containers, events, alerts, sessions).
+  - Event timeline with vertical line and colored dots per category.
+  - Config viewer renders top-level keys as label + mono value with collapsible raw JSON toggle.
+  - Linear-style sidebar active state (`bg-primary/10` + left border) with section labels and version footer.
+  - Staggered `animate-fade-in` entrance animations on cards and list items.
+  - Mobile nav sheet closes on link click.
+  - Session table shows relative time ("2h ago") with full timestamp on hover.
+  - Events page wraps filters in a Card with event count badge.
+
+## [0.4.0] - 2026-03-18
+
+### Added
+
+- **Web interface** (`squire web`) — browser-based frontend for interacting with Squire, powered by a FastAPI backend and Next.js 15 frontend with shadcn/ui components.
+- **FastAPI backend** (`src/squire/api/`) — full REST API and WebSocket layer reusing the same backend services as the TUI (DatabaseService, BackendRegistry, WebhookDispatcher, ADK agent runner).
+  - `GET /api/system/status` — live system snapshots for all hosts.
+  - `GET /api/system/snapshots` — historical snapshots for trend charts.
+  - `GET /api/hosts`, `GET /api/hosts/{name}` — host list and detail with current status.
+  - `WebSocket /api/chat/ws/{session_id}` — bidirectional streaming chat with tool call indicators and approval flow.
+  - `POST /api/chat/sessions` — create new chat sessions.
+  - `GET /api/sessions`, `GET /api/sessions/{id}/messages`, `DELETE /api/sessions/{id}` — session history management.
+  - `GET/POST/PUT/DELETE /api/alerts` — alert rule CRUD with condition validation.
+  - `POST /api/alerts/{name}/toggle` — enable/disable alert rules.
+  - `GET /api/events` — filterable event timeline query.
+  - `GET /api/config` — current effective configuration (all sections).
+  - `GET /api/watch/status` — watch mode state.
+- **WebApprovalBridge** — WebSocket-based approval provider that mirrors the TUI's ApprovalBridge for interactive tool approval in the browser.
+- **Next.js 15 frontend** (`web/`) — App Router with TypeScript, Tailwind CSS, shadcn/ui components.
+  - Dashboard page with CPU/memory/disk gauges, container status grid, and 24h trend charts (Recharts).
+  - Chat interface with WebSocket streaming, tool call indicators, and approval dialog modal.
+  - Session resume — click a past session to reconnect and continue the conversation.
+  - Host overview grid with drill-down to individual host detail pages.
+  - Alert rules management — create, edit, toggle, and delete rules from the browser.
+  - Event timeline with category filtering and auto-refresh.
+  - Session history browser with resume and delete actions.
+  - Configuration viewer with tabbed sections (app, LLM, database, security, watch, notifications, risk, hosts).
+  - Dark/light theme toggle with system preference detection.
+  - Mobile-responsive layout with collapsible sidebar navigation.
+- **`squire web` CLI command** — starts the combined API + frontend server (`--port`, `--host`, `--reload` flags). Default port 8420.
+- `fastapi` and `uvicorn[standard]` added to project dependencies.
+- Background snapshot collection in the web server — periodic system status updates shared across all API consumers.
+
 ## [0.3.0] - 2026-03-16
 
 ### Fixed
