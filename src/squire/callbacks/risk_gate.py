@@ -18,13 +18,16 @@ from ..types import BeforeToolCallback
 
 logger = logging.getLogger(__name__)
 
-# ADK framework tools that should bypass the risk gate.
+# ADK framework tools that should bypass the risk gate and be hidden from users.
 # These are auto-injected by ADK and are not user-facing tools.
-_ADK_INTERNAL_TOOLS = frozenset(
+ADK_INTERNAL_TOOLS = frozenset(
     {
         "transfer_to_agent",
     }
 )
+
+# Keep the private alias for backwards compatibility within this module.
+_ADK_INTERNAL_TOOLS = ADK_INTERNAL_TOOLS
 
 
 def create_risk_gate(

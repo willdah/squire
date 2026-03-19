@@ -14,7 +14,7 @@ from google.adk.runners import InMemoryRunner
 from google.genai import types
 
 from ...agents import create_squire_agent
-from ...callbacks.risk_gate import create_risk_gate
+from ...callbacks.risk_gate import ADK_INTERNAL_TOOLS, create_risk_gate
 from ...config import GuardrailsConfig
 from ...tools import TOOL_RISK_LEVELS
 from ..dependencies import get_app_config, get_db, get_llm_config, get_registry
@@ -330,6 +330,8 @@ async def _stream_response(
                     # concatenating prior sub-agent text into
                     # message_complete).
                     response_parts = []
+                    if fc.name in ADK_INTERNAL_TOOLS:
+                        continue
                     request_id = str(uuid.uuid4())
                     await websocket.send_json(
                         {
@@ -351,6 +353,8 @@ async def _stream_response(
                 elif part.function_response:
                     fr = part.function_response
                     response_parts = []
+                    if fr.name in ADK_INTERNAL_TOOLS:
+                        continue
                     await websocket.send_json(
                         {
                             "type": "tool_result",

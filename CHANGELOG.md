@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Hide internal ADK tool calls from web UI chat** — `transfer_to_agent` (and any future ADK-internal tools) are no longer streamed to the WebSocket client. Previously, agent routing events appeared as unhelpful `🔧 transfer_to_agent: {'result': None}` messages that exposed internal sub-agent names. `ADK_INTERNAL_TOOLS` is now a public constant in `callbacks/risk_gate.py` shared by both the risk gate and the chat router.
+
 ### Added
 
 - **Clear all sessions** — bulk-delete all chat sessions at once instead of removing them one by one.
