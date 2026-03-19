@@ -6,6 +6,65 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Static
 
 
+class ConfirmModal(ModalScreen[bool]):
+    """Simple yes/no confirmation dialog.
+
+    Returns True if confirmed, False if cancelled.
+    """
+
+    DEFAULT_CSS = """
+    ConfirmModal {
+        align: center middle;
+    }
+
+    #confirm-dialog {
+        width: 50;
+        max-width: 80%;
+        height: auto;
+        border: thick $error;
+        background: $surface;
+        padding: 1 2;
+    }
+
+    #confirm-title {
+        text-style: bold;
+        color: $error;
+        margin-bottom: 1;
+    }
+
+    #confirm-message {
+        color: $text;
+        margin-bottom: 1;
+    }
+
+    #confirm-buttons {
+        margin-top: 1;
+        align: center middle;
+        height: auto;
+    }
+
+    #confirm-buttons Button {
+        margin: 0 2;
+    }
+    """
+
+    def __init__(self, message: str, title: str = "Confirm", **kwargs):
+        super().__init__(**kwargs)
+        self._message = message
+        self._title = title
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="confirm-dialog"):
+            yield Label(self._title, id="confirm-title")
+            yield Static(self._message, id="confirm-message")
+            with Horizontal(id="confirm-buttons"):
+                yield Button("Yes", variant="error", id="btn-yes")
+                yield Button("Cancel", variant="default", id="btn-cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(event.button.id == "btn-yes")
+
+
 class ApprovalModal(ModalScreen[bool]):
     """Modal dialog that asks the user to approve or deny a tool execution.
 

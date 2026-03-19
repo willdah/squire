@@ -9,7 +9,7 @@ from textual.widgets import Footer, Header
 
 from ..instructions.profiles import get_profile
 from .approval_bridge import ApprovalBridge, ApprovalRequest
-from .approval_modal import ApprovalModal
+from .approval_modal import ApprovalModal, ConfirmModal
 from .chat_pane import ChatPane
 from .log_viewer import LogViewer
 from .status_panel import StatusPanel
@@ -62,6 +62,7 @@ class SquireApp(App):
         Binding("ctrl+l", "clear_chat", "Clear", show=True),
         Binding("ctrl+g", "toggle_log", "Log", show=True),
         Binding("ctrl+s", "toggle_status", "Status", show=True),
+        Binding("ctrl+x", "clear_all_sessions", "Del Sessions", show=True),
     ]
 
     def __init__(
@@ -162,3 +163,15 @@ class SquireApp(App):
     def action_clear_chat(self) -> None:
         chat_pane = self.query_one(ChatPane)
         chat_pane.clear_messages()
+
+    async def action_clear_all_sessions(self) -> None:
+        """Prompt the user to confirm deleting all sessions, then delete them."""
+        confirmed = await self.push_screen_wait(
+            ConfirmModal(
+                message="Delete ALL sessions and their messages?\nThis cannot be undone.",
+                title="Clear All Sessions",
+            )
+        )
+        if confirmed and self._db is not None:
+            count = await self._db.delete_all_sessions()
+            self.notify(f"Deleted {count} session(s).", severity="information")

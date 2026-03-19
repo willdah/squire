@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Clear all sessions** — bulk-delete all chat sessions at once instead of removing them one by one.
+  - `DELETE /api/sessions` — new API endpoint; returns `{"deleted": <count>}`.
+  - **Web UI** — "Clear All" button (with browser confirmation dialog) on the Sessions page; only shown when sessions exist.
+  - **CLI** — `squire sessions clear` command with a `--yes/-y` flag to skip the confirmation prompt. The existing `squire sessions` command is now a sub-command group (`squire sessions list` / `squire sessions clear`).
+  - **TUI** — `Ctrl+X` binding opens a confirmation modal and deletes all sessions from the database.
+- `DatabaseService.delete_all_sessions()` — deletes all rows from `sessions` and `conversations`, returns the session count.
+
 ## [0.5.0] — 2026-03-18
 
 ### Added

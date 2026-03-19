@@ -12,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Trash2, MessageSquare, History } from "lucide-react";
+import { Trash2, MessageSquare, History, Eraser } from "lucide-react";
 import type { SessionInfo } from "@/lib/types";
 
 function relativeTime(dateStr: string): string {
@@ -40,9 +40,23 @@ export default function SessionsPage() {
     mutate();
   };
 
+  const handleClearAll = async () => {
+    if (!confirm("Delete ALL sessions and their messages? This cannot be undone.")) return;
+    await apiDelete("/api/sessions");
+    mutate();
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <h1 className="text-2xl">Session History</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl">Session History</h1>
+        {sessions && sessions.length > 0 && (
+          <Button variant="outline" size="sm" onClick={handleClearAll}>
+            <Eraser className="h-4 w-4 mr-2" />
+            Clear All
+          </Button>
+        )}
+      </div>
 
       {!sessions || sessions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">

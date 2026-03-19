@@ -59,3 +59,43 @@ async def test_empty_queries(db):
     assert await db.get_snapshots(since="2020-01-01") == []
     assert await db.get_messages("nonexistent") == []
     assert await db.list_sessions() == []
+
+
+@pytest.mark.asyncio
+async def test_delete_session(db):
+    await db.create_session("sess-del", preview="to be deleted")
+    await db.save_message(session_id="sess-del", role="user", content="hello")
+
+    deleted = await db.delete_session("sess-del")
+    assert deleted is True
+
+    sessions = await db.list_sessions()
+    assert not any(s["session_id"] == "sess-del" for s in sessions)
+    assert await db.get_messages("sess-del") == []
+
+
+@pytest.mark.asyncio
+async def test_delete_session_not_found(db):
+    deleted = await db.delete_session("nonexistent-session")
+    assert deleted is False
+
+
+@pytest.mark.asyncio
+async def test_delete_all_sessions(db):
+    await db.create_session("sess-a", preview="first")
+    await db.create_session("sess-b", preview="second")
+    await db.save_message(session_id="sess-a", role="user", content="hello")
+    await db.save_message(session_id="sess-b", role="user", content="world")
+
+    count = await db.delete_all_sessions()
+    assert count == 2
+
+    assert await db.list_sessions() == []
+    assert await db.get_messages("sess-a") == []
+    assert await db.get_messages("sess-b") == []
+
+
+@pytest.mark.asyncio
+async def test_delete_all_sessions_empty(db):
+    count = await db.delete_all_sessions()
+    assert count == 0
