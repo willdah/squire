@@ -77,6 +77,16 @@ class TestEnroll:
             await store.enroll(name="local", address="10.0.0.1")
 
     @pytest.mark.asyncio
+    async def test_rejects_invalid_name(self, store):
+        with pytest.raises(ValueError, match="Invalid host name"):
+            await store.enroll(name="../etc/passwd", address="10.0.0.1")
+
+    @pytest.mark.asyncio
+    async def test_rejects_empty_name(self, store):
+        with pytest.raises(ValueError, match="Invalid host name"):
+            await store.enroll(name="", address="10.0.0.1")
+
+    @pytest.mark.asyncio
     async def test_rejects_duplicate_name(self, store):
         with patch("squire.hosts.store.asyncssh.connect", side_effect=OSError("refused")):
             await store.enroll(name="srv", address="10.0.0.1")

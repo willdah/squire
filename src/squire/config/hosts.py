@@ -1,6 +1,6 @@
 """Host configuration for multi-machine management.
 
-Loaded from [[hosts]] array-of-tables in squire.toml.
+Used by HostStore and BackendRegistry for SSH connection details.
 """
 
 from pydantic import BaseModel, Field

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 
 import asyncssh
@@ -28,6 +29,9 @@ class EnrollmentResult(BaseModel):
     status: str  # "active" or "pending_key"
     public_key: str
     message: str
+
+
+_VALID_HOST_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
 
 
 class HostStore:
@@ -58,6 +62,11 @@ class HostStore:
         """Enroll a new host: generate key, attempt deploy, persist, register."""
         if name == "local":
             raise ValueError("Cannot enroll a host named 'local' — reserved for the local machine")
+
+        if not _VALID_HOST_NAME.match(name):
+            raise ValueError(
+                f"Invalid host name '{name}'. Use alphanumeric characters, dots, hyphens, and underscores."
+            )
 
         existing = await self._db.get_managed_host(name)
         if existing is not None:
@@ -149,14 +158,16 @@ class HostStore:
             conn.close()
             await conn.wait_closed()
 
-        # Verify the managed key works
+        # Verify the managed key works (with strict host keys now that we saved the host key)
+        known_hosts_path = Path.home() / ".ssh" / "known_hosts"
+        verify_known_hosts = str(known_hosts_path) if known_hosts_path.exists() else None
         try:
             test_conn = await asyncssh.connect(
                 address,
                 port=port,
                 username=user,
                 client_keys=[str(key_path)],
-                known_hosts=None,
+                known_hosts=verify_known_hosts,
             )
             test_conn.close()
             await test_conn.wait_closed()

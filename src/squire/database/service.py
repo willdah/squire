@@ -665,14 +665,24 @@ class DatabaseService:
         services: list[str] | None = None,
         service_root: str = "/opt",
     ) -> None:
-        """Insert or replace a managed host."""
+        """Insert or update a managed host, preserving created_at on conflict."""
         conn = await self._get_conn()
         now = datetime.now(UTC).isoformat()
         await conn.execute(
             """
-            INSERT OR REPLACE INTO managed_hosts
+            INSERT INTO managed_hosts
                 (name, address, user, port, key_file, tags, services, service_root, status, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(name) DO UPDATE SET
+                address = excluded.address,
+                user = excluded.user,
+                port = excluded.port,
+                key_file = excluded.key_file,
+                tags = excluded.tags,
+                services = excluded.services,
+                service_root = excluded.service_root,
+                status = excluded.status,
+                updated_at = excluded.updated_at
             """,
             (
                 name,

@@ -2987,7 +2987,7 @@ wheels = [
 
 [[package]]
 name = "squire"
-version = "0.5.0"
+version = "0.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "agent-risk-engine" },
