@@ -4,7 +4,7 @@ import useSWR from "swr";
 import { apiGet } from "@/lib/api";
 import { ConfigEditor } from "@/components/config/config-editor";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { ConfigResponse } from "@/lib/types";
+import type { ConfigDetailResponse } from "@/lib/types";
 
 function ConfigSkeleton() {
   return (
@@ -17,8 +17,8 @@ function ConfigSkeleton() {
 }
 
 export default function ConfigPage() {
-  const { data: config, isLoading } = useSWR("/api/config", () =>
-    apiGet<ConfigResponse>("/api/config")
+  const { data: config, isLoading, mutate } = useSWR("/api/config", () =>
+    apiGet<ConfigDetailResponse>("/api/config")
   );
 
   if (isLoading || !config) {
@@ -28,7 +28,7 @@ export default function ConfigPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-2xl">Configuration</h1>
-      <ConfigEditor config={config} />
+      <ConfigEditor config={config} onSaved={() => mutate()} />
     </div>
   );
 }

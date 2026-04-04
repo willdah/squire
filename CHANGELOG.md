@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Runtime config editing from Web UI** — the `/config` page is now editable instead of read-only
+  - `PATCH /api/config/{section}` endpoint for app, llm, watch, guardrails, and notifications sections
+  - Per-section editable forms with appropriate input types (selects, switches, tag inputs)
+  - Env-var-override detection — locked fields show a lock icon with the env var name
+  - Optional persist-to-disk via `?persist=true` query parameter (writes back to `squire.toml` preserving comments)
+  - Redacted sentinel values (`••••••`) are automatically preserved during webhook updates
+  - Enriched `GET /api/config` response with `env_overrides` per section and `toml_path`
 - **Host enrollment system** — Squire generates dedicated SSH keys per host and manages the full lifecycle
   - `squire hosts add` / `remove` / `list` / `verify` CLI commands
   - Web UI host enrollment form with public key display for manual setup

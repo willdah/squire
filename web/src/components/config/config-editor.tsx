@@ -5,10 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import type { ConfigResponse } from "@/lib/types";
+import type { ConfigDetailResponse } from "@/lib/types";
+import { AppConfigForm } from "./app-config-form";
+import { LLMConfigForm } from "./llm-config-form";
+import { WatchConfigForm } from "./watch-config-form";
+import { GuardrailsConfigForm } from "./guardrails-config-form";
+import { NotificationsConfigForm } from "./notifications-config-form";
 
 interface ConfigEditorProps {
-  config: ConfigResponse;
+  config: ConfigDetailResponse;
+  onSaved: () => void;
 }
 
 function ConfigKeyValue({ data }: { data: Record<string, unknown> }) {
@@ -18,7 +24,7 @@ function ConfigKeyValue({ data }: { data: Record<string, unknown> }) {
         const display =
           typeof value === "object" && value !== null
             ? JSON.stringify(value, null, 2)
-            : String(value ?? "—");
+            : String(value ?? "\u2014");
         const isComplex = typeof value === "object" && value !== null;
 
         return (
@@ -40,7 +46,7 @@ function ConfigKeyValue({ data }: { data: Record<string, unknown> }) {
   );
 }
 
-function ConfigSection({
+function ReadOnlySection({
   title,
   data,
 }: {
@@ -83,31 +89,71 @@ function ConfigSection({
   );
 }
 
-export function ConfigEditor({ config }: ConfigEditorProps) {
-  const sections = [
-    { key: "app", label: "App", data: config.app },
-    { key: "llm", label: "LLM", data: config.llm },
-    { key: "database", label: "Database", data: config.database },
-    { key: "guardrails", label: "Guardrails", data: config.guardrails },
-    { key: "watch", label: "Watch", data: config.watch },
-    { key: "notifications", label: "Notifications", data: config.notifications },
-    { key: "hosts", label: "Hosts", data: config.hosts },
-  ];
-
+export function ConfigEditor({ config, onSaved }: ConfigEditorProps) {
   return (
     <Tabs defaultValue="app">
       <TabsList className="flex flex-wrap">
-        {sections.map((s) => (
-          <TabsTrigger key={s.key} value={s.key}>
-            {s.label}
-          </TabsTrigger>
-        ))}
+        <TabsTrigger value="app">App</TabsTrigger>
+        <TabsTrigger value="llm">LLM</TabsTrigger>
+        <TabsTrigger value="database">Database</TabsTrigger>
+        <TabsTrigger value="guardrails">Guardrails</TabsTrigger>
+        <TabsTrigger value="watch">Watch</TabsTrigger>
+        <TabsTrigger value="notifications">Notifications</TabsTrigger>
+        <TabsTrigger value="hosts">Hosts</TabsTrigger>
       </TabsList>
-      {sections.map((s) => (
-        <TabsContent key={s.key} value={s.key}>
-          <ConfigSection title={s.label} data={s.data} />
-        </TabsContent>
-      ))}
+
+      <TabsContent value="app">
+        <AppConfigForm
+          values={config.app.values}
+          envOverrides={config.app.env_overrides}
+          tomlPath={config.toml_path}
+          onSaved={onSaved}
+        />
+      </TabsContent>
+
+      <TabsContent value="llm">
+        <LLMConfigForm
+          values={config.llm.values}
+          envOverrides={config.llm.env_overrides}
+          tomlPath={config.toml_path}
+          onSaved={onSaved}
+        />
+      </TabsContent>
+
+      <TabsContent value="database">
+        <ReadOnlySection title="Database" data={config.database.values} />
+      </TabsContent>
+
+      <TabsContent value="guardrails">
+        <GuardrailsConfigForm
+          values={config.guardrails.values}
+          envOverrides={config.guardrails.env_overrides}
+          tomlPath={config.toml_path}
+          onSaved={onSaved}
+        />
+      </TabsContent>
+
+      <TabsContent value="watch">
+        <WatchConfigForm
+          values={config.watch.values}
+          envOverrides={config.watch.env_overrides}
+          tomlPath={config.toml_path}
+          onSaved={onSaved}
+        />
+      </TabsContent>
+
+      <TabsContent value="notifications">
+        <NotificationsConfigForm
+          values={config.notifications.values}
+          envOverrides={config.notifications.env_overrides}
+          tomlPath={config.toml_path}
+          onSaved={onSaved}
+        />
+      </TabsContent>
+
+      <TabsContent value="hosts">
+        <ReadOnlySection title="Hosts" data={config.hosts} />
+      </TabsContent>
     </Tabs>
   );
 }
