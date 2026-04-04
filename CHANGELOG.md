@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Host enrollment system** — Squire generates dedicated SSH keys per host and manages the full lifecycle
+  - `squire hosts add` / `remove` / `list` / `verify` CLI commands
+  - Web UI host enrollment form with public key display for manual setup
+  - `POST /api/hosts`, `DELETE /api/hosts/{name}`, `POST /api/hosts/{name}/verify`, `GET /api/hosts/{name}/public-key` API endpoints
+  - `HostStore` service for centralized host management with cascading auth (existing SSH keys → manual fallback)
+
+### Changed
+
+- Host configuration moved from TOML `[[hosts]]` to SQLite database — hosts are now added via CLI or web UI with no restart required
+- `BackendRegistry` supports runtime `add_host()` / `remove_host()` for hot-reload
+- Hosts page shows enrollment status badges and management actions (verify, remove)
+
+### Removed
+
+- TOML `[[hosts]]` configuration support — hosts are now managed exclusively via CLI and web UI
+
 ## [0.6.0] — 2026-04-04
 
 ### Added
