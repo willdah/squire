@@ -303,38 +303,84 @@ snapshot_interval_minutes = 15
 
 ---
 
-## Remote Hosts -- `[[hosts]]`
+## Remote Hosts
 
-Connect Squire to other machines via SSH. Each entry defines a remote host.
+Hosts are managed at runtime through the CLI or web UI — there are no `[[hosts]]` entries in `squire.toml`. Squire persists host configuration in SQLite and makes changes available immediately without a restart.
 
-| Key | Default | Description |
-|---|---|---|
-| `name` | *(required)* | Unique alias for this host |
-| `address` | *(required)* | Hostname or IP address |
-| `user` | `"root"` | SSH username |
-| `port` | `22` | SSH port |
-| `key_file` | `null` | Path to SSH private key (uses ssh-agent if omitted) |
-| `tags` | `[]` | Optional tags for grouping |
-| `services` | `[]` | Docker Compose services on this host |
-| `service_root` | `"/opt"` | Root directory for compose service directories |
+### Adding a Host
 
-```toml
-[[hosts]]
-name = "media-server"
-address = "192.168.1.10"
-user = "test_user"
-services = ["plex", "sonarr", "radarr"]
-service_root = "/opt/stacks"
-
-[[hosts]]
-name = "nas"
-address = "192.168.1.20"
-user = "test_user"
-port = 2222
-tags = ["storage"]
+```bash
+squire hosts add --name media-server --address 192.168.1.10 --user will
+squire hosts add --name nas --address 192.168.1.20 --user will --port 2222 --tags storage --services plex,sonarr
 ```
 
-Squire connects lazily on first use. Remote tool calls receive a **+1 risk bump** (e.g., `docker_ps` becomes risk 2 on a remote host).
+| Flag | Default | Description |
+|---|---|---|
+| `--name` | *(required)* | Unique alias for the host |
+| `--address` | *(required)* | Hostname or IP address |
+| `--user` | `"root"` | SSH username |
+| `--port` | `22` | SSH port |
+| `--tags` | `[]` | Comma-separated tags for grouping |
+| `--services` | `[]` | Comma-separated Docker Compose service names on this host |
+
+### Enrollment Flow
+
+On `hosts add`, Squire generates a dedicated ed25519 SSH key for the host and stores it at `~/.config/squire/keys/<name>`. It then attempts to deploy the public key automatically using your existing SSH access.
+
+- **Auto-deploy succeeds** — the host status becomes `active` and Squire can connect immediately.
+- **Auto-deploy fails** (no existing credentials, key-based auth not yet configured) — the host status is set to `pending_key` and Squire displays the public key for manual installation:
+
+```bash
+# Copy the public key shown by `hosts add`, then on the target machine:
+echo "<public-key>" >> ~/.ssh/authorized_keys
+```
+
+Once the key is installed, verify the connection:
+
+```bash
+squire hosts verify media-server
+```
+
+A successful verify transitions the host to `active`.
+
+You can also retrieve the public key for a host at any time:
+
+```bash
+squire hosts key media-server
+# or via the API: GET /api/hosts/media-server/public-key
+```
+
+### Host Status
+
+| Status | Meaning |
+|---|---|
+| `active` | SSH key installed, Squire can connect |
+| `pending_key` | Awaiting public key installation on the target host |
+
+### Listing and Removing Hosts
+
+```bash
+squire hosts list              # show all enrolled hosts and their status
+squire hosts remove nas        # remove a host and its SSH key
+```
+
+### Using Hosts
+
+Once enrolled, mention a host by name in conversation and Squire targets it automatically. Every tool also accepts an explicit `host` parameter. Remote tool calls receive a **+1 risk bump** — for example, `docker_ps` on a remote host is risk level 2 instead of 1.
+
+### Web UI and API
+
+The `/hosts` page in the web UI provides an "Add Host" dialog and lists all enrolled hosts with their status, tags, and services. The public key for `pending_key` hosts is shown inline.
+
+Equivalent API endpoints:
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/hosts` | Enroll a new host |
+| `GET` | `/api/hosts` | List all hosts |
+| `DELETE` | `/api/hosts/{name}` | Remove a host |
+| `POST` | `/api/hosts/{name}/verify` | Verify SSH connectivity |
+| `GET` | `/api/hosts/{name}/public-key` | Retrieve the host's public key |
 
 ---
 

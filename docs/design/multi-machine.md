@@ -57,6 +57,8 @@ Implement `SSHBackend` as a new `SystemBackend`. Immediate multi-machine support
 - Tools are unaware of which backend they're using
 - Agent can be told "check the nginx container on `media-server`" and it just works
 
+> **Note:** Phase 1 was implemented with database-backed host enrollment rather than TOML configuration. Hosts are managed via `squire hosts add` / `squire hosts remove` and the web UI at `/hosts`. The TOML example below reflects the original design sketch, not the current interface.
+
 ```toml
 [[hosts]]
 name = "media-server"
