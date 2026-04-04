@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **README restructure** — rewrote README with new Interfaces section (Web UI, TUI, CLI), Docker deployment section, Notifications config section, badges, expanded Quickstart and Development sections. Removed stale Personalization TOC entry. Trimmed config duplication in favor of linking to `docs/configuration.md`. Updated `docs/cli.md` with `squire web` command, fixed watch config table to reflect `[guardrails.watch]` restructure, added `Ctrl+X` keyboard shortcut.
+
 - **Runbooks replaced by Skills** — the database-backed runbook system (ordered steps in `runbooks` + `runbook_steps` tables) has been replaced by file-based skills. This simplifies the data model (no numbered steps, no per-step tracking), makes skills version-controllable, and aligns with the Open Agent Skills spec. The `[STEP N COMPLETE]` / `[RUNBOOK COMPLETE]` markers are replaced by a single `[SKILL COMPLETE]` marker. Existing runbook tables in the database are left in place but no longer queried. The WebSocket `?runbook=` query param is now `?skill=`. CLI commands changed from `squire runbooks` to `squire skills`. Added `pyyaml>=6.0` as an explicit dependency (was already a transitive dep).
 
 ### Fixed
