@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **CI/CD improvements** — split CI into parallel jobs (lint, test, frontend, docker) with dependency caching. Fixed broken Dockerfile (missing `packages/` copy for `agent-risk-engine`). Added `.dockerignore`. Added Dependabot for Python, npm, and GitHub Actions. `make ci` now includes frontend lint and build checks.
+- **Release workflow** — pushing a `v*` tag now builds and publishes the Docker image to `ghcr.io/willdah/squire` and creates a GitHub Release with changelog notes.
 
 - **`agent-risk-engine` v0.2.0: action-centric protocol** — breaking refactor repositioning the package as an open protocol with Python reference implementation.
   - **`Action` envelope** — new `Action(kind, name, parameters, risk, metadata)` dataclass replaces the `(tool_name, args, tool_risk)` tuple. `kind` enables per-category routing; `metadata` carries framework-provided context.
