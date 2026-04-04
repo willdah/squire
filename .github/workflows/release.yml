@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/willdah/squire:${{ steps.version.outputs.version }}
+            ghcr.io/willdah/squire:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          changelog=$(awk -v ver="$version" '
+            /^## \[/ {
+              if (found) exit
+              if (index($0, ver) || ($0 ~ /Unreleased/ && !found_ver)) found=1
+              next
+            }
+            found { print }
+          ' CHANGELOG.md)
+          echo "$changelog" > /tmp/changelog.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: /tmp/changelog.md
+          generate_release_notes: false
