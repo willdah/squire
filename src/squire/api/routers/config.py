@@ -35,6 +35,11 @@ async def get_config(
     llm_config=Depends(get_llm_config),
 ):
     """Current effective configuration (all sections), with sensitive values redacted."""
+    host_configs = []
+    if deps.host_store is not None:
+        hosts = await deps.host_store.list_hosts()
+        host_configs = [h.model_dump(mode="json") for h in hosts]
+
     return ConfigResponse(
         app=app_config.model_dump(mode="json"),
         llm=_redact_llm(llm_config.model_dump(mode="json")),
@@ -42,5 +47,5 @@ async def get_config(
         notifications=_redact_notifications(deps.notif_config.model_dump(mode="json") if deps.notif_config else {}),
         guardrails=deps.guardrails.model_dump(mode="json") if deps.guardrails else {},
         watch=deps.watch_config.model_dump(mode="json") if deps.watch_config else {},
-        hosts=[h.model_dump(mode="json") for h in deps.host_configs],
+        hosts=host_configs,
     )

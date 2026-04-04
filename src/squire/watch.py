@@ -31,9 +31,8 @@ from .config import (
     SkillsConfig,
     WatchConfig,
 )
-from .config.hosts import HostConfig
-from .config.loader import get_list_section
 from .database.service import DatabaseService
+from .hosts.store import HostStore
 from .main import _collect_all_snapshots
 from .notifications.webhook import WebhookDispatcher
 from .system.registry import BackendRegistry
@@ -124,10 +123,8 @@ async def start_watch() -> None:
     watch_config = WatchConfig()
     skills_config = SkillsConfig()
 
-    # Load host configuration and create backend registry
-    host_dicts = get_list_section("hosts")
-    hosts = [HostConfig(**h) for h in host_dicts]
-    registry = BackendRegistry(hosts)
+    # Create backend registry (hosts loaded from DB below)
+    registry = BackendRegistry()
     set_registry(registry)
 
     # Initialize database and webhook dispatcher
@@ -136,6 +133,10 @@ async def start_watch() -> None:
     notifier = WebhookDispatcher(notif_config)
     set_db(db)
     set_notifier(notifier)
+
+    # Load managed hosts from DB into the registry
+    host_store = HostStore(db, registry)
+    await host_store.load()
 
     # Build the risk evaluation pipeline
     guardrails = GuardrailsConfig()

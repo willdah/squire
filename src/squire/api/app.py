@@ -21,9 +21,8 @@ from ..config import (
     SkillsConfig,
     WatchConfig,
 )
-from ..config.hosts import HostConfig
-from ..config.loader import get_list_section
 from ..database.service import DatabaseService
+from ..hosts.store import HostStore
 from ..main import _collect_all_snapshots
 from ..notifications.webhook import WebhookDispatcher
 from ..skills import SkillService
@@ -78,15 +77,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     deps.guardrails = GuardrailsConfig()
     skills_config = SkillsConfig()
 
-    # Load host configs
-    host_dicts = get_list_section("hosts")
-    deps.host_configs = [HostConfig(**h) for h in host_dicts]
-
     # Create service singletons
-    deps.registry = BackendRegistry(deps.host_configs)
+    deps.registry = BackendRegistry()
     deps.db = DatabaseService(deps.db_config.path)
     deps.notifier = WebhookDispatcher(deps.notif_config)
     deps.skills_service = SkillService(skills_config.path)
+
+    # Load managed hosts from DB into the registry
+    deps.host_store = HostStore(deps.db, deps.registry)
+    await deps.host_store.load()
 
     # Wire up tool registry
     tools_set_registry(deps.registry)
