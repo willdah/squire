@@ -37,8 +37,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - **Persona customization** — removed `house`, `squire_name`, and `squire_profile` config fields and the three built-in personality profiles (Rook, Cedric, Wynn). Squire now uses a single fixed identity across all interfaces. The `profiles.py` module has been deleted. System prompts, session state, TUI, config files, and documentation have been updated accordingly.
+- **`agent-risk-engine` v0.2.0: tool-centric models and state layer** — `ToolDef`, `ToolRegistry`, `ToolAnalyzer`, `SystemState`, `StateMonitor`, `NullStateMonitor`, and `RiskScore.alternative` removed from public API.
 
 ### Changed
+
+- **`agent-risk-engine` v0.2.0: action-centric protocol** — breaking refactor repositioning the package as an open protocol with Python reference implementation.
+  - **`Action` envelope** — new `Action(kind, name, parameters, risk, metadata)` dataclass replaces the `(tool_name, args, tool_risk)` tuple. `kind` enables per-category routing; `metadata` carries framework-provided context.
+  - **3-layer stateless pipeline** — `RuleGate` → `ActionAnalyzer` → `ActionGate`. The `StateMonitor` layer is removed; the engine no longer tracks call history internally. Temporal context (loop detection, session state) is the framework's responsibility and flows in via `Action.metadata`.
+  - **Kind-aware routing** — `RuleGate` gains `kind_thresholds` for per-kind threshold overrides. `allowed_tools`/`approve_tools`/`denied_tools` renamed to `allowed`/`approve`/`denied`.
+  - **Kind-scoped patterns** — `RiskPattern.kinds` enables patterns that only fire for specific action categories.
+  - **`CallTracker` standalone** — extracted from pipeline to standalone utility. `check()` returns `dict` instead of `SystemState`. New configurable `repetition_ratio` parameter.
+  - **Renames** — `ToolDef` → `ActionDef`, `ToolRegistry` → `ActionRegistry`, `ToolAnalyzer` → `ActionAnalyzer`.
+  - **`PROTOCOL.md`** — new language-agnostic protocol specification defining risk levels, gate results, action envelope, and evaluation semantics.
 
 - **README restructure** — rewrote README with new Interfaces section (Web UI, TUI, CLI), Docker deployment section, Notifications config section, badges, expanded Quickstart and Development sections. Removed stale Personalization TOC entry. Trimmed config duplication in favor of linking to `docs/configuration.md`. Updated `docs/cli.md` with `squire web` command, fixed watch config table to reflect `[guardrails.watch]` restructure, added `Ctrl+X` keyboard shortcut.
 

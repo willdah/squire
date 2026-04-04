@@ -10,11 +10,14 @@ class TestPublicAPI:
 
     def test_all_contains_expected_names(self):
         expected = {
+            "ActionAnalyzer",
             "ActionGate",
+            "Action",
+            "ActionDef",
+            "ActionRegistry",
             "CallTracker",
             "DEFAULT_PATTERNS",
             "GateResult",
-            "NullStateMonitor",
             "PassthroughActionGate",
             "PassthroughAnalyzer",
             "PatternAnalyzer",
@@ -25,11 +28,7 @@ class TestPublicAPI:
             "RiskScore",
             "RiskUtilityGate",
             "RuleGate",
-            "StateMonitor",
-            "SystemState",
-            "ToolAnalyzer",
-            "ToolDef",
-            "ToolRegistry",
+            "THRESHOLD_ALIASES",
             "UtilityScore",
         }
         assert set(agent_risk_engine.__all__) == expected

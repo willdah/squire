@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-risk-engine"
-version = "0.1.0"
-description = "Layered risk evaluation for AI agent tool execution."
+version = "0.2.0"
+description = "A layered protocol and reference implementation for codifying risk in autonomous agent actions."
 authors = [{name = "Will Ahern"}]
 readme = "README.md"
 license = "MIT"

@@ -1,38 +1,53 @@
 """RuleGate — Layer 1: Fast static risk evaluation.
 
-No LLM calls. Evaluates tool risk against a threshold with per-tool overrides.
-Framework-agnostic — no imports from squire or any agent framework.
+No LLM calls. Evaluates action risk against a threshold with per-name
+overrides and per-kind threshold routing.
+Framework-agnostic — no external dependencies.
 """
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from .models import THRESHOLD_ALIASES, GateResult
 
+if TYPE_CHECKING:
+    from .models import Action
+
 
 class RuleGate:
-    """Fast heuristic gate using threshold comparison and per-tool overrides.
+    """Fast heuristic gate using threshold comparison and per-action overrides.
 
     Args:
         threshold: Risk levels at or below this are auto-allowed (1-5).
             Also accepts string aliases: "read-only", "cautious", "standard", "full-trust".
-        strict: When True, tools above threshold are denied outright.
+        strict: When True, actions above threshold are denied outright.
             When False, they require approval.
-        allowed_tools: Tool names that are always auto-allowed regardless of threshold.
-        approve_tools: Tool names that always require approval even if threshold would allow.
-        denied_tools: Tool names that are always denied.
+        allowed: Action names that are always auto-allowed regardless of threshold.
+        approve: Action names that always require approval even if threshold would allow.
+        denied: Action names that are always denied.
+        kind_thresholds: Per-kind threshold overrides. Keys are action kinds,
+            values are thresholds (int or alias). Actions whose kind matches
+            use this threshold instead of the default.
     """
 
     def __init__(
         self,
         threshold: int | str = 2,
         strict: bool = False,
-        allowed_tools: set[str] | None = None,
-        approve_tools: set[str] | None = None,
-        denied_tools: set[str] | None = None,
+        allowed: set[str] | None = None,
+        approve: set[str] | None = None,
+        denied: set[str] | None = None,
+        kind_thresholds: dict[str, int | str] | None = None,
     ) -> None:
         self.threshold = self._resolve_threshold(threshold)
         self.strict = strict
-        self.allowed_tools = allowed_tools or set()
-        self.approve_tools = approve_tools or set()
-        self.denied_tools = denied_tools or set()
+        self.allowed = allowed or set()
+        self.approve = approve or set()
+        self.denied = denied or set()
+        self._kind_thresholds: dict[str, int] = {
+            k: self._resolve_threshold(v) for k, v in (kind_thresholds or {}).items()
+        }
 
     @staticmethod
     def _resolve_threshold(value: int | str) -> int:
@@ -43,23 +58,24 @@ class RuleGate:
             return int(value)
         return value
 
-    def evaluate(self, tool_name: str, tool_risk: int) -> GateResult:
-        """Evaluate whether a tool call should be allowed, need approval, or be denied.
+    def evaluate(self, action: Action) -> GateResult:
+        """Evaluate whether an action should be allowed, need approval, or be denied.
 
         Args:
-            tool_name: The name of the tool being invoked.
-            tool_risk: The static risk level assigned to the tool (1-5).
+            action: The Action to evaluate.
 
         Returns:
             GateResult indicating the decision.
         """
-        if tool_name in self.denied_tools:
+        if action.name in self.denied:
             return GateResult.DENIED
-        if tool_name in self.allowed_tools:
+        if action.name in self.allowed:
             return GateResult.ALLOWED
-        if tool_name in self.approve_tools:
+        if action.name in self.approve:
             return GateResult.NEEDS_APPROVAL
-        if tool_risk <= self.threshold:
+
+        effective_threshold = self._kind_thresholds.get(action.kind, self.threshold)
+        if action.risk <= effective_threshold:
             return GateResult.ALLOWED
         return GateResult.DENIED if self.strict else GateResult.NEEDS_APPROVAL
 

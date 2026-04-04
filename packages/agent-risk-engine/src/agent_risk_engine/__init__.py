@@ -1,32 +1,36 @@
-"""Layered risk evaluation for AI agent tool execution.
+"""Layered risk evaluation for autonomous agent actions.
 
-Framework-agnostic — zero dependencies, zero framework imports. Integrate
-with any agent framework by writing a thin adapter (~20 lines).
+A framework-agnostic protocol and reference implementation for codifying
+risk in agent actions. Zero dependencies.
 """
 
 from .action_gate import ActionGate, PassthroughActionGate, RiskUtilityGate
-from .analyzer import DEFAULT_PATTERNS, PassthroughAnalyzer, PatternAnalyzer, ToolAnalyzer
+from .analyzer import DEFAULT_PATTERNS, ActionAnalyzer, PassthroughAnalyzer, PatternAnalyzer
 from .assessment import RiskEvaluator
+from .call_tracker import CallTracker
 from .models import (
+    THRESHOLD_ALIASES,
+    Action,
+    ActionDef,
     GateResult,
     RiskLevel,
     RiskPattern,
     RiskResult,
     RiskScore,
-    SystemState,
-    ToolDef,
     UtilityScore,
 )
-from .registry import ToolRegistry
+from .registry import ActionRegistry
 from .rule_gate import RuleGate
-from .state_monitor import CallTracker, NullStateMonitor, StateMonitor
 
 __all__ = [
+    "Action",
+    "ActionAnalyzer",
+    "ActionDef",
     "ActionGate",
+    "ActionRegistry",
     "CallTracker",
     "DEFAULT_PATTERNS",
     "GateResult",
-    "NullStateMonitor",
     "PassthroughActionGate",
     "PassthroughAnalyzer",
     "PatternAnalyzer",
@@ -37,10 +41,6 @@ __all__ = [
     "RiskScore",
     "RiskUtilityGate",
     "RuleGate",
-    "StateMonitor",
-    "SystemState",
-    "ToolAnalyzer",
-    "ToolDef",
-    "ToolRegistry",
+    "THRESHOLD_ALIASES",
     "UtilityScore",
 ]

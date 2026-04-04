@@ -8,7 +8,7 @@ and headless (auto-deny + optional notification) modes.
 import logging
 from typing import Any
 
-from agent_risk_engine import GateResult, RiskEvaluator, RuleGate
+from agent_risk_engine import Action, GateResult, RiskEvaluator, RuleGate
 from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
 
@@ -83,7 +83,8 @@ def create_risk_gate(
         if not evaluator or not isinstance(evaluator, RiskEvaluator):
             evaluator = RiskEvaluator(rule_gate=RuleGate())
 
-        result = await evaluator.evaluate(tool_name, args, tool_risk)
+        action = Action(kind="tool_call", name=tool_name, parameters=args, risk=tool_risk)
+        result = await evaluator.evaluate(action)
 
         if result.decision == GateResult.DENIED:
             if headless and notifier:

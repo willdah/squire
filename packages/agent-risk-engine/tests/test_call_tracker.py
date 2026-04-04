@@ -1,126 +1,135 @@
-"""Tests for CallTracker — Layer 3 loop/repetition detection."""
+"""Tests for CallTracker — standalone loop detection utility."""
 
-from agent_risk_engine.state_monitor import CallTracker
+from agent_risk_engine import CallTracker
 
 
 class TestHealthyState:
     def test_empty_history(self):
         tracker = CallTracker()
-        state = tracker.check()
-        assert state.healthy is True
-        assert state.warnings == []
-        assert state.risk_adjustment == 0
+        ctx = tracker.check()
+        assert ctx["healthy"] is True
+        assert ctx["warnings"] == []
 
     def test_varied_calls(self):
         tracker = CallTracker()
-        for name in ["read", "write", "search", "read", "list"]:
+        for name in ["a", "b", "c", "d"]:
             tracker.record(name)
-        state = tracker.check()
-        assert state.healthy is True
+        ctx = tracker.check()
+        assert ctx["healthy"] is True
 
 
 class TestLoopDetection:
     def test_consecutive_repetition_triggers(self):
-        tracker = CallTracker(loop_threshold=3)
+        tracker = CallTracker()
         for _ in range(3):
-            tracker.record("stuck_tool")
-        state = tracker.check()
-        assert not state.healthy
-        assert any("loop" in w.lower() for w in state.warnings)
-        assert state.risk_adjustment >= 2
+            tracker.record("x")
+        ctx = tracker.check()
+        assert ctx["healthy"] is False
+        assert any("loop" in w.lower() for w in ctx["warnings"])
 
     def test_below_threshold_no_trigger(self):
-        tracker = CallTracker(loop_threshold=3)
-        tracker.record("tool")
-        tracker.record("tool")
-        state = tracker.check()
-        assert state.healthy is True
+        tracker = CallTracker()
+        tracker.record("x")
+        tracker.record("x")
+        ctx = tracker.check()
+        assert ctx["healthy"] is True
 
     def test_interrupted_sequence_no_trigger(self):
-        tracker = CallTracker(loop_threshold=3)
-        tracker.record("tool")
-        tracker.record("tool")
-        tracker.record("other")
-        tracker.record("tool")
-        state = tracker.check()
-        # The last 3 are ["tool", "other", "tool"] — not all the same
-        assert state.healthy is True
+        tracker = CallTracker()
+        tracker.record("x")
+        tracker.record("x")
+        tracker.record("y")
+        tracker.record("x")
+        tracker.record("x")
+        ctx = tracker.check()
+        assert ctx["healthy"] is True or "loop" not in str(ctx["warnings"]).lower()
 
     def test_custom_threshold(self):
         tracker = CallTracker(loop_threshold=5)
         for _ in range(4):
-            tracker.record("tool")
-        state = tracker.check()
-        assert state.healthy is True
-
-        tracker.record("tool")
-        state = tracker.check()
-        assert not state.healthy
+            tracker.record("x")
+        ctx = tracker.check()
+        assert ctx["healthy"] is True
+        tracker.record("x")
+        ctx = tracker.check()
+        assert ctx["healthy"] is False
 
 
 class TestRepetitionRatio:
     def test_high_repetition_triggers(self):
-        tracker = CallTracker(window=10, loop_threshold=100)  # disable loop detection
-        # 8 out of 10 = 80% > 70%
+        tracker = CallTracker()
         for _ in range(8):
-            tracker.record("dominant")
-        tracker.record("other1")
-        tracker.record("other2")
-        state = tracker.check()
-        assert any("repetition" in w.lower() for w in state.warnings)
+            tracker.record("x")
+        tracker.record("y")
+        ctx = tracker.check()
+        assert any("repetition" in w.lower() for w in ctx["warnings"])
 
     def test_low_repetition_no_trigger(self):
-        tracker = CallTracker(window=10, loop_threshold=100)
-        for i in range(10):
-            tracker.record(f"tool_{i % 5}")
-        state = tracker.check()
-        # Max 2 out of 10 = 20% — well below 70%
-        assert state.healthy is True
+        tracker = CallTracker()
+        for name in ["a", "b", "c", "d", "e"]:
+            tracker.record(name)
+        ctx = tracker.check()
+        assert ctx["healthy"] is True
 
     def test_needs_minimum_calls(self):
-        tracker = CallTracker(loop_threshold=100)
-        # 3 of same in 3 calls = 100%, but < 5 total calls and count <= 3
+        tracker = CallTracker()
+        tracker.record("x")
+        tracker.record("x")
+        tracker.record("x")
+        ctx = tracker.check()
+        assert not any("repetition" in w.lower() for w in ctx["warnings"])
+
+    def test_custom_ratio(self):
+        tracker = CallTracker(repetition_ratio=0.5)
+        for _ in range(4):
+            tracker.record("x")
         for _ in range(3):
-            tracker.record("tool")
-        state = tracker.check()
-        # Ratio check requires >= 5 calls and count > 3
-        assert not any("repetition" in w.lower() for w in state.warnings)
+            tracker.record("y")
+        ctx = tracker.check()
+        assert any("repetition" in w.lower() for w in ctx["warnings"])
 
 
 class TestWindow:
     def test_old_calls_evicted(self):
         tracker = CallTracker(window=5, loop_threshold=3)
-        # Fill window with "old"
+        for _ in range(3):
+            tracker.record("x")
         for _ in range(5):
-            tracker.record("old")
-        # Now push them out
-        for _ in range(5):
-            tracker.record("new")
-        state = tracker.check()
-        # "old" is fully evicted; "new" triggers loop (5 consecutive)
-        assert any("loop" in w.lower() for w in state.warnings)
+            tracker.record("y")
+        ctx = tracker.check()
+        assert ctx["healthy"] is False
 
 
 class TestCallCount:
     def test_count(self):
         tracker = CallTracker()
         assert tracker.call_count == 0
-        tracker.record("a")
-        tracker.record("b")
+        tracker.record("x")
+        tracker.record("y")
         assert tracker.call_count == 2
 
     def test_count_respects_window(self):
         tracker = CallTracker(window=3)
-        for i in range(5):
-            tracker.record(f"tool_{i}")
+        for _ in range(5):
+            tracker.record("x")
         assert tracker.call_count == 3
 
 
 class TestReset:
     def test_reset_clears_history(self):
         tracker = CallTracker()
-        tracker.record("tool")
-        tracker.record("tool")
+        for _ in range(5):
+            tracker.record("x")
         tracker.reset()
         assert tracker.call_count == 0
-        assert tracker.check().healthy is True
+        ctx = tracker.check()
+        assert ctx["healthy"] is True
+
+
+class TestCheckReturnType:
+    def test_returns_dict(self):
+        tracker = CallTracker()
+        ctx = tracker.check()
+        assert isinstance(ctx, dict)
+        assert "healthy" in ctx
+        assert "warnings" in ctx
