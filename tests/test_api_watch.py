@@ -95,6 +95,7 @@ async def test_watch_approve(db):
 @pytest.mark.asyncio
 async def test_watch_approve_already_resolved(db):
     from fastapi import HTTPException
+
     from squire.api.routers.watch import watch_approve
     from squire.api.schemas import WatchApprovalAction
 

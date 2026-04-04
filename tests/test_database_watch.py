@@ -41,9 +41,11 @@ async def test_get_watch_cycles(db):
     """Aggregate cycles from start/end events."""
     await db.insert_watch_event(cycle=1, type="cycle_start", content=json.dumps({"session_id": "s1"}))
     await db.insert_watch_event(cycle=1, type="tool_call", content=json.dumps({"name": "get_system_info"}))
-    await db.insert_watch_event(cycle=1, type="cycle_end", content=json.dumps({"status": "ok", "duration_seconds": 5.2, "tool_count": 1}))
+    end1 = json.dumps({"status": "ok", "duration_seconds": 5.2, "tool_count": 1})
+    await db.insert_watch_event(cycle=1, type="cycle_end", content=end1)
     await db.insert_watch_event(cycle=2, type="cycle_start", content=json.dumps({"session_id": "s1"}))
-    await db.insert_watch_event(cycle=2, type="cycle_end", content=json.dumps({"status": "error", "duration_seconds": 2.0, "tool_count": 0}))
+    end2 = json.dumps({"status": "error", "duration_seconds": 2.0, "tool_count": 0})
+    await db.insert_watch_event(cycle=2, type="cycle_end", content=end2)
 
     cycles = await db.get_watch_cycles(page=1, per_page=10)
     assert len(cycles) == 2

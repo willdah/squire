@@ -28,9 +28,17 @@ class WatchEventEmitter:
         await self._emit(cycle, "cycle_start", json.dumps({"session_id": session_id}))
 
     async def emit_cycle_end(self, cycle: int, status: str, duration_seconds: float, tool_count: int) -> None:
-        await self._emit(cycle, "cycle_end", json.dumps({
-            "status": status, "duration_seconds": duration_seconds, "tool_count": tool_count,
-        }))
+        await self._emit(
+            cycle,
+            "cycle_end",
+            json.dumps(
+                {
+                    "status": status,
+                    "duration_seconds": duration_seconds,
+                    "tool_count": tool_count,
+                }
+            ),
+        )
 
     async def emit_token(self, cycle: int, content: str) -> None:
         await self._emit(cycle, "token", content)
@@ -41,10 +49,26 @@ class WatchEventEmitter:
     async def emit_tool_result(self, cycle: int, tool_name: str, output: str) -> None:
         await self._emit(cycle, "tool_result", json.dumps({"name": tool_name, "output": output[:500]}))
 
-    async def emit_approval_request(self, cycle: int, request_id: str, tool_name: str, args: dict, risk_level: int) -> None:
-        await self._emit(cycle, "approval_request", json.dumps({
-            "request_id": request_id, "tool_name": tool_name, "args": args, "risk_level": risk_level,
-        }))
+    async def emit_approval_request(
+        self,
+        cycle: int,
+        request_id: str,
+        tool_name: str,
+        args: dict,
+        risk_level: int,
+    ) -> None:
+        await self._emit(
+            cycle,
+            "approval_request",
+            json.dumps(
+                {
+                    "request_id": request_id,
+                    "tool_name": tool_name,
+                    "args": args,
+                    "risk_level": risk_level,
+                }
+            ),
+        )
 
     async def emit_approval_resolved(self, cycle: int, request_id: str, status: str) -> None:
         await self._emit(cycle, "approval_resolved", json.dumps({"request_id": request_id, "status": status}))
@@ -53,6 +77,13 @@ class WatchEventEmitter:
         await self._emit(cycle, "error", json.dumps({"message": message}))
 
     async def emit_session_rotated(self, cycle: int, old_session_id: str, new_session_id: str) -> None:
-        await self._emit(cycle, "session_rotated", json.dumps({
-            "old_session_id": old_session_id, "new_session_id": new_session_id,
-        }))
+        await self._emit(
+            cycle,
+            "session_rotated",
+            json.dumps(
+                {
+                    "old_session_id": old_session_id,
+                    "new_session_id": new_session_id,
+                }
+            ),
+        )

@@ -16,7 +16,7 @@ async def db(tmp_path):
 @pytest.mark.asyncio
 async def test_ws_sets_supervisor_connected(db):
     """Verify supervisor tracking logic."""
-    from squire.api.routers.watch import _increment_supervisor_count, _decrement_supervisor_count
+    from squire.api.routers.watch import _decrement_supervisor_count, _increment_supervisor_count
 
     await _increment_supervisor_count(db)
     assert await db.get_watch_state("supervisor_connected") == "true"

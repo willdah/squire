@@ -522,15 +522,17 @@ class DatabaseService:
                     end_content = json.loads(row_dict["end_content"])
                 except (json.JSONDecodeError, TypeError):
                     pass
-            cycles.append({
-                "cycle": row_dict["cycle"],
-                "started_at": row_dict["started_at"],
-                "ended_at": row_dict["ended_at"],
-                "status": end_content.get("status", "unknown"),
-                "duration_seconds": end_content.get("duration_seconds"),
-                "tool_count": end_content.get("tool_count", 0),
-                "event_count": row_dict["event_count"],
-            })
+            cycles.append(
+                {
+                    "cycle": row_dict["cycle"],
+                    "started_at": row_dict["started_at"],
+                    "ended_at": row_dict["ended_at"],
+                    "status": end_content.get("status", "unknown"),
+                    "duration_seconds": end_content.get("duration_seconds"),
+                    "tool_count": end_content.get("tool_count", 0),
+                    "event_count": row_dict["event_count"],
+                }
+            )
         return cycles
 
     # --- Watch Commands ---
@@ -619,9 +621,7 @@ class DatabaseService:
             return 0
         min_cycle = rows[-1][0]
 
-        cursor = await conn.execute(
-            "DELETE FROM watch_events WHERE cycle < ?", (min_cycle,)
-        )
+        cursor = await conn.execute("DELETE FROM watch_events WHERE cycle < ?", (min_cycle,))
         deleted = cursor.rowcount
 
         await conn.execute(

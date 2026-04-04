@@ -59,8 +59,11 @@ async def test_emit_swallows_db_error():
 async def test_emit_approval_request(db):
     emitter = WatchEventEmitter(db)
     await emitter.emit_approval_request(
-        cycle=1, request_id="req-1", tool_name="restart_container",
-        args={"container": "nginx"}, risk_level=4,
+        cycle=1,
+        request_id="req-1",
+        tool_name="restart_container",
+        args={"container": "nginx"},
+        risk_level=4,
     )
 
     events = await db.get_watch_events_since(0)

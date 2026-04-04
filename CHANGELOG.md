@@ -9,8 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **WatchEventEmitter** (`src/squire/watch_emitter.py`) — typed, fire-and-forget event emitter backed by the `watch_events` table. Wraps `DatabaseService` with named emit methods (`emit_cycle_start`, `emit_cycle_end`, `emit_token`, `emit_tool_call`, `emit_tool_result`, `emit_approval_request`, `emit_approval_resolved`, `emit_error`, `emit_session_rotated`). Exceptions are caught and logged so emission never blocks the watch cycle.
-- **Watch event persistence** — three new SQLite tables (`watch_events`, `watch_commands`, `watch_approvals`) with full async CRUD on `DatabaseService`: insert/tail events, cycle aggregation, command queue with status tracking, and approval lifecycle management.
+- **Watch mode web integration** — manage and observe watch mode through the web UI at `/watch`.
+  - Start/stop watch mode from the browser, with PID-based liveness detection
+  - Live streaming of watch cycle activity via WebSocket (tokens, tool calls, tool results, cycle boundaries)
+  - Cycle history with expandable event details and paginated browsing
+  - Runtime configuration (interval, risk tolerance, check-in prompt) applied without restarting
+  - Interactive tool approval when supervising — approval cards with countdown timers appear in the live stream; falls back to auto-deny when nobody is watching
+  - Three new SQLite tables (`watch_events`, `watch_commands`, `watch_approvals`) for process-independent IPC
+  - Watch process emits granular events and polls for commands between cycles (responsive to stop/config changes)
+  - Supervisor connection tracking (`supervisor_count` / `supervisor_connected` in `watch_state`)
 
 - **Skills** (replaces Runbooks) — file-based skill definitions aligned with the [Open Agent Skills spec](https://agentskills.io/specification). Each skill is a `SKILL.md` file with YAML frontmatter + freeform Markdown instructions, stored in a configurable directory (default `~/.local/share/squire/skills`). No database required — skills are version-controllable and editable with any text editor.
   - **SkillService** (`src/squire/skills/`) — file-based CRUD: `list_skills`, `get_skill`, `save_skill`, `delete_skill`. Parses YAML frontmatter with `yaml.safe_load()` and renders back to spec-compliant SKILL.md format (`name`/`description` at top level, Squire-specific fields under `metadata`). Names are validated per the spec (lowercase alphanumeric + hyphens, max 64 chars).

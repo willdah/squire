@@ -164,7 +164,7 @@ async def watch_ws(websocket: WebSocket, db=Depends(get_db)):
 
             try:
                 await asyncio.wait_for(websocket.receive_text(), timeout=0.2)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
             except WebSocketDisconnect:
                 break

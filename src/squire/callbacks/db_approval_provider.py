@@ -36,7 +36,10 @@ class DatabaseApprovalProvider:
         self._poll_interval = poll_interval
 
     async def request_approval_async(
-        self, tool_name: str, args: dict, risk_level: int,
+        self,
+        tool_name: str,
+        args: dict,
+        risk_level: int,
     ) -> bool:
         """Request approval via database, polling until resolved or timeout."""
         request_id = str(uuid.uuid4())
@@ -64,7 +67,9 @@ class DatabaseApprovalProvider:
             if approval and approval["status"] != "pending":
                 approved = approval["status"] == "approved"
                 await self._emitter.emit_approval_resolved(
-                    self.cycle, request_id, approval["status"],
+                    self.cycle,
+                    request_id,
+                    approval["status"],
                 )
                 return approved
 
