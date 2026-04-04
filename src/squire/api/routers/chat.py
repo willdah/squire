@@ -112,9 +112,9 @@ async def create_chat_session(
     rule_gate = RuleGate(
         threshold=app_config.risk_tolerance,
         strict=app_config.risk_strict,
-        allowed_tools=set(guardrails.tools_allow),
-        approve_tools=set(guardrails.tools_require_approval),
-        denied_tools=set(guardrails.tools_deny),
+        allowed=set(guardrails.tools_allow),
+        approve=set(guardrails.tools_require_approval),
+        denied=set(guardrails.tools_deny),
     )
     risk_evaluator = RiskEvaluator(rule_gate=rule_gate)
 
@@ -201,9 +201,9 @@ async def chat_websocket(
     rule_gate = RuleGate(
         threshold=app_config.risk_tolerance,
         strict=app_config.risk_strict,
-        allowed_tools=set(guardrails.tools_allow),
-        approve_tools=set(guardrails.tools_require_approval),
-        denied_tools=set(guardrails.tools_deny),
+        allowed=set(guardrails.tools_allow),
+        approve=set(guardrails.tools_require_approval),
+        denied=set(guardrails.tools_deny),
     )
     risk_evaluator = RiskEvaluator(rule_gate=rule_gate)
     snapshot = await get_latest_snapshot()

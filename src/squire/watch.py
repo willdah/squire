@@ -13,7 +13,7 @@ import signal
 import sys
 from datetime import UTC, datetime
 
-from agent_risk_engine import CallTracker, RiskEvaluator, RuleGate
+from agent_risk_engine import RiskEvaluator, RuleGate
 from dotenv import load_dotenv
 from google.adk.apps import App
 from google.adk.events.event import Event
@@ -137,18 +137,17 @@ async def start_watch() -> None:
     set_db(db)
     set_notifier(notifier)
 
-    # Build the risk evaluation pipeline with CallTracker for loop detection
+    # Build the risk evaluation pipeline
     guardrails = GuardrailsConfig()
-    call_tracker = CallTracker()
     watch_tolerance = guardrails.watch_tolerance or app_config.risk_tolerance
     rule_gate = RuleGate(
         threshold=watch_tolerance,
         strict=True,  # Always strict in watch mode — deny, don't prompt
-        allowed_tools=set(guardrails.tools_allow) | set(guardrails.watch_tools_allow),
-        # tools_require_approval intentionally omitted — watch mode has no approval provider
-        denied_tools=set(guardrails.tools_deny) | set(guardrails.watch_tools_deny),
+        allowed=set(guardrails.tools_allow) | set(guardrails.watch_tools_allow),
+        # approve intentionally omitted — watch mode has no approval provider
+        denied=set(guardrails.tools_deny) | set(guardrails.watch_tools_deny),
     )
-    risk_evaluator = RiskEvaluator(rule_gate=rule_gate, state_monitor=call_tracker)
+    risk_evaluator = RiskEvaluator(rule_gate=rule_gate)
 
     # Build the agent with headless risk gate
     block_notifier = notifier if watch_config.notify_on_blocked else None
@@ -263,9 +262,6 @@ async def start_watch() -> None:
                 session.state["latest_snapshot"] = snapshot
             except Exception:
                 logger.debug("Snapshot collection failed", exc_info=True)
-
-            # Reset per-cycle state
-            call_tracker.reset()
 
             # Build prompt with error context from previous cycle
             prompt = watch_config.checkin_prompt

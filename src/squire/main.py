@@ -184,9 +184,9 @@ async def start_chat(resume_session_id: str | None = None) -> None:
     rule_gate = RuleGate(
         threshold=app_config.risk_tolerance,
         strict=app_config.risk_strict,
-        allowed_tools=set(guardrails.tools_allow),
-        approve_tools=set(guardrails.tools_require_approval),
-        denied_tools=set(guardrails.tools_deny),
+        allowed=set(guardrails.tools_allow),
+        approve=set(guardrails.tools_require_approval),
+        denied=set(guardrails.tools_deny),
     )
     risk_evaluator = RiskEvaluator(rule_gate=rule_gate)
 
