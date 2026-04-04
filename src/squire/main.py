@@ -15,9 +15,8 @@ from google.genai import types
 from .agents import create_squire_agent
 from .callbacks.risk_gate import create_risk_gate
 from .config import AppConfig, DatabaseConfig, GuardrailsConfig, LLMConfig, NotificationsConfig
-from .config.hosts import HostConfig
-from .config.loader import get_list_section
 from .database.service import DatabaseService
+from .hosts.store import HostStore
 from .notifications.webhook import WebhookDispatcher
 from .system.registry import BackendRegistry
 from .tools import TOOL_RISK_LEVELS, set_db, set_notifier, set_registry
@@ -138,10 +137,8 @@ async def start_chat(resume_session_id: str | None = None) -> None:
     db_config = DatabaseConfig()
     notif_config = NotificationsConfig()
 
-    # Load host configuration and create backend registry
-    host_dicts = get_list_section("hosts")
-    hosts = [HostConfig(**h) for h in host_dicts]
-    registry = BackendRegistry(hosts)
+    # Create backend registry (hosts loaded from DB below)
+    registry = BackendRegistry()
     set_registry(registry)
 
     # Initialize database and webhook dispatcher
@@ -149,6 +146,10 @@ async def start_chat(resume_session_id: str | None = None) -> None:
     notifier = WebhookDispatcher(notif_config)
     set_db(db)
     set_notifier(notifier)
+
+    # Load managed hosts from DB into the registry
+    host_store = HostStore(db, registry)
+    await host_store.load()
 
     # Build the approval provider
     approval_bridge = ApprovalBridge()

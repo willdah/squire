@@ -32,6 +32,31 @@ export interface HostInfo {
   tags: string[];
   services: string[];
   snapshot: HostSnapshot | null;
+  source: string;
+  status: string;
+}
+
+export interface HostCreate {
+  name: string;
+  address: string;
+  user: string;
+  port: number;
+  tags: string[];
+  services: string[];
+  service_root: string;
+}
+
+export interface HostEnrollmentResponse {
+  name: string;
+  status: string;
+  public_key: string;
+  message: string;
+}
+
+export interface HostVerifyResponse {
+  name: string;
+  reachable: boolean;
+  message: string;
 }
 
 export interface SessionInfo {

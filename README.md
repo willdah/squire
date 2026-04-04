@@ -165,23 +165,18 @@ Fine-grained overrides (per-tool allow/deny/require-approval, per-agent toleranc
 
 ### Remote Hosts
 
-Connect Squire to other machines in your homelab via SSH:
+Hosts are managed at runtime — no TOML required. Squire generates a dedicated ed25519 SSH key per host and attempts to deploy it automatically on enrollment.
 
-```toml
-[[hosts]]
-name = "media-server"
-address = "192.168.1.10"
-user = "will"
-
-[[hosts]]
-name = "nas"
-address = "192.168.1.20"
-user = "will"
-port = 2222
-tags = ["storage"]
+```bash
+squire hosts add --name media-server --address 192.168.1.10 --user will
+squire hosts add --name nas --address 192.168.1.20 --user will --port 2222 --tags storage
+squire hosts list
+squire hosts verify media-server
 ```
 
-Squire connects lazily on first use via SSH key authentication (uses your ssh-agent or a configured `key_file`). Once configured, just mention a host by name in conversation and Squire will target the right machine automatically. Every tool also accepts an explicit `host` parameter to determine where it runs.
+If Squire can reach the host with your existing SSH credentials, the key is installed automatically and the host becomes `active` immediately. Otherwise it shows you the public key to install manually. Keys are stored at `~/.config/squire/keys/`.
+
+Once enrolled, just mention a host by name in conversation and Squire targets it automatically. Every tool also accepts an explicit `host` parameter.
 
 > [!NOTE]
 > Remote tool calls receive a **+1 risk bump**.

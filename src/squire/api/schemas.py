@@ -49,6 +49,31 @@ class HostInfo(BaseModel):
     tags: list[str] = []
     services: list[str] = []
     snapshot: HostSnapshot | None = None
+    source: str = "managed"
+    status: str = "active"
+
+
+class HostCreate(BaseModel):
+    name: str
+    address: str
+    user: str = "root"
+    port: int = 22
+    tags: list[str] = []
+    services: list[str] = []
+    service_root: str = "/opt"
+
+
+class HostEnrollmentResponse(BaseModel):
+    name: str
+    status: str
+    public_key: str
+    message: str
+
+
+class HostVerifyResponse(BaseModel):
+    name: str
+    reachable: bool
+    message: str
 
 
 # --- Sessions ---

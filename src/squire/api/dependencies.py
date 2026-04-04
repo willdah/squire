@@ -5,8 +5,8 @@ injection. Tools also receive these via the global tool registry.
 """
 
 from squire.config import AppConfig, DatabaseConfig, GuardrailsConfig, LLMConfig, NotificationsConfig, WatchConfig
-from squire.config.hosts import HostConfig
 from squire.database.service import DatabaseService
+from squire.hosts.store import HostStore
 from squire.notifications.webhook import WebhookDispatcher
 from squire.skills import SkillService
 from squire.system.registry import BackendRegistry
@@ -24,7 +24,7 @@ db_config: DatabaseConfig | None = None
 notif_config: NotificationsConfig | None = None
 watch_config: WatchConfig | None = None
 guardrails: GuardrailsConfig | None = None
-host_configs: list[HostConfig] = []
+host_store: HostStore | None = None
 
 
 def get_db() -> DatabaseService:
@@ -73,3 +73,9 @@ def get_guardrails() -> GuardrailsConfig:
     if guardrails is None:
         raise RuntimeError("GuardrailsConfig not loaded")
     return guardrails
+
+
+def get_host_store() -> HostStore:
+    if host_store is None:
+        raise RuntimeError("HostStore not initialized")
+    return host_store

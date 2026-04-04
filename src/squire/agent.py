@@ -9,14 +9,15 @@ runs without an ApprovalProvider, so NEEDS_APPROVAL results are auto-denied.
 For interactive approval, use the TUI via `squire chat`.
 """
 
+import asyncio
+
 from dotenv import load_dotenv
 
 from .agents.squire_agent import create_squire_agent
 from .callbacks.risk_gate import create_risk_gate
 from .config import AppConfig, DatabaseConfig, LLMConfig, NotificationsConfig
-from .config.hosts import HostConfig
-from .config.loader import get_list_section
 from .database.service import DatabaseService
+from .hosts.store import HostStore
 from .notifications.webhook import WebhookDispatcher
 from .system.registry import BackendRegistry
 from .tools import TOOL_RISK_LEVELS, set_db, set_notifier, set_registry
@@ -24,9 +25,7 @@ from .tools import TOOL_RISK_LEVELS, set_db, set_notifier, set_registry
 load_dotenv()
 
 # Set up service registry so tools can execute
-_host_dicts = get_list_section("hosts")
-_hosts = [HostConfig(**h) for h in _host_dicts]
-_registry = BackendRegistry(_hosts)
+_registry = BackendRegistry()
 set_registry(_registry)
 
 _db_config = DatabaseConfig()
@@ -36,6 +35,10 @@ set_db(_db)
 _notif_config = NotificationsConfig()
 _notifier = WebhookDispatcher(_notif_config)
 set_notifier(_notifier)
+
+# Load managed hosts from DB into the registry (sync wrapper for module-level init)
+_host_store = HostStore(_db, _registry)
+asyncio.get_event_loop().run_until_complete(_host_store.load())
 
 _app_config = AppConfig()
 _llm_config = LLMConfig()
