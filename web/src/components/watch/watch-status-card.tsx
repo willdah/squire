@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { apiPost } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 import type { WatchStatus } from "@/lib/types";
 import { Loader2, Play, Square, Settings } from "lucide-react";
 
@@ -21,13 +21,23 @@ export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusC
   const interval = status?.interval_minutes ? parseInt(status.interval_minutes) : 5;
   const riskTolerance = status?.risk_tolerance || "—";
 
+  const pollUntilStatus = async (target: string, maxAttempts = 15) => {
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      onRefresh();
+      const res = await apiGet<WatchStatus>("/api/watch/status");
+      if (res.status === target) return;
+    }
+  };
+
   const handleStart = async () => {
     setLoading("starting");
     try {
       await apiPost("/api/watch/start");
-      onRefresh();
+      await pollUntilStatus("running");
     } finally {
       setLoading(null);
+      onRefresh();
     }
   };
 
@@ -35,9 +45,10 @@ export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusC
     setLoading("stopping");
     try {
       await apiPost("/api/watch/stop");
-      onRefresh();
+      await pollUntilStatus("stopped");
     } finally {
       setLoading(null);
+      onRefresh();
     }
   };
 
@@ -47,7 +58,7 @@ export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusC
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Watch Mode</h2>
           <Badge variant={isRunning ? "default" : "secondary"}>
-            {isRunning ? "● Running" : "● Stopped"}
+            {loading === "starting" ? "Starting…" : loading === "stopping" ? "Stopping…" : isRunning ? "● Running" : "● Stopped"}
           </Badge>
         </div>
         <div className="text-sm text-muted-foreground space-y-1">
