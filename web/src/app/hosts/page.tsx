@@ -302,8 +302,8 @@ function HostDetail({ name }: { name: string }) {
     setVerifyResult(null);
     try {
       const res = await apiPost<HostVerifyResponse>(`/api/hosts/${name}/verify`);
-      mutate(`/api/hosts/${name}`);
-      mutate("/api/hosts");
+      await mutate(`/api/hosts/${name}`);
+      await mutate("/api/hosts");
       setVerifyResult(res.reachable ? "success" : "failed");
       if (res.reachable) {
         setTimeout(() => setVerifyResult(null), 3000);
