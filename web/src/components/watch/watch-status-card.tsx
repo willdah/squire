@@ -1,11 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { apiPost } from "@/lib/api";
 import type { WatchStatus } from "@/lib/types";
-import { Play, Square, Settings } from "lucide-react";
+import { Loader2, Play, Square, Settings } from "lucide-react";
 
 interface WatchStatusCardProps {
   status: WatchStatus | null;
@@ -14,19 +15,30 @@ interface WatchStatusCardProps {
 }
 
 export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusCardProps) {
+  const [loading, setLoading] = useState<"starting" | "stopping" | null>(null);
   const isRunning = status?.status === "running";
   const cycle = status?.cycle ? parseInt(status.cycle) : 0;
   const interval = status?.interval_minutes ? parseInt(status.interval_minutes) : 5;
   const riskTolerance = status?.risk_tolerance || "—";
 
   const handleStart = async () => {
-    await apiPost("/api/watch/start");
-    onRefresh();
+    setLoading("starting");
+    try {
+      await apiPost("/api/watch/start");
+      onRefresh();
+    } finally {
+      setLoading(null);
+    }
   };
 
   const handleStop = async () => {
-    await apiPost("/api/watch/stop");
-    onRefresh();
+    setLoading("stopping");
+    try {
+      await apiPost("/api/watch/stop");
+      onRefresh();
+    } finally {
+      setLoading(null);
+    }
   };
 
   return (
@@ -53,14 +65,22 @@ export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusC
         </div>
         <div className="flex gap-2 mt-4">
           {isRunning ? (
-            <Button variant="destructive" size="sm" onClick={handleStop}>
-              <Square className="h-3 w-3 mr-1" />
-              Stop
+            <Button variant="destructive" size="sm" onClick={handleStop} disabled={loading !== null}>
+              {loading === "stopping" ? (
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              ) : (
+                <Square className="h-3 w-3 mr-1" />
+              )}
+              {loading === "stopping" ? "Stopping…" : "Stop"}
             </Button>
           ) : (
-            <Button size="sm" onClick={handleStart}>
-              <Play className="h-3 w-3 mr-1" />
-              Start Watch
+            <Button size="sm" onClick={handleStart} disabled={loading !== null}>
+              {loading === "starting" ? (
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              ) : (
+                <Play className="h-3 w-3 mr-1" />
+              )}
+              {loading === "starting" ? "Starting…" : "Start Watch"}
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={onConfigure}>
