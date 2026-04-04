@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **WatchEventEmitter** (`src/squire/watch_emitter.py`) — typed, fire-and-forget event emitter backed by the `watch_events` table. Wraps `DatabaseService` with named emit methods (`emit_cycle_start`, `emit_cycle_end`, `emit_token`, `emit_tool_call`, `emit_tool_result`, `emit_approval_request`, `emit_approval_resolved`, `emit_error`, `emit_session_rotated`). Exceptions are caught and logged so emission never blocks the watch cycle.
 - **Watch event persistence** — three new SQLite tables (`watch_events`, `watch_commands`, `watch_approvals`) with full async CRUD on `DatabaseService`: insert/tail events, cycle aggregation, command queue with status tracking, and approval lifecycle management.
 
 - **Skills** (replaces Runbooks) — file-based skill definitions aligned with the [Open Agent Skills spec](https://agentskills.io/specification). Each skill is a `SKILL.md` file with YAML frontmatter + freeform Markdown instructions, stored in a configurable directory (default `~/.local/share/squire/skills`). No database required — skills are version-controllable and editable with any text editor.
