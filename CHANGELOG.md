@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`docker_container` tool** — container lifecycle management (`inspect`, `start`, `stop`, `restart`, `remove`). Supports `force=True` for forced removal of running containers, and auto-resolves the target host via `resolve_host_for_service` when `host="local"`. Per-action `RISK_LEVELS` dict enables compound `tool:action` risk gate entries.
+
 - **Watch mode web integration** — manage and observe watch mode through the web UI at `/watch`.
   - Start/stop watch mode from the browser, with PID-based liveness detection
   - Live streaming of watch cycle activity via WebSocket (tokens, tool calls, tool results, cycle boundaries)
