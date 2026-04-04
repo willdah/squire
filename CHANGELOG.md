@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **CI restructured into parallel jobs** — split the single `lint-and-test` matrix job into four independent jobs: `lint` (single Python 3.13, ruff only), `test` (Python 3.12 + 3.13 matrix), `frontend` (Node 22, ESLint + Next.js build), and `docker` (image build, runs after all others pass). All jobs enable dependency caching (`uv` cache for Python jobs, `npm` cache for frontend).
+
 - **`agent-risk-engine` v0.2.0: action-centric protocol** — breaking refactor repositioning the package as an open protocol with Python reference implementation.
   - **`Action` envelope** — new `Action(kind, name, parameters, risk, metadata)` dataclass replaces the `(tool_name, args, tool_risk)` tuple. `kind` enables per-category routing; `metadata` carries framework-provided context.
   - **3-layer stateless pipeline** — `RuleGate` → `ActionAnalyzer` → `ActionGate`. The `StateMonitor` layer is removed; the engine no longer tracks call history internally. Temporal context (loop detection, session state) is the framework's responsibility and flows in via `Action.metadata`.
