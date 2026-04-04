@@ -137,9 +137,6 @@ async def start_watch() -> None:
         "risk_tolerance": rule_gate.threshold,
         "latest_snapshot": snapshot,
         "watch_mode": True,
-        "house": app_config.house,
-        "squire_name": app_config.squire_name,
-        "squire_profile": app_config.squire_profile,
         "available_hosts": registry.host_names,
         "host_configs": {name: cfg.model_dump() for name, cfg in registry.host_configs.items()},
     }

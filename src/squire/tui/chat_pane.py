@@ -85,7 +85,7 @@ class ChatPane(Static):
         app_config=None,
         db=None,
         notifier=None,
-        squire_name="Rook",
+        squire_name="Squire",
         **kwargs,
     ):
         super().__init__(**kwargs)

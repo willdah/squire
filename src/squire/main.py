@@ -200,9 +200,6 @@ async def start_chat(resume_session_id: str | None = None) -> None:
         "risk_evaluator": risk_evaluator,
         "risk_tolerance": rule_gate.threshold,
         "latest_snapshot": snapshot,
-        "house": app_config.house,
-        "squire_name": app_config.squire_name,
-        "squire_profile": app_config.squire_profile,
         "available_hosts": registry.host_names,
         "host_configs": {name: cfg.model_dump() for name, cfg in registry.host_configs.items()},
     }

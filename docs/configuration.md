@@ -29,30 +29,11 @@ These are set as top-level keys in `squire.toml` or via `SQUIRE_*` environment v
 |---|---|---|---|
 | `app_name` | `"Squire"` | `SQUIRE_APP_NAME` | Application name for the ADK runner |
 | `user_id` | `"squire-user"` | `SQUIRE_USER_ID` | User ID for ADK session management |
-| `house` | `""` | `SQUIRE_HOUSE` | Name of the house Squire serves (e.g., a family name or domain) |
-| `squire_profile` | `""` | `SQUIRE_SQUIRE_PROFILE` | Personality profile: `rook`, `cedric`, or `wynn` |
-| `squire_name` | `""` | `SQUIRE_SQUIRE_NAME` | Custom name (overrides the profile's bundled name) |
 | `risk_tolerance` | `"cautious"` | `SQUIRE_RISK_TOLERANCE` | Global risk tolerance (see [Risk Tolerance](#risk-tolerance)) |
 | `risk_strict` | `false` | `SQUIRE_RISK_STRICT` | When `true`, tools above tolerance are denied instead of prompting |
 | `history_limit` | `50` | `SQUIRE_HISTORY_LIMIT` | Maximum messages in conversation context |
 | `max_tool_rounds` | `10` | `SQUIRE_MAX_TOOL_ROUNDS` | Maximum tool-call rounds per user message |
 | `multi_agent` | `false` | `SQUIRE_MULTI_AGENT` | Enable sub-agent decomposition (see [Multi-Agent Mode](#multi-agent-mode)) |
-
-### Personality Profiles
-
-| Profile | Name | Style |
-|---|---|---|
-| `rook` | Rook | Watchful and methodical. Concise, confirms before acting. |
-| `cedric` | Cedric | Confident and proactive. Anticipates problems, takes initiative. |
-| `wynn` | Wynn | Thoughtful and educational. Explains reasoning, teaches as it goes. |
-
-Set a profile with `squire_profile` and optionally override the name with `squire_name`:
-
-```toml
-squire_profile = "cedric"
-squire_name = "Gareth"       # uses Cedric's personality but a custom name
-house = "Titancore"
-```
 
 ---
 
