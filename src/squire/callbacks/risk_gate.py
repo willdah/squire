@@ -105,13 +105,23 @@ def create_risk_gate(
         if result.decision == GateResult.DENIED:
             if headless and notifier:
                 await _notify_blocked(notifier, compound_name, args, result.reasoning)
-            return {"error": f"Blocked: {result.reasoning}"}
+            return {
+                "error": (
+                    f"[BLOCKED] '{compound_name}' was denied by the risk policy: {result.reasoning}. "
+                    "Do NOT retry this tool call. Tell the user it was blocked and suggest alternatives."
+                )
+            }
 
         if result.decision == GateResult.NEEDS_APPROVAL:
             if headless:
                 if notifier:
                     await _notify_blocked(notifier, compound_name, args, result.reasoning)
-                return {"error": f"Watch mode denied '{compound_name}': above risk threshold."}
+                return {
+                    "error": (
+                        f"[BLOCKED] '{compound_name}' denied in watch mode: above risk threshold. "
+                        "Do NOT retry. Note this in your response and move on."
+                    )
+                }
 
             if approval_provider is not None:
                 if isinstance(approval_provider, AsyncApprovalProvider):
@@ -121,9 +131,19 @@ def create_risk_gate(
                 else:
                     approved = approval_provider.request_approval(compound_name, args, result.risk_score.level)
                 if not approved:
-                    return {"error": f"User declined to approve '{compound_name}'."}
+                    return {
+                        "error": (
+                            f"[DENIED] The user declined '{compound_name}'. "
+                            "Do NOT retry. Acknowledge the denial and move on."
+                        )
+                    }
             else:
-                return {"error": f"No approval provider — auto-denied '{compound_name}'."}
+                return {
+                    "error": (
+                        f"[BLOCKED] '{compound_name}' requires approval but no approval provider is available. "
+                        "Do NOT retry. Inform the user."
+                    )
+                }
 
         # GateResult.ALLOWED — proceed
         return None

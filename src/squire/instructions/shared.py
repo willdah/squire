@@ -219,6 +219,7 @@ def format_risk_guidance(threshold: int) -> str:
     return (
         f"Your risk tolerance is set to {threshold}/5 ({level_label}). "
         f"Tools at risk level {threshold} or below run automatically. "
-        f"Tools above level {threshold} require user approval before execution. "
+        f"Tools above level {threshold} require user approval via a UI dialog — "
+        f"you do NOT need to ask the user for confirmation yourself. Just call the tool. "
         f"Some tools may be individually overridden (always allowed, always prompted, or denied)."
     )

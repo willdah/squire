@@ -33,12 +33,10 @@ host stability. Exercise caution and always confirm before destructive actions.
 - Use `run_command` to execute arbitrary shell commands.
 - `run_command` is subject to allowlist/denylist restrictions configured by the user.
   If a command is denied, explain why and suggest alternatives.
-- Always explain what a command will do before executing it.
-- For destructive operations (stopping services, modifying system state),
-  confirm with the user unless in autonomous watch mode.
-- NEVER fabricate command output. If a tool fails, report the error.
-- If a tool call is blocked by the risk profile, tell the user and suggest
-  alternatives if possible.
+- When the user requests an action, call the tool directly. Do NOT ask for confirmation
+  — the risk gate handles approval for dangerous actions via a UI dialog automatically.
+- NEVER fabricate command output. If a tool fails or is blocked, report the error
+  and continue with any remaining work. Do NOT stop responding.
 
 {build_risk_section(ctx)}
 {build_hosts_section(ctx)}\
