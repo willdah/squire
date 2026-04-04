@@ -2,7 +2,13 @@
 
 import squire.config.loader as loader_mod
 from squire.config import AppConfig, DatabaseConfig, GuardrailsConfig, HostConfig, LLMConfig, NotificationsConfig
-from squire.config.loader import get_list_section
+from squire.config.loader import (
+    get_env_overrides,
+    get_list_section,
+    get_toml_path,
+    invalidate_cache,
+    write_toml_section,
+)
 
 
 class TestAppConfig:
@@ -202,3 +208,82 @@ class TestHostConfig:
         )
         assert host.name == "srv"
         assert host.tags == ["docker", "media"]
+
+
+class TestLoaderUtilities:
+    def test_get_env_overrides_detects_set_vars(self, monkeypatch):
+        monkeypatch.setenv("SQUIRE_RISK_TOLERANCE", "full-trust")
+        monkeypatch.setenv("SQUIRE_HISTORY_LIMIT", "100")
+        result = get_env_overrides("SQUIRE_", ["risk_tolerance", "history_limit", "multi_agent"])
+        assert "risk_tolerance" in result
+        assert "history_limit" in result
+        assert "multi_agent" not in result
+
+    def test_get_env_overrides_empty_when_none_set(self):
+        result = get_env_overrides("SQUIRE_TEST_PREFIX_", ["field_a", "field_b"])
+        assert result == []
+
+    def test_get_toml_path_returns_existing(self, tmp_path, monkeypatch):
+        toml_file = tmp_path / "squire.toml"
+        toml_file.write_text("")
+        monkeypatch.setattr(loader_mod, "_SEARCH_PATHS", [toml_file])
+        assert get_toml_path() == toml_file.resolve()
+
+    def test_get_toml_path_returns_none(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(loader_mod, "_SEARCH_PATHS", [tmp_path / "nonexistent.toml"])
+        assert get_toml_path() is None
+
+    def test_invalidate_cache(self, monkeypatch):
+        monkeypatch.setattr(loader_mod, "_cached", {"key": "value"})
+        invalidate_cache()
+        assert loader_mod._cached is None
+
+    def test_write_toml_section_creates_file(self, tmp_path, monkeypatch):
+        toml_file = tmp_path / "squire.toml"
+        # File doesn't exist yet; write_toml_section falls back to first search path
+        monkeypatch.setattr(loader_mod, "_SEARCH_PATHS", [toml_file])
+
+        path = write_toml_section("llm", {"model": "gpt-4", "temperature": 0.5})
+        assert path == toml_file
+        assert toml_file.exists()
+
+        import tomlkit
+
+        with open(toml_file) as f:
+            doc = tomlkit.load(f)
+        assert doc["llm"]["model"] == "gpt-4"
+        assert doc["llm"]["temperature"] == 0.5
+
+    def test_write_toml_section_top_level(self, tmp_path, monkeypatch):
+        toml_file = tmp_path / "squire.toml"
+        toml_file.write_text("")
+        monkeypatch.setattr(loader_mod, "_SEARCH_PATHS", [toml_file])
+
+        write_toml_section(None, {"risk_tolerance": "standard", "history_limit": 100})
+
+        import tomlkit
+
+        with open(toml_file) as f:
+            doc = tomlkit.load(f)
+        assert doc["risk_tolerance"] == "standard"
+        assert doc["history_limit"] == 100
+
+    def test_write_toml_preserves_comments(self, tmp_path, monkeypatch):
+        toml_file = tmp_path / "squire.toml"
+        toml_file.write_text('# My config\nrisk_tolerance = "cautious"\n')
+        monkeypatch.setattr(loader_mod, "_SEARCH_PATHS", [toml_file])
+
+        write_toml_section(None, {"history_limit": 50})
+
+        content = toml_file.read_text()
+        assert "# My config" in content
+        assert "history_limit = 50" in content
+
+    def test_write_toml_invalidates_cache(self, tmp_path, monkeypatch):
+        toml_file = tmp_path / "squire.toml"
+        toml_file.write_text("")
+        monkeypatch.setattr(loader_mod, "_SEARCH_PATHS", [toml_file])
+        monkeypatch.setattr(loader_mod, "_cached", {"old": "data"})
+
+        write_toml_section("llm", {"model": "test"})
+        assert loader_mod._cached is None

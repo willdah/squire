@@ -180,6 +180,62 @@ class ConfigResponse(BaseModel):
     hosts: list[dict]
 
 
+class ConfigSectionMeta(BaseModel):
+    values: dict
+    env_overrides: list[str] = []
+
+
+class ConfigDetailResponse(BaseModel):
+    app: ConfigSectionMeta
+    llm: ConfigSectionMeta
+    database: ConfigSectionMeta
+    notifications: ConfigSectionMeta
+    guardrails: ConfigSectionMeta
+    watch: ConfigSectionMeta
+    hosts: list[dict]
+    toml_path: str | None = None
+
+
+class AppConfigUpdate(BaseModel):
+    risk_tolerance: str | None = None
+    risk_strict: bool | None = None
+    history_limit: int | None = None
+    max_tool_rounds: int | None = None
+    multi_agent: bool | None = None
+
+
+class LLMConfigUpdate(BaseModel):
+    model: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+
+
+class WatchConfigPatch(BaseModel):
+    interval_minutes: int | None = None
+    cycle_timeout_seconds: int | None = None
+    checkin_prompt: str | None = None
+    notify_on_action: bool | None = None
+    notify_on_blocked: bool | None = None
+
+
+class GuardrailsConfigUpdate(BaseModel):
+    tools_allow: list[str] | None = None
+    tools_require_approval: list[str] | None = None
+    tools_deny: list[str] | None = None
+    monitor_tolerance: str | None = None
+    container_tolerance: str | None = None
+    admin_tolerance: str | None = None
+    notifier_tolerance: str | None = None
+    watch_tolerance: str | None = None
+    watch_tools_allow: list[str] | None = None
+    watch_tools_deny: list[str] | None = None
+
+
+class NotificationsConfigUpdate(BaseModel):
+    enabled: bool | None = None
+    webhooks: list[dict] | None = None
+
+
 # --- Watch ---
 
 

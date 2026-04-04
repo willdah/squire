@@ -10,11 +10,13 @@ Search order:
   3. /etc/squire/squire.toml (system-wide)
 """
 
+import os
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
+import tomlkit
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource
 
 _SEARCH_PATHS = [
@@ -73,6 +75,68 @@ def get_top_level() -> dict:
     """Get top-level keys (everything not in a sub-table)."""
     data = _load_toml()
     return {k: v for k, v in data.items() if not isinstance(v, (dict, list))}
+
+
+def invalidate_cache() -> None:
+    """Clear the cached TOML data so the next read reloads from disk."""
+    global _cached
+    _cached = None
+
+
+def get_toml_path() -> Path | None:
+    """Return the path of the first existing squire.toml, or None."""
+    for path in _SEARCH_PATHS:
+        if path.is_file():
+            return path.resolve()
+    return None
+
+
+def get_env_overrides(prefix: str, field_names: Iterable[str]) -> list[str]:
+    """Return field names whose values are currently set via environment variables."""
+    overridden = []
+    for name in field_names:
+        env_key = f"{prefix}{name.upper()}"
+        if env_key in os.environ:
+            overridden.append(name)
+    return overridden
+
+
+def write_toml_section(section: str | None, data: dict) -> Path:
+    """Write config values to the TOML file, preserving comments and formatting.
+
+    Args:
+        section: TOML section name (e.g. ``"llm"``), or ``None`` for top-level keys.
+        data: Field names and values to write.
+
+    Returns:
+        Path to the written file.
+    """
+    path = get_toml_path()
+    if path is None:
+        # Create at the first search path location (project-local by default)
+        path = _SEARCH_PATHS[0].resolve()
+
+    if path.is_file():
+        with open(path) as f:
+            doc = tomlkit.load(f)
+    else:
+        doc = tomlkit.document()
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    if section is None:
+        for k, v in data.items():
+            doc[k] = v
+    else:
+        if section not in doc:
+            doc[section] = tomlkit.table()
+        for k, v in data.items():
+            doc[section][k] = v
+
+    with open(path, "w") as f:
+        tomlkit.dump(doc, f)
+
+    invalidate_cache()
+    return path
 
 
 class TomlSectionSource(PydanticBaseSettingsSource):

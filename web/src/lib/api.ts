@@ -41,6 +41,13 @@ export function apiPut<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
+export function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  return apiFetch<T>(path, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
 export async function apiDelete(path: string): Promise<void> {
   const headers: Record<string, string> = {};
   const res = await fetch(`${API_BASE}${path}`, {

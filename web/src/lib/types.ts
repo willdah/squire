@@ -168,6 +168,22 @@ export interface ConfigResponse {
   hosts: Record<string, unknown>[];
 }
 
+export interface ConfigSectionMeta {
+  values: Record<string, unknown>;
+  env_overrides: string[];
+}
+
+export interface ConfigDetailResponse {
+  app: ConfigSectionMeta;
+  llm: ConfigSectionMeta;
+  database: ConfigSectionMeta;
+  notifications: ConfigSectionMeta;
+  guardrails: ConfigSectionMeta;
+  watch: ConfigSectionMeta;
+  hosts: Record<string, unknown>[];
+  toml_path: string | null;
+}
+
 // WebSocket message types
 export interface WsToken {
   type: "token";
