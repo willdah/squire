@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Moon, Sun, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,14 +37,11 @@ export function Header() {
 
   useEffect(() => {
     const stored = localStorage.getItem("squire-theme");
-    if (stored) {
-      const isDark = stored === "dark";
-      setDark(isDark);
-      document.documentElement.classList.toggle("dark", isDark);
-    } else {
-      const isDark = document.documentElement.classList.contains("dark");
-      setDark(isDark);
-    }
+    const isDark = stored
+      ? stored === "dark"
+      : document.documentElement.classList.contains("dark");
+    document.documentElement.classList.toggle("dark", isDark);
+    startTransition(() => setDark(isDark));
   }, []);
 
   const toggleTheme = () => {

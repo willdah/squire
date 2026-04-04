@@ -34,7 +34,7 @@ test-v: ## Run pytest with verbose output
 	uv run pytest -v
 
 .PHONY: ci
-ci: lint format-check test ## Run the full CI pipeline locally
+ci: lint format-check test web-lint web-build ## Run the full CI pipeline locally
 
 # ---------------------------------------------------------------------------
 # Frontend (web/)

@@ -11,15 +11,21 @@ const BASE_DELAY_MS = 1000;
 
 export function useWatchWebSocket(enabled: boolean = true) {
   const wsRef = useRef<WebSocket | null>(null);
-  const [status, setStatus] = useState<WatchWsStatus>("disconnected");
+  const [status, setStatus] = useState<WatchWsStatus>(enabled ? "connecting" : "disconnected");
   const [events, setEvents] = useState<WatchEvent[]>([]);
   const intentionalCloseRef = useRef(false);
   const retriesRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Handle enabled transitions during render (React-recommended pattern)
+  const [prevEnabled, setPrevEnabled] = useState(enabled);
+  if (enabled !== prevEnabled) {
+    setPrevEnabled(enabled);
+    setStatus(enabled ? "connecting" : "disconnected");
+  }
+
   useEffect(() => {
     if (!enabled) {
-      setStatus("disconnected");
       return;
     }
 
@@ -28,7 +34,6 @@ export function useWatchWebSocket(enabled: boolean = true) {
     function connect() {
       const ws = new WebSocket(wsUrl("/api/watch/ws"));
       wsRef.current = ws;
-      setStatus("connecting");
 
       ws.onopen = () => {
         setStatus("connected");

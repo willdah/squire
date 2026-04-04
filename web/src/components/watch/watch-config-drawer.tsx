@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import useSWR from "swr";
 import { apiGet, apiPut } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -39,14 +39,14 @@ export function WatchConfigDrawer({ open, onOpenChange }: WatchConfigDrawerProps
   const [interval, setInterval_] = useState(5);
   const [risk, setRisk] = useState(3);
   const [prompt, setPrompt] = useState("");
+  const [prevConfig, setPrevConfig] = useState(config);
 
-  useEffect(() => {
-    if (config) {
-      setInterval_(config.interval_minutes);
-      setRisk(config.risk_tolerance ?? 3);
-      setPrompt(config.checkin_prompt);
-    }
-  }, [config]);
+  if (config && config !== prevConfig) {
+    setPrevConfig(config);
+    setInterval_(config.interval_minutes);
+    setRisk(config.risk_tolerance ?? 3);
+    setPrompt(config.checkin_prompt);
+  }
 
   const handleApply = async () => {
     await apiPut("/api/watch/config", {
