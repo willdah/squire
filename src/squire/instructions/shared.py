@@ -38,18 +38,13 @@ def build_risk_section(ctx: ReadonlyContext) -> str:
 
 
 def build_hosts_section(ctx: ReadonlyContext) -> str:
-    """Build the available hosts section.
+    """Build the available hosts section from the live registry.
 
-    Falls back to loading from config if session state is empty (e.g., when
-    running via ``adk web`` where session state isn't pre-populated).
+    Reads directly from the BackendRegistry so newly enrolled hosts
+    are visible immediately, even in an existing chat session.
     """
-    available_hosts = ctx.state.get("available_hosts")
-    host_configs = ctx.state.get("host_configs")
-
-    if not available_hosts or available_hosts == ["local"]:
-        available_hosts, host_configs = _load_hosts_from_config()
-
-    return format_hosts_section(available_hosts, host_configs or {})
+    available_hosts, host_configs = _load_hosts_from_registry()
+    return format_hosts_section(available_hosts, host_configs)
 
 
 def build_system_state_section(ctx: ReadonlyContext) -> str:
@@ -105,19 +100,18 @@ You are running autonomously — no human is in the loop.
 - Keep your response concise — this is a periodic check-in, not a conversation."""
 
 
-def _load_hosts_from_config() -> tuple[list[str], dict]:
-    """Load host information directly from config as a fallback.
+def _load_hosts_from_registry() -> tuple[list[str], dict]:
+    """Load host information from the live BackendRegistry.
 
-    Used when session state doesn't contain host data (e.g., adk web).
+    Returns the current host list and configs, reflecting any hosts
+    added or removed at runtime via HostStore.
     """
     try:
-        from ..config.hosts import HostConfig
-        from ..config.loader import get_list_section
+        from ..tools._registry import get_registry
 
-        host_dicts = get_list_section("hosts")
-        hosts = [HostConfig(**h) for h in host_dicts]
-        available = ["local"] + [h.name for h in hosts]
-        configs = {h.name: h.model_dump() for h in hosts}
+        registry = get_registry()
+        available = registry.host_names
+        configs = {name: cfg.model_dump() for name, cfg in registry.host_configs.items()}
         return available, configs
     except Exception:
         return ["local"], {}
