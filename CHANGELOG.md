@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - **Persona customization** — removed `house`, `squire_name`, and `squire_profile` config fields and the three built-in personality profiles (Rook, Cedric, Wynn). Squire now uses a single fixed identity across all interfaces. The `profiles.py` module has been deleted. System prompts, session state, TUI, config files, and documentation have been updated accordingly.
+- **`agent-risk-engine`: `StateMonitor` protocol and `NullStateMonitor` stub** — removed from `state_monitor.py` (file deleted). `CallTracker` is now a standalone utility in `call_tracker.py`; it is no longer a pipeline layer and its `check()` returns a plain `dict` instead of `SystemState`. Added configurable `repetition_ratio` parameter.
 
 ### Changed
 
