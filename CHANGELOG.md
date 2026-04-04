@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Watch event persistence** — three new SQLite tables (`watch_events`, `watch_commands`, `watch_approvals`) with full async CRUD on `DatabaseService`: insert/tail events, cycle aggregation, command queue with status tracking, and approval lifecycle management.
+
 - **Skills** (replaces Runbooks) — file-based skill definitions aligned with the [Open Agent Skills spec](https://agentskills.io/specification). Each skill is a `SKILL.md` file with YAML frontmatter + freeform Markdown instructions, stored in a configurable directory (default `~/.local/share/squire/skills`). No database required — skills are version-controllable and editable with any text editor.
   - **SkillService** (`src/squire/skills/`) — file-based CRUD: `list_skills`, `get_skill`, `save_skill`, `delete_skill`. Parses YAML frontmatter with `yaml.safe_load()` and renders back to spec-compliant SKILL.md format (`name`/`description` at top level, Squire-specific fields under `metadata`). Names are validated per the spec (lowercase alphanumeric + hyphens, max 64 chars).
   - **SkillsConfig** (`src/squire/config/skills.py`) — configurable via `[skills]` in `squire.toml` or `SQUIRE_SKILLS_` env vars. Default path: `~/.local/share/squire/skills`.

@@ -99,6 +99,44 @@ _CREATE_ALERT_RULES_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled ON alert_rules(enabled)
 """
 
+_CREATE_WATCH_EVENTS = """
+CREATE TABLE IF NOT EXISTS watch_events (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    cycle      INTEGER NOT NULL,
+    type       TEXT NOT NULL,
+    content    TEXT,
+    created_at TEXT NOT NULL
+)
+"""
+
+_CREATE_WATCH_EVENTS_IDX_CYCLE = """
+CREATE INDEX IF NOT EXISTS idx_watch_events_cycle ON watch_events(cycle)
+"""
+
+_CREATE_WATCH_COMMANDS = """
+CREATE TABLE IF NOT EXISTS watch_commands (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    command    TEXT NOT NULL,
+    payload    TEXT,
+    status     TEXT NOT NULL DEFAULT 'pending',
+    error      TEXT,
+    created_at TEXT NOT NULL
+)
+"""
+
+_CREATE_WATCH_APPROVALS = """
+CREATE TABLE IF NOT EXISTS watch_approvals (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id   TEXT UNIQUE NOT NULL,
+    tool_name    TEXT NOT NULL,
+    args         TEXT,
+    risk_level   INTEGER NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'pending',
+    responded_at TEXT,
+    created_at   TEXT NOT NULL
+)
+"""
+
 
 class DatabaseService:
     """Async wrapper around aiosqlite for Squire persistence.
@@ -138,6 +176,10 @@ class DatabaseService:
             _CREATE_WATCH_STATE,
             _CREATE_ALERT_RULES,
             _CREATE_ALERT_RULES_INDEX,
+            _CREATE_WATCH_EVENTS,
+            _CREATE_WATCH_EVENTS_IDX_CYCLE,
+            _CREATE_WATCH_COMMANDS,
+            _CREATE_WATCH_APPROVALS,
         ):
             await self._conn.execute(stmt)
         await self._conn.commit()
@@ -417,6 +459,179 @@ class DatabaseService:
             (now, name),
         )
         await conn.commit()
+
+    # --- Watch Events ---
+
+    async def insert_watch_event(self, cycle: int, type: str, content: str | None = None) -> int:
+        """Insert a watch event and return its ID."""
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        cursor = await conn.execute(
+            "INSERT INTO watch_events (cycle, type, content, created_at) VALUES (?, ?, ?, ?)",
+            (cycle, type, content, now),
+        )
+        await conn.commit()
+        return cursor.lastrowid
+
+    async def get_watch_events_since(self, last_id: int, limit: int = 200) -> list[dict]:
+        """Tail watch events after a given ID."""
+        conn = await self._get_conn()
+        cursor = await conn.execute(
+            "SELECT * FROM watch_events WHERE id > ? ORDER BY id LIMIT ?",
+            (last_id, limit),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_watch_events_for_cycle(self, cycle: int) -> list[dict]:
+        """Get all events for a specific watch cycle."""
+        conn = await self._get_conn()
+        cursor = await conn.execute(
+            "SELECT * FROM watch_events WHERE cycle = ? ORDER BY id",
+            (cycle,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_watch_cycles(self, page: int = 1, per_page: int = 20) -> list[dict]:
+        """Get aggregated cycle list from cycle_start/cycle_end events."""
+        conn = await self._get_conn()
+        offset = (page - 1) * per_page
+        cursor = await conn.execute(
+            """
+            SELECT
+                e.cycle,
+                MIN(CASE WHEN e.type = 'cycle_start' THEN e.created_at END) AS started_at,
+                MIN(CASE WHEN e.type = 'cycle_end' THEN e.created_at END) AS ended_at,
+                MIN(CASE WHEN e.type = 'cycle_end' THEN e.content END) AS end_content,
+                COUNT(*) AS event_count
+            FROM watch_events e
+            GROUP BY e.cycle
+            ORDER BY e.cycle DESC
+            LIMIT ? OFFSET ?
+            """,
+            (per_page, offset),
+        )
+        rows = await cursor.fetchall()
+        cycles = []
+        for row in rows:
+            row_dict = dict(row)
+            end_content = {}
+            if row_dict.get("end_content"):
+                try:
+                    end_content = json.loads(row_dict["end_content"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            cycles.append({
+                "cycle": row_dict["cycle"],
+                "started_at": row_dict["started_at"],
+                "ended_at": row_dict["ended_at"],
+                "status": end_content.get("status", "unknown"),
+                "duration_seconds": end_content.get("duration_seconds"),
+                "tool_count": end_content.get("tool_count", 0),
+                "event_count": row_dict["event_count"],
+            })
+        return cycles
+
+    # --- Watch Commands ---
+
+    async def insert_watch_command(self, command: str, payload: str | None = None) -> int:
+        """Insert a watch command and return its ID."""
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        cursor = await conn.execute(
+            "INSERT INTO watch_commands (command, payload, created_at) VALUES (?, ?, ?)",
+            (command, payload, now),
+        )
+        await conn.commit()
+        return cursor.lastrowid
+
+    async def get_pending_watch_commands(self) -> list[dict]:
+        """Get all pending watch commands in order."""
+        conn = await self._get_conn()
+        cursor = await conn.execute(
+            "SELECT * FROM watch_commands WHERE status = 'pending' ORDER BY id",
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def update_watch_command_status(self, cmd_id: int, status: str, error: str | None = None) -> None:
+        """Update a watch command's status."""
+        conn = await self._get_conn()
+        await conn.execute(
+            "UPDATE watch_commands SET status = ?, error = ? WHERE id = ?",
+            (status, error, cmd_id),
+        )
+        await conn.commit()
+
+    # --- Watch Approvals ---
+
+    async def insert_watch_approval(
+        self,
+        *,
+        request_id: str,
+        tool_name: str,
+        args: str | None = None,
+        risk_level: int,
+    ) -> int:
+        """Insert a watch approval request."""
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        cursor = await conn.execute(
+            """
+            INSERT INTO watch_approvals (request_id, tool_name, args, risk_level, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (request_id, tool_name, args, risk_level, now),
+        )
+        await conn.commit()
+        return cursor.lastrowid
+
+    async def get_watch_approval(self, request_id: str) -> dict | None:
+        """Get a watch approval by request_id."""
+        conn = await self._get_conn()
+        cursor = await conn.execute(
+            "SELECT * FROM watch_approvals WHERE request_id = ?",
+            (request_id,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def update_watch_approval(self, request_id: str, status: str) -> None:
+        """Update a watch approval's status."""
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        await conn.execute(
+            "UPDATE watch_approvals SET status = ?, responded_at = ? WHERE request_id = ?",
+            (status, now, request_id),
+        )
+        await conn.commit()
+
+    async def cleanup_watch_data(self, max_cycles: int = 500) -> int:
+        """Remove old watch events, commands, and approvals beyond retention."""
+        conn = await self._get_conn()
+        cursor = await conn.execute(
+            "SELECT DISTINCT cycle FROM watch_events ORDER BY cycle DESC LIMIT ?",
+            (max_cycles,),
+        )
+        rows = await cursor.fetchall()
+        if not rows:
+            return 0
+        min_cycle = rows[-1][0]
+
+        cursor = await conn.execute(
+            "DELETE FROM watch_events WHERE cycle < ?", (min_cycle,)
+        )
+        deleted = cursor.rowcount
+
+        await conn.execute(
+            "DELETE FROM watch_commands WHERE id NOT IN (SELECT id FROM watch_commands ORDER BY id DESC LIMIT 1000)"
+        )
+        await conn.execute(
+            "DELETE FROM watch_approvals WHERE id NOT IN (SELECT id FROM watch_approvals ORDER BY id DESC LIMIT 1000)"
+        )
+        await conn.commit()
+        return deleted
 
     async def close(self) -> None:
         """Close the database connection."""
