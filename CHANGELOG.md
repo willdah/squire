@@ -37,11 +37,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - **Persona customization** — removed `house`, `squire_name`, and `squire_profile` config fields and the three built-in personality profiles (Rook, Cedric, Wynn). Squire now uses a single fixed identity across all interfaces. The `profiles.py` module has been deleted. System prompts, session state, TUI, config files, and documentation have been updated accordingly.
-- **`agent-risk-engine`: `StateMonitor` protocol and `NullStateMonitor` stub** — removed from `state_monitor.py` (file deleted). `CallTracker` is now a standalone utility in `call_tracker.py`; it is no longer a pipeline layer and its `check()` returns a plain `dict` instead of `SystemState`. Added configurable `repetition_ratio` parameter.
-- **`agent-risk-engine`: `RiskEvaluator` — `SystemState` removed from pipeline** — `RiskResult` no longer contains `system_state`. `evaluate()` now takes `Action` instead of `(tool_name, args, tool_risk)`. The `state_monitor` layer has been removed; the pipeline is now 3 layers: `RuleGate` → `ActionAnalyzer` → `ActionGate`. `default_risk` parameter replaces registry-based mandatory risk resolution.
-- **`agent-risk-engine`: `ToolRegistry` replaced by `ActionRegistry`** — `register()` now requires `kind` argument. Old `ToolRegistry` removed from public API.
+- **`agent-risk-engine` v0.2.0: tool-centric models and state layer** — `ToolDef`, `ToolRegistry`, `ToolAnalyzer`, `SystemState`, `StateMonitor`, `NullStateMonitor`, and `RiskScore.alternative` removed from public API.
 
 ### Changed
+
+- **`agent-risk-engine` v0.2.0: action-centric protocol** — breaking refactor repositioning the package as an open protocol with Python reference implementation.
+  - **`Action` envelope** — new `Action(kind, name, parameters, risk, metadata)` dataclass replaces the `(tool_name, args, tool_risk)` tuple. `kind` enables per-category routing; `metadata` carries framework-provided context.
+  - **3-layer stateless pipeline** — `RuleGate` → `ActionAnalyzer` → `ActionGate`. The `StateMonitor` layer is removed; the engine no longer tracks call history internally. Temporal context (loop detection, session state) is the framework's responsibility and flows in via `Action.metadata`.
+  - **Kind-aware routing** — `RuleGate` gains `kind_thresholds` for per-kind threshold overrides. `allowed_tools`/`approve_tools`/`denied_tools` renamed to `allowed`/`approve`/`denied`.
+  - **Kind-scoped patterns** — `RiskPattern.kinds` enables patterns that only fire for specific action categories.
+  - **`CallTracker` standalone** — extracted from pipeline to standalone utility. `check()` returns `dict` instead of `SystemState`. New configurable `repetition_ratio` parameter.
+  - **Renames** — `ToolDef` → `ActionDef`, `ToolRegistry` → `ActionRegistry`, `ToolAnalyzer` → `ActionAnalyzer`.
+  - **`PROTOCOL.md`** — new language-agnostic protocol specification defining risk levels, gate results, action envelope, and evaluation semantics.
+
+- **README restructure** — rewrote README with new Interfaces section (Web UI, TUI, CLI), Docker deployment section, Notifications config section, badges, expanded Quickstart and Development sections. Removed stale Personalization TOC entry. Trimmed config duplication in favor of linking to `docs/configuration.md`. Updated `docs/cli.md` with `squire web` command, fixed watch config table to reflect `[guardrails.watch]` restructure, added `Ctrl+X` keyboard shortcut.
 
 - **Runbooks replaced by Skills** — the database-backed runbook system (ordered steps in `runbooks` + `runbook_steps` tables) has been replaced by file-based skills. This simplifies the data model (no numbered steps, no per-step tracking), makes skills version-controllable, and aligns with the Open Agent Skills spec. The `[STEP N COMPLETE]` / `[RUNBOOK COMPLETE]` markers are replaced by a single `[SKILL COMPLETE]` marker. Existing runbook tables in the database are left in place but no longer queried. The WebSocket `?runbook=` query param is now `?skill=`. CLI commands changed from `squire runbooks` to `squire skills`. Added `pyyaml>=6.0` as an explicit dependency (was already a transitive dep).
 
