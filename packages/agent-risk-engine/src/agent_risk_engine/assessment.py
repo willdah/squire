@@ -1,6 +1,6 @@
 """RiskEvaluator — Orchestrates the layered risk evaluation pipeline.
 
-Wires together RuleGate, ToolAnalyzer, StateMonitor, and ActionGate
+Wires together RuleGate, ActionAnalyzer, StateMonitor, and ActionGate
 into a single evaluation call. Returns a RiskResult with the decision
 and all context needed by the consumer.
 Framework-agnostic — no imports from squire or any agent framework.
@@ -9,7 +9,7 @@ Framework-agnostic — no imports from squire or any agent framework.
 from __future__ import annotations
 
 from .action_gate import ActionGate, PassthroughActionGate
-from .analyzer import PassthroughAnalyzer, ToolAnalyzer
+from .analyzer import ActionAnalyzer, PassthroughAnalyzer
 from .models import GateResult, RiskLevel, RiskResult, RiskScore, SystemState, UtilityScore
 from .registry import ToolRegistry
 from .rule_gate import RuleGate
@@ -30,13 +30,13 @@ class RiskEvaluator:
     def __init__(
         self,
         rule_gate: RuleGate,
-        tool_analyzer: ToolAnalyzer | None = None,
+        tool_analyzer: ActionAnalyzer | None = None,
         state_monitor: StateMonitor | None = None,
         action_gate: ActionGate | None = None,
         registry: ToolRegistry | None = None,
     ) -> None:
         self.rule_gate = rule_gate
-        self.tool_analyzer: ToolAnalyzer = tool_analyzer or PassthroughAnalyzer()
+        self.tool_analyzer: ActionAnalyzer = tool_analyzer or PassthroughAnalyzer()
         self.state_monitor: StateMonitor = state_monitor or NullStateMonitor()
         self.action_gate: ActionGate = action_gate or PassthroughActionGate()
         self.registry = registry

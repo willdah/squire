@@ -5,7 +5,7 @@ with any agent framework by writing a thin adapter (~20 lines).
 """
 
 from .action_gate import ActionGate, PassthroughActionGate, RiskUtilityGate
-from .analyzer import DEFAULT_PATTERNS, PassthroughAnalyzer, PatternAnalyzer, ToolAnalyzer
+from .analyzer import ActionAnalyzer, DEFAULT_PATTERNS, PassthroughAnalyzer, PatternAnalyzer
 from .models import (
     Action,
     ActionDef,
@@ -22,6 +22,7 @@ from .rule_gate import RuleGate
 
 __all__ = [
     "Action",
+    "ActionAnalyzer",
     "ActionDef",
     "ActionGate",
     "ActionRegistry",
@@ -37,6 +38,5 @@ __all__ = [
     "RiskUtilityGate",
     "RuleGate",
     "THRESHOLD_ALIASES",
-    "ToolAnalyzer",
     "UtilityScore",
 ]
