@@ -343,12 +343,13 @@ squire hosts verify media-server
 
 A successful verify transitions the host to `active`.
 
-You can also retrieve the public key for a host at any time:
+You can also retrieve the public key for a host via the API or web UI:
 
-```bash
-squire hosts key media-server
-# or via the API: GET /api/hosts/media-server/public-key
 ```
+GET /api/hosts/media-server/public-key
+```
+
+The web UI host detail page also displays the public key for `pending_key` hosts.
 
 ### Host Status
 
