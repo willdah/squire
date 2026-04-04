@@ -89,8 +89,11 @@ async def host_detail(name: str, registry=Depends(get_registry), host_store=Depe
 
 
 @router.post("", response_model=HostEnrollmentResponse, status_code=201)
-async def enroll_host(body: HostCreate, host_store=Depends(get_host_store)):
+async def enroll_host(body: HostCreate, host_store=Depends(get_host_store), registry=Depends(get_registry)):
     """Enroll a new managed host."""
+    from ...main import _collect_snapshot
+    from ..app import get_latest_snapshot, set_latest_snapshot
+
     try:
         result = await host_store.enroll(
             name=body.name,
@@ -103,18 +106,36 @@ async def enroll_host(body: HostCreate, host_store=Depends(get_host_store)):
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    # Collect a snapshot for the new host so it appears connected immediately
+    if result.status == "active":
+        try:
+            snap = await _collect_snapshot(host=body.name)
+            current = await get_latest_snapshot()
+            current[body.name] = snap
+            await set_latest_snapshot(current)
+        except Exception:
+            pass  # non-fatal — snapshot will be collected on next background cycle
+
     return result
 
 
 @router.delete("/{name}", status_code=204)
 async def remove_host(name: str, host_store=Depends(get_host_store)):
     """Remove a managed host."""
+    from ..app import get_latest_snapshot, set_latest_snapshot
+
     if name == "local":
         raise HTTPException(status_code=400, detail="Cannot remove the local host")
     try:
         await host_store.remove(name)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+    # Remove from snapshot cache
+    current = await get_latest_snapshot()
+    current.pop(name, None)
+    await set_latest_snapshot(current)
 
 
 @router.post("/{name}/verify", response_model=HostVerifyResponse)

@@ -41,8 +41,16 @@ export function apiPut<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
-export function apiDelete<T>(path: string): Promise<T> {
-  return apiFetch<T>(path, { method: "DELETE" });
+export async function apiDelete(path: string): Promise<void> {
+  const headers: Record<string, string> = {};
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+    headers,
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`API error ${res.status}: ${body}`);
+  }
 }
 
 export function wsUrl(path: string): string {

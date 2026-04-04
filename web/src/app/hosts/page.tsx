@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
@@ -256,6 +256,7 @@ function AddHostDialog() {
 }
 
 function HostDetail({ name }: { name: string }) {
+  const router = useRouter();
   const { data: host, isLoading } = useSWR(`/api/hosts/${name}`, () =>
     apiGet<HostInfo>(`/api/hosts/${name}`)
   );
@@ -289,8 +290,8 @@ function HostDetail({ name }: { name: string }) {
     setRemoving(true);
     try {
       await apiDelete(`/api/hosts/${name}`);
-      mutate("/api/hosts");
-      window.location.href = "/hosts";
+      await mutate("/api/hosts");
+      router.push("/hosts");
     } finally {
       setRemoving(false);
     }
@@ -414,15 +415,11 @@ function HostList() {
     apiGet<HostInfo[]>("/api/hosts")
   );
 
-  if (isLoading || !hosts) {
-    return <HostsSkeleton />;
-  }
-
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center gap-3">
         <h1 className="text-2xl">Hosts</h1>
-        <Badge variant="secondary">{hosts.length}</Badge>
+        {hosts && <Badge variant="secondary">{hosts.length}</Badge>}
         <div className="ml-auto">
           <AddHostDialog />
         </div>
@@ -431,7 +428,20 @@ function HostList() {
         Hosts that Squire can connect to. For live metrics, use Beszel or
         Grafana.
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {(isLoading || !hosts) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-40 rounded-lg" />
+          ))}
+        </div>
+      )}
+      {hosts && hosts.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          No hosts configured. Click &quot;Add Host&quot; to enroll a remote
+          host.
+        </p>
+      )}
+      {hosts && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {hosts.map((host) => {
           const isReachable = host.snapshot && !host.snapshot.error;
 
@@ -488,7 +498,7 @@ function HostList() {
             </Link>
           );
         })}
-      </div>
+      </div>}
     </div>
   );
 }
