@@ -7,24 +7,11 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Header
 
-from ..instructions.profiles import get_profile
 from .approval_bridge import ApprovalBridge, ApprovalRequest
 from .approval_modal import ApprovalModal, ConfirmModal
 from .chat_pane import ChatPane
 from .log_viewer import LogViewer
 from .status_panel import StatusPanel
-
-
-def _resolve_squire_name(app_config) -> str:
-    """Resolve the effective squire name from config and profile."""
-    if app_config:
-        if app_config.squire_name:
-            return app_config.squire_name
-        if app_config.squire_profile:
-            profile = get_profile(app_config.squire_profile)
-            if profile:
-                return profile.name
-    return "Rook"
 
 
 class SquireApp(App):
@@ -81,8 +68,8 @@ class SquireApp(App):
         self._agent_runner = agent_runner
         self._session = session
         self._app_config = app_config
-        self._squire_name = _resolve_squire_name(app_config)
-        self.title = self._squire_name
+        self._squire_name = "Squire"
+        self.title = "Squire"
         self._db = db
         self._notifier = notifier
         self._initial_snapshot = initial_snapshot

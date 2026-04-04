@@ -66,18 +66,6 @@ class AppConfig(BaseSettings):
         default="squire-user",
         description="User ID for ADK session management",
     )
-    house: str = Field(
-        default="",
-        description="Name of the house this Squire serves (e.g. a family name, crest, or domain)",
-    )
-    squire_name: str = Field(
-        default="",
-        description="Custom name for your Squire — overrides the profile's bundled name if set",
-    )
-    squire_profile: str = Field(
-        default="",
-        description="Pre-configured Squire profile: rook, cedric, wynn",
-    )
     risk_tolerance: Annotated[RiskTolerance, BeforeValidator(_coerce_risk_tolerance)] = Field(
         default=RiskTolerance.CAUTIOUS,
         description="Risk tolerance (1-5 or alias: read-only, cautious, standard, full-trust)",

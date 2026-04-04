@@ -26,7 +26,7 @@ def build_instruction(ctx: ReadonlyContext) -> str:
         ctx: ADK ReadonlyContext with access to session state.
     """
     return f"""\
-{build_identity_section(ctx)}
+{build_identity_section()}
 
 {build_conversation_style()}
 

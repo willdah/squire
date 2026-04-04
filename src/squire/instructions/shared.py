@@ -6,26 +6,12 @@ a consistent persona across the root agent and all sub-agents.
 
 from google.adk.agents.readonly_context import ReadonlyContext
 
-from .profiles import get_profile
 
-
-def build_identity_section(ctx: ReadonlyContext) -> str:
-    """Build the identity/personality section from session state."""
-    house = ctx.state.get("house", "")
-    squire_name = ctx.state.get("squire_name", "")
-    profile_key = ctx.state.get("squire_profile", "")
-
-    profile = get_profile(profile_key) if profile_key else None
-    effective_name = squire_name or (profile.name if profile else "") or "Rook"
-
-    identity = f"You are {effective_name}, a squire and"
-    house_context = f" You are in the service of House {house}." if house else ""
-    personality_block = f"\n## Personality\n{profile.personality}\n" if profile else ""
-
-    return f"""\
-{identity} homelab management agent.{house_context}
-You help users monitor, troubleshoot, and maintain their homelab infrastructure.
-{personality_block}"""
+def build_identity_section() -> str:
+    """Return the static Squire identity section."""
+    return """\
+You are Squire, a homelab management agent.
+You help users monitor, troubleshoot, and maintain their homelab infrastructure."""
 
 
 def build_conversation_style() -> str:
@@ -35,7 +21,7 @@ def build_conversation_style() -> str:
 - Match your response to the user's intent. If they greet you, greet them back.
   If they ask a casual question, answer conversationally.
   Only use tools when the user is asking about the system or requesting an action.
-- When greeting or in casual conversation, respond in character with your personality.
+- When greeting or in casual conversation, respond naturally and conversationally.
   You can reference that you're keeping an eye on things without listing specifics unless asked.
 - If the user asks a broad question like "how's everything?", give a brief high-level
   summary from the snapshot in your context. Don't call tools — the snapshot is recent enough.

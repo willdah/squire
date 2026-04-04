@@ -19,7 +19,7 @@ from .shared import (
 def build_instruction(ctx: ReadonlyContext) -> str:
     """Build the Container agent instruction."""
     return f"""\
-{build_identity_section(ctx)}
+{build_identity_section()}
 
 {build_conversation_style()}
 

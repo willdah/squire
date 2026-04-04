@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **TUI** — `Ctrl+X` binding opens a confirmation modal and deletes all sessions from the database.
 - `DatabaseService.delete_all_sessions()` — deletes all rows from `sessions` and `conversations`, returns the session count.
 
+### Removed
+
+- **Persona customization** — removed `house`, `squire_name`, and `squire_profile` config fields and the three built-in personality profiles (Rook, Cedric, Wynn). Squire now uses a single fixed identity across all interfaces. The `profiles.py` module has been deleted. System prompts, session state, TUI, config files, and documentation have been updated accordingly.
+
 ### Changed
 
 - **Runbooks replaced by Skills** — the database-backed runbook system (ordered steps in `runbooks` + `runbook_steps` tables) has been replaced by file-based skills. This simplifies the data model (no numbered steps, no per-step tracking), makes skills version-controllable, and aligns with the Open Agent Skills spec. The `[STEP N COMPLETE]` / `[RUNBOOK COMPLETE]` markers are replaced by a single `[SKILL COMPLETE]` marker. Existing runbook tables in the database are left in place but no longer queried. The WebSocket `?runbook=` query param is now `?skill=`. CLI commands changed from `squire runbooks` to `squire skills`. Added `pyyaml>=6.0` as an explicit dependency (was already a transitive dep).

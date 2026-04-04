@@ -36,7 +36,7 @@
 - **Multi-model LLM** — Powered by [LiteLLM](https://github.com/BerriAI/litellm) — use Ollama, Anthropic, OpenAI, Gemini, or any supported provider. Latest functionality tested with Qwen 3.5 (35B) on Ollama
 - **Session persistence** — SQLite-backed chat history with session resume
 - **Webhook notifications** — Get alerts on Discord, ntfy.sh, or any HTTP endpoint
-- **Personality profiles** — Choose from built-in squire personalities (Rook, Cedric, Wynn) or create your own
+
 
 ## Quickstart
 
@@ -84,21 +84,6 @@ Control tool permissions with `risk_tolerance`:
 | `cautious` | 2 | + log viewing, config reads | Compose, systemctl, commands |
 | `standard` | 3 | + compose, systemctl | Arbitrary command execution |
 | `full-trust` | 5 | Everything | Nothing |
-
-### Personalization
-
-Give your Squire an identity:
-
-```toml
-house = "Agents"              # Your house name
-squire_profile = "rook"      # Built-in profile: rook, cedric, wynn
-squire_name = "Gareth"       # Custom name (overrides profile name)
-```
-
-**Built-in profiles:**
-- **Rook** — Watchful and methodical. Concise responses, confirms before acting.
-- **Cedric** — Confident and proactive. Anticipates problems, takes initiative.
-- **Wynn** — Thoughtful and educational. Explains reasoning, teaches as it goes.
 
 ### Remote Hosts
 
