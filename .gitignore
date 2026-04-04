@@ -9,3 +9,4 @@ build/
 .adk/
 *.db
 squire.toml
+.superpowers/
