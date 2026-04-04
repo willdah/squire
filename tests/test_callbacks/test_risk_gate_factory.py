@@ -158,3 +158,129 @@ class TestHostRiskEscalation:
             _make_context(threshold=1),
         )
         assert result is None
+
+
+class TestCompoundActionNames:
+    @pytest.mark.asyncio
+    async def test_action_param_creates_compound_name(self):
+        """Tools with an 'action' param should use 'tool:action' for risk lookup."""
+        gate = create_risk_gate(
+            tool_risk_levels={"my_tool:read": 1, "my_tool:write": 4},
+        )
+        # read action (risk 1) should be allowed at threshold 3
+        result = await gate(
+            _make_tool("my_tool"),
+            {"action": "read"},
+            _make_context(threshold=3),
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_compound_name_high_risk_action_blocked(self):
+        """High-risk actions within a tool should be blocked appropriately."""
+        gate = create_risk_gate(
+            tool_risk_levels={"my_tool:read": 1, "my_tool:write": 4},
+        )
+        # write action (risk 4) should need approval at threshold 3
+        result = await gate(
+            _make_tool("my_tool"),
+            {"action": "write"},
+            _make_context(threshold=3),
+        )
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_no_action_param_uses_tool_name(self):
+        """Tools without an 'action' param should use tool name directly (backward compat)."""
+        gate = create_risk_gate(
+            tool_risk_levels={"system_info": 1},
+        )
+        result = await gate(
+            _make_tool("system_info"),
+            {"host": "local"},
+            _make_context(threshold=3),
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_compound_name_remote_host_escalation(self):
+        """Remote host escalation should apply to compound action risk levels."""
+        gate = create_risk_gate(
+            tool_risk_levels={"my_tool:start": 3},
+        )
+        # risk 3 + remote bump = 4, which exceeds threshold 3
+        result = await gate(
+            _make_tool("my_tool"),
+            {"action": "start", "host": "remote-server"},
+            _make_context(threshold=3),
+        )
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_unknown_compound_action_denied(self):
+        """An action not in the risk levels dict should be denied."""
+        gate = create_risk_gate(
+            tool_risk_levels={"my_tool:read": 1},
+        )
+        result = await gate(
+            _make_tool("my_tool"),
+            {"action": "destroy"},
+            _make_context(threshold=5),
+        )
+        assert result is not None
+        assert "unknown" in result["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_force_flag_bumps_risk(self):
+        """force=True should escalate risk by +1."""
+        gate = create_risk_gate(
+            tool_risk_levels={"my_tool:remove": 3},
+        )
+        # risk 3 + force bump = 4, which exceeds threshold 3
+        result = await gate(
+            _make_tool("my_tool"),
+            {"action": "remove", "force": True},
+            _make_context(threshold=3),
+        )
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_force_false_no_bump(self):
+        """force=False should not escalate risk."""
+        gate = create_risk_gate(
+            tool_risk_levels={"my_tool:remove": 3},
+        )
+        result = await gate(
+            _make_tool("my_tool"),
+            {"action": "remove", "force": False},
+            _make_context(threshold=3),
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_fallback_to_bare_tool_name(self):
+        """Tools with action param but no compound entries should fall back to bare tool name."""
+        gate = create_risk_gate(
+            tool_risk_levels={"docker_compose": 3},
+        )
+        # docker_compose has an action param but uses a single RISK_LEVEL
+        result = await gate(
+            _make_tool("docker_compose"),
+            {"action": "ps"},
+            _make_context(threshold=3),
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_fallback_still_blocks_unknown_tool(self):
+        """Unknown tool with action param should still be blocked (no fallback)."""
+        gate = create_risk_gate(
+            tool_risk_levels={"docker_compose": 3},
+        )
+        result = await gate(
+            _make_tool("unknown_tool"),
+            {"action": "ps"},
+            _make_context(threshold=5),
+        )
+        assert result is not None
+        assert "unknown" in result["error"].lower()
