@@ -74,9 +74,14 @@ def create_risk_gate(
         else:
             compound_name = tool_name
 
-        # Unknown tools/actions (not in our scope and not ADK internal) are denied
+        # Unknown tools/actions (not in our scope and not ADK internal) are denied.
+        # Fallback: if compound name not found, try the bare tool name (for tools
+        # that use a single RISK_LEVEL rather than per-action RISK_LEVELS).
         if compound_name not in scoped_risk_levels:
-            return {"error": f"Blocked: unknown tool '{compound_name}'."}
+            if action_param and tool_name in scoped_risk_levels:
+                compound_name = tool_name
+            else:
+                return {"error": f"Blocked: unknown tool '{compound_name}'."}
 
         tool_risk = scoped_risk_levels[compound_name]
 

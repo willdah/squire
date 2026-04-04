@@ -256,3 +256,31 @@ class TestCompoundActionNames:
             _make_context(threshold=3),
         )
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_fallback_to_bare_tool_name(self):
+        """Tools with action param but no compound entries should fall back to bare tool name."""
+        gate = create_risk_gate(
+            tool_risk_levels={"docker_compose": 3},
+        )
+        # docker_compose has an action param but uses a single RISK_LEVEL
+        result = await gate(
+            _make_tool("docker_compose"),
+            {"action": "ps"},
+            _make_context(threshold=3),
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_fallback_still_blocks_unknown_tool(self):
+        """Unknown tool with action param should still be blocked (no fallback)."""
+        gate = create_risk_gate(
+            tool_risk_levels={"docker_compose": 3},
+        )
+        result = await gate(
+            _make_tool("unknown_tool"),
+            {"action": "ps"},
+            _make_context(threshold=5),
+        )
+        assert result is not None
+        assert "unknown" in result["error"].lower()
