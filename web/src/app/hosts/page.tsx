@@ -425,8 +425,7 @@ function HostList() {
         </div>
       </div>
       <p className="text-sm text-muted-foreground">
-        Hosts that Squire can connect to. For live metrics, use Beszel or
-        Grafana.
+        Hosts that Squire can connect to and manage.
       </p>
       {(isLoading || !hosts) && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
