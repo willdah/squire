@@ -1,11 +1,11 @@
-"""Layered risk evaluation for AI agent tool execution.
+"""Layered risk evaluation for autonomous agent actions.
 
-Framework-agnostic — zero dependencies, zero framework imports. Integrate
-with any agent framework by writing a thin adapter (~20 lines).
+A framework-agnostic protocol and reference implementation for codifying
+risk in agent actions. Zero dependencies.
 """
 
 from .action_gate import ActionGate, PassthroughActionGate, RiskUtilityGate
-from .analyzer import ActionAnalyzer, DEFAULT_PATTERNS, PassthroughAnalyzer, PatternAnalyzer
+from .analyzer import DEFAULT_PATTERNS, ActionAnalyzer, PassthroughAnalyzer, PatternAnalyzer
 from .assessment import RiskEvaluator
 from .call_tracker import CallTracker
 from .models import (
