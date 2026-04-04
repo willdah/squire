@@ -1,16 +1,41 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
 import Link from "next/link";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { HostInfo } from "@/lib/types";
-import { ArrowLeft, Server, Wifi, WifiOff } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import type {
+  HostInfo,
+  HostEnrollmentResponse,
+  HostVerifyResponse,
+} from "@/lib/types";
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  Loader2,
+  Plus,
+  Server,
+  ShieldAlert,
+  Trash2,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 
 function HostsSkeleton() {
   return (
@@ -25,10 +50,217 @@ function HostsSkeleton() {
   );
 }
 
+function StatusBadge({ status }: { status: string }) {
+  if (status === "active") {
+    return (
+      <Badge variant="secondary" className="gap-1">
+        <Check className="h-3 w-3" />
+        Active
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="gap-1 border-amber-500 text-amber-600">
+      <ShieldAlert className="h-3 w-3" />
+      Pending Key
+    </Badge>
+  );
+}
+
+function AddHostDialog() {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<HostEnrollmentResponse | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setResult(null);
+
+    const form = new FormData(e.currentTarget);
+    const tagsStr = (form.get("tags") as string) || "";
+    const servicesStr = (form.get("services") as string) || "";
+
+    try {
+      const res = await apiPost<HostEnrollmentResponse>("/api/hosts", {
+        name: form.get("name"),
+        address: form.get("address"),
+        user: form.get("user") || "root",
+        port: Number(form.get("port")) || 22,
+        tags: tagsStr
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean),
+        services: servicesStr
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        service_root: form.get("service_root") || "/opt",
+      });
+      setResult(res);
+      mutate("/api/hosts");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Enrollment failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopy = async (text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    setResult(null);
+    setError(null);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button size="sm" className="gap-1" />}>
+        <Plus className="h-4 w-4" />
+        Add Host
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
+            {result ? "Enrollment Result" : "Add Host"}
+          </DialogTitle>
+          <DialogDescription>
+            {result
+              ? "Review the enrollment result below."
+              : "Enter the connection details for the remote host."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {result ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <StatusBadge status={result.status} />
+              <span className="text-sm">{result.message}</span>
+            </div>
+            {result.status === "pending_key" && (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Add this public key to{" "}
+                  <code className="text-xs">~/.ssh/authorized_keys</code> on
+                  the remote host:
+                </p>
+                <div className="relative">
+                  <pre className="bg-muted p-3 rounded text-xs break-all whitespace-pre-wrap">
+                    {result.public_key}
+                  </pre>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="absolute top-1 right-1 h-7 w-7"
+                    onClick={() => handleCopy(result.public_key)}
+                  >
+                    {copied ? (
+                      <Check className="h-3 w-3" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+            <Button onClick={handleClose} className="w-full">
+              Done
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  name="name"
+                  placeholder="media-server"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="address">Address</Label>
+                <Input
+                  id="address"
+                  name="address"
+                  placeholder="10.0.0.5"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="user">User</Label>
+                <Input
+                  id="user"
+                  name="user"
+                  placeholder="root"
+                  defaultValue="root"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="port">Port</Label>
+                <Input
+                  id="port"
+                  name="port"
+                  type="number"
+                  placeholder="22"
+                  defaultValue="22"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tags">Tags (comma-separated)</Label>
+              <Input
+                id="tags"
+                name="tags"
+                placeholder="production, docker"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="services">Services (comma-separated)</Label>
+              <Input
+                id="services"
+                name="services"
+                placeholder="nginx, postgres"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="service_root">Service Root</Label>
+              <Input
+                id="service_root"
+                name="service_root"
+                placeholder="/opt"
+                defaultValue="/opt"
+              />
+            </div>
+            {error && (
+              <p className="text-sm text-destructive">{error}</p>
+            )}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Enroll Host
+            </Button>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function HostDetail({ name }: { name: string }) {
   const { data: host, isLoading } = useSWR(`/api/hosts/${name}`, () =>
     apiGet<HostInfo>(`/api/hosts/${name}`)
   );
+  const [verifying, setVerifying] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   if (isLoading || !host) {
     return (
@@ -40,6 +272,29 @@ function HostDetail({ name }: { name: string }) {
   }
 
   const isReachable = host.snapshot && !host.snapshot.error;
+
+  const handleVerify = async () => {
+    setVerifying(true);
+    try {
+      await apiPost<HostVerifyResponse>(`/api/hosts/${name}/verify`);
+      mutate(`/api/hosts/${name}`);
+      mutate("/api/hosts");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!confirm(`Remove host '${name}'? This deletes the SSH key.`)) return;
+    setRemoving(true);
+    try {
+      await apiDelete(`/api/hosts/${name}`);
+      mutate("/api/hosts");
+      window.location.href = "/hosts";
+    } finally {
+      setRemoving(false);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -61,6 +316,7 @@ function HostDetail({ name }: { name: string }) {
             Unreachable
           </Badge>
         )}
+        <StatusBadge status={host.status} />
       </div>
 
       <Card>
@@ -116,6 +372,37 @@ function HostDetail({ name }: { name: string }) {
               </div>
             </div>
           )}
+
+          {host.source === "managed" && (
+            <div className="flex gap-2 pt-2 border-t">
+              {host.status === "pending_key" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleVerify}
+                  disabled={verifying}
+                >
+                  {verifying && (
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  )}
+                  Verify Connection
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={handleRemove}
+                disabled={removing}
+              >
+                {removing ? (
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                ) : (
+                  <Trash2 className="h-3 w-3 mr-1" />
+                )}
+                Remove
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -136,9 +423,13 @@ function HostList() {
       <div className="flex items-center gap-3">
         <h1 className="text-2xl">Hosts</h1>
         <Badge variant="secondary">{hosts.length}</Badge>
+        <div className="ml-auto">
+          <AddHostDialog />
+        </div>
       </div>
       <p className="text-sm text-muted-foreground">
-        Hosts that Squire can connect to. For live metrics, use Beszel or Grafana.
+        Hosts that Squire can connect to. For live metrics, use Beszel or
+        Grafana.
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {hosts.map((host) => {
@@ -151,11 +442,14 @@ function HostList() {
                   <CardTitle className="text-base flex items-center gap-2">
                     <Server className="h-4 w-4" />
                     {host.name}
-                    {isReachable ? (
-                      <Wifi className="h-3 w-3 text-green-500 ml-auto" />
-                    ) : (
-                      <WifiOff className="h-3 w-3 text-destructive ml-auto" />
-                    )}
+                    <div className="ml-auto flex items-center gap-1">
+                      <StatusBadge status={host.status} />
+                      {isReachable ? (
+                        <Wifi className="h-3 w-3 text-green-500" />
+                      ) : (
+                        <WifiOff className="h-3 w-3 text-destructive" />
+                      )}
+                    </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
@@ -201,9 +495,7 @@ function HostList() {
 
 export default function HostsPage() {
   return (
-    <Suspense
-      fallback={<HostsSkeleton />}
-    >
+    <Suspense fallback={<HostsSkeleton />}>
       <HostsPageInner />
     </Suspense>
   );
