@@ -1,11 +1,12 @@
-# agent-risk-engine (ARE)
+# agent-risk-engine
 
-Layered risk evaluation for AI agent tool execution.
+A layered protocol and reference implementation for codifying risk in autonomous agent actions.
 
-`agent-risk-engine` is a framework-agnostic pipeline that evaluates whether an agent's action should be **allowed**, **require user approval**, or be **denied** based on static rules, argument analysis, system state, and a final integration gate.
+See [PROTOCOL.md](PROTOCOL.md) for the language-agnostic protocol specification.
 
 ## Installation
-### UV
+
+### uv
 ```bash
 uv add agent-risk-engine
 ```
@@ -18,47 +19,40 @@ pip install agent-risk-engine
 ## Quick Start
 
 ```python
-from agent_risk_engine import RuleGate, RiskEvaluator, GateResult
+from agent_risk_engine import RuleGate, RiskEvaluator, Action, GateResult
 
-# Create a rule gate with a threshold (1-5 or alias)
-gate = RuleGate(threshold="cautious")  # alias for level 2
-
-# Build the evaluator pipeline
+gate = RuleGate(threshold="cautious")
 evaluator = RiskEvaluator(rule_gate=gate)
 
-# Evaluate a tool call
-result = await evaluator.evaluate("read_file", {}, tool_risk=1)
+result = await evaluator.evaluate(Action(kind="tool_call", name="read_file", risk=1))
 assert result.decision == GateResult.ALLOWED
 
-result = await evaluator.evaluate("execute_shell", {"command": "rm -rf /"}, tool_risk=5)
+result = await evaluator.evaluate(
+    Action(kind="tool_call", name="execute_shell", parameters={"command": "rm -rf /"}, risk=5)
+)
 assert result.decision == GateResult.NEEDS_APPROVAL
 ```
 
 ## Architecture
 
-Tool calls pass through four evaluation layers before execution:
+Actions pass through a 3-layer pipeline:
 
 ```mermaid
-flowchart TD
-    A["Tool call arrives"] --> B
+flowchart LR
+    A["Action arrives"] --> B
 
-    B["**RuleGate** · Layer 1\nFast static rules — threshold, per-tool overrides\nNo LLM · Microseconds"]
-    B -->|passes| C
+    B["**RuleGate** · L1\nFast static rules\nNo LLM · Microseconds"]
     B -->|denied| Z["DENIED"]
+    B -->|passes| C
 
-    C["**ToolAnalyzer** · Layer 2\nArgument-aware risk analysis\n*What does rm -rf / actually do?*"]
+    C["**ActionAnalyzer** · L2\nArgument-aware scoring\nPassthrough stub by default"]
     C -->|scored| D
 
-    D["**StateMonitor** · Layer 3\nSystem health context\nLoop detection · Rate limits"]
-    D -->|context| E
-
-    E["**ActionGate** · Layer 4\nRisk vs utility tradeoff\nOnly escalates, never relaxes"]
-    E --> F["ALLOWED"]
-    E --> G["NEEDS_APPROVAL"]
-    E --> Z
+    D["**ActionGate** · L3\nRisk vs utility tradeoff\nOnly escalates, never relaxes"]
+    D --> E["ALLOWED / NEEDS_APPROVAL / DENIED"]
 ```
 
-**Layer 1 (RuleGate)** and **Layer 4 (RiskUtilityGate)** are fully implemented. Layers 2-3 ship as protocol interfaces with passthrough stubs — plug in your own implementations as needed.
+**L1 (RuleGate)** and the **RiskUtilityGate** implementation of L3 are fully implemented. L2 ships as a passthrough stub — plug in your own `ActionAnalyzer`.
 
 ## Risk Levels
 
@@ -72,156 +66,116 @@ flowchart TD
 
 ## RuleGate
 
-The `RuleGate` is the core of Layer 1 — fast, deterministic, no LLM required.
+Fast, deterministic, no LLM required. Supports per-kind threshold routing:
 
 ```python
 gate = RuleGate(
-    threshold=2,                         # auto-allow tools at risk level <= 2
-    strict=False,                        # False = prompt above threshold; True = deny
-    allowed_tools={"read_logs"},         # always auto-allow, regardless of threshold
-    approve_tools={"restart_service"},   # always prompt, even if threshold would allow
-    denied_tools={"delete_database"},    # hard block, never execute
+    threshold="cautious",
+    kind_thresholds={
+        "tool_call": "standard",
+        "file_write": 2,
+        "code_execution": 1,
+    },
+    denied={"delete_database"},
+    allowed={"read_logs"},
 )
 ```
 
+Evaluation order: `denied` → `allowed` → `approve` → threshold comparison.
+
 ### Threshold Aliases
 
-| Alias        | Level | Description |
-|--------------|-------|-------------|
-| `read-only`  | 1     | Only info-level tools |
-| `cautious`   | 2     | Info + low-risk tools |
-| `standard`   | 3     | Up to reversible mutations |
-| `full-trust` | 5     | Everything auto-allowed |
+| Alias        | Level | Description                     |
+|--------------|-------|---------------------------------|
+| `read-only`  | 1     | Only info-level actions         |
+| `cautious`   | 2     | Info + low-risk actions         |
+| `standard`   | 3     | Up to reversible mutations      |
+| `full-trust` | 5     | Everything auto-allowed         |
 
-### Evaluation Order
+## PatternAnalyzer
 
-1. **Denied tools** — always denied, regardless of threshold
-2. **Allowed tools** — always allowed, regardless of threshold
-3. **Approve tools** — always requires approval
-4. **Threshold** — compare tool risk level against threshold
-
-## RiskUtilityGate (Layer 4)
-
-The `RiskUtilityGate` weighs risk against caller-provided utility for a final go/no-go decision. Utility is an **input**, not computed internally — the library evaluates risk; your framework understands agent goals and provides utility.
+Scores actions by matching regex patterns against serialized parameters. Supports kind-scoped patterns:
 
 ```python
-from agent_risk_engine import RiskEvaluator, RuleGate, RiskUtilityGate, UtilityScore, GateResult
+from agent_risk_engine import PatternAnalyzer, RiskPattern
 
+analyzer = PatternAnalyzer(extra_patterns=[
+    RiskPattern(r"\bDROP\b", 5, "SQL drop", kinds=frozenset({"database_query"})),
+])
+```
+
+Pass it to `RiskEvaluator(rule_gate=gate, action_analyzer=analyzer)`.
+
+## RiskUtilityGate
+
+Weighs risk against caller-provided utility. Utility is an **input**, not computed internally — the library evaluates risk; your framework understands agent goals.
+
+```python
 evaluator = RiskEvaluator(
     rule_gate=RuleGate(threshold="standard"),
     action_gate=RiskUtilityGate(),
 )
 
-# High utility justifies the risk — no escalation
 result = await evaluator.evaluate(
-    "write_file", {"path": "output.txt"}, tool_risk=3,
-    utility=UtilityScore(level=4, reasoning="User explicitly requested file creation"),
+    Action(kind="tool_call", name="write_file", risk=3),
+    utility=UtilityScore(level=4, reasoning="User explicitly requested"),
 )
-assert result.decision == GateResult.ALLOWED
-
-# Low utility doesn't justify the risk — escalated
-result = await evaluator.evaluate(
-    "write_file", {"path": "output.txt"}, tool_risk=3,
-    utility=UtilityScore(level=1, reasoning="Speculative write"),
-)
-assert result.decision == GateResult.DENIED
 ```
 
-### Escalation Rules
+The gate **only escalates, never relaxes** — it cannot make a decision less restrictive than L1.
 
-The gate **only escalates, never relaxes** — it cannot make a decision less restrictive than Layer 1's.
+## Extending with Custom Analyzers
 
-| Condition | Effect |
-|-----------|--------|
-| `utility >= effective_risk` | No escalation |
-| `gap == 1` (risk exceeds utility by 1) | Escalate one step (ALLOWED → NEEDS_APPROVAL) |
-| `gap >= 2` | Escalate two steps (ALLOWED → DENIED) |
-| Unhealthy system + `gap > 0` | +1 additional escalation step |
-
-`effective_risk = risk_score.level + system_state.risk_adjustment`
-
-Layer 1 DENIED results are always respected — utility cannot override a hard deny.
-
-## Extending Layers 2-3
-
-Each layer is defined as a Python `Protocol`. Implement the interface and pass your implementation to `RiskEvaluator`:
+`ActionAnalyzer` is a `Protocol`. Implement `analyze(action: Action) -> RiskScore`:
 
 ```python
-from agent_risk_engine import RiskEvaluator, RuleGate, RiskScore
+from agent_risk_engine import RiskEvaluator, RuleGate, RiskScore, Action
 
 class LLMAnalyzer:
-    """Use an LLM to evaluate the actual risk of tool arguments."""
+    """Use an LLM to evaluate the actual risk of action arguments."""
 
-    async def analyze(self, tool_name: str, args: dict, tool_risk: int) -> RiskScore:
-        # Your LLM call here — inspect args, reason about consequences
-        assessed_level = await my_llm_judge(tool_name, args)
+    async def analyze(self, action: Action) -> RiskScore:
+        # Inspect action.parameters, reason about consequences
+        assessed_level = await my_llm_judge(action.name, action.parameters)
         return RiskScore(level=assessed_level, reasoning="LLM analysis")
 
 evaluator = RiskEvaluator(
     rule_gate=RuleGate(threshold="cautious"),
-    tool_analyzer=LLMAnalyzer(),
+    action_analyzer=LLMAnalyzer(),
 )
 ```
 
-### StateMonitor Example
+## CallTracker
+
+Standalone loop and repetition detection. Not a pipeline layer — use it to build context before evaluating:
 
 ```python
-from agent_risk_engine import SystemState
+from agent_risk_engine import CallTracker
 
-class LoopDetector:
-    """Detects repeated tool calls that may indicate an agent loop."""
-
-    def __init__(self):
-        self._recent_calls: list[str] = []
-
-    def check(self) -> SystemState:
-        duplicates = len(self._recent_calls) != len(set(self._recent_calls))
-        return SystemState(
-            healthy=not duplicates,
-            warnings=["Possible agent loop detected"] if duplicates else [],
-            risk_adjustment=2 if duplicates else 0,
-        )
+tracker = CallTracker()
+tracker.record(action.name)
+context = tracker.check()
+# Merge into action metadata before evaluating
+action = Action(kind=action.kind, name=action.name, risk=action.risk, metadata=context)
 ```
+
+`check()` returns `{"healthy": bool, "warnings": list[str]}`.
 
 ## Framework Integration
 
-`agent-risk-engine` operates entirely on primitives — `tool_name: str`, `args: dict`, `tool_risk: int`. To integrate with your agent framework, write a thin adapter:
+Write a thin adapter that maps your framework's action primitives to `Action`:
 
 ```python
-from agent_risk_engine import (
-    GateResult, RiskEvaluator, RiskUtilityGate, RuleGate, UtilityScore,
-)
-
-# Map your tools to risk levels
-TOOL_RISK_LEVELS = {
-    "search_docs": 1,
-    "read_file": 2,
-    "write_file": 3,
-    "execute_shell": 5,
-}
-
-# Build the evaluator once at startup
-evaluator = RiskEvaluator(
-    rule_gate=RuleGate(threshold="standard"),
-    action_gate=RiskUtilityGate(),
-)
-
-async def before_tool_hook(
-    tool_name: str, args: dict, utility: UtilityScore | None = None,
-) -> bool:
-    """Returns True to allow, False to block."""
-    tool_risk = TOOL_RISK_LEVELS.get(tool_name, 5)  # default to highest risk
-    result = await evaluator.evaluate(tool_name, args, tool_risk, utility=utility)
+async def before_action_hook(action_name, args, action_risk):
+    action = Action(kind="tool_call", name=action_name, parameters=args, risk=action_risk)
+    result = await evaluator.evaluate(action)
 
     if result.decision == GateResult.DENIED:
-        print(f"Blocked: {result.reasoning}")
-        return False
-
+        raise PermissionError(result.reasoning)
     if result.decision == GateResult.NEEDS_APPROVAL:
-        approved = await prompt_user(f"Allow '{tool_name}'? Risk: {result.risk_score.level}/5")
-        return approved
-
-    return True  # ALLOWED
+        approved = await prompt_user(f"Allow '{action_name}'? Risk: {result.risk_score.level}/5")
+        if not approved:
+            raise PermissionError("User denied")
 ```
 
 ## License
