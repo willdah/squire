@@ -16,11 +16,13 @@ from .models import (
     THRESHOLD_ALIASES,
     UtilityScore,
 )
+from .registry import ActionRegistry
 from .rule_gate import RuleGate
 
 __all__ = [
     "Action",
     "ActionDef",
+    "ActionRegistry",
     "DEFAULT_PATTERNS",
     "GateResult",
     "PassthroughAnalyzer",
