@@ -73,3 +73,34 @@ class TestBackendRegistry:
         hosts = [HostConfig(name="a", address="10.0.0.1", services=["syncthing"])]
         registry = BackendRegistry(hosts)
         assert registry.resolve_host_for_service("unknown") is None
+
+    def test_add_host(self):
+        registry = BackendRegistry()
+        config = HostConfig(name="new-host", address="10.0.0.99")
+        registry.add_host(config)
+        assert "new-host" in registry.host_names
+        backend = registry.get("new-host")
+        assert backend is not None
+
+    def test_add_host_evicts_stale_backend(self):
+        hosts = [HostConfig(name="srv", address="10.0.0.1")]
+        registry = BackendRegistry(hosts)
+        b1 = registry.get("srv")
+        # Re-add with different address
+        registry.add_host(HostConfig(name="srv", address="10.0.0.2"))
+        b2 = registry.get("srv")
+        assert b1 is not b2
+
+    @pytest.mark.asyncio
+    async def test_remove_host(self):
+        hosts = [HostConfig(name="srv", address="10.0.0.1")]
+        registry = BackendRegistry(hosts)
+        await registry.remove_host("srv")
+        assert "srv" not in registry.host_names
+        with pytest.raises(ValueError, match="Unknown host"):
+            registry.get("srv")
+
+    @pytest.mark.asyncio
+    async def test_remove_host_nonexistent_is_noop(self):
+        registry = BackendRegistry()
+        await registry.remove_host("ghost")  # should not raise

@@ -41,6 +41,18 @@ class BackendRegistry:
         self._backends[host] = backend
         return backend
 
+    def add_host(self, config: HostConfig) -> None:
+        """Register a new host at runtime. Evicts any stale cached backend."""
+        self._hosts[config.name] = config
+        self._backends.pop(config.name, None)
+
+    async def remove_host(self, name: str) -> None:
+        """Remove a host at runtime. Closes the backend if active."""
+        self._hosts.pop(name, None)
+        backend = self._backends.pop(name, None)
+        if backend is not None:
+            await backend.close()
+
     @property
     def host_names(self) -> list[str]:
         """All configured host names including 'local'."""
