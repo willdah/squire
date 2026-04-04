@@ -110,7 +110,9 @@ def create_risk_gate(
 
             if approval_provider is not None:
                 if isinstance(approval_provider, AsyncApprovalProvider):
-                    approved = await approval_provider.request_approval_async(compound_name, args, result.risk_score.level)
+                    approved = await approval_provider.request_approval_async(
+                        compound_name, args, result.risk_score.level
+                    )
                 else:
                     approved = approval_provider.request_approval(compound_name, args, result.risk_score.level)
                 if not approved:

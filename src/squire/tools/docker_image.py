@@ -39,8 +39,10 @@ async def docker_image(
 
     if action == "list":
         cmd = [
-            "docker", "images",
-            "--format", "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.CreatedSince}}",
+            "docker",
+            "images",
+            "--format",
+            "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.CreatedSince}}",
         ]
     elif action == "inspect":
         cmd = ["docker", "image", "inspect", image]

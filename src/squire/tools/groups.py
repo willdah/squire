@@ -29,8 +29,7 @@ MONITOR_TOOLS = [
 ]
 MONITOR_TOOL_NAMES = {t.__name__ for t in MONITOR_TOOLS}
 MONITOR_RISK_LEVELS = {
-    k: v for k, v in TOOL_RISK_LEVELS.items()
-    if k in MONITOR_TOOL_NAMES or k.split(":")[0] in MONITOR_TOOL_NAMES
+    k: v for k, v in TOOL_RISK_LEVELS.items() if k in MONITOR_TOOL_NAMES or k.split(":")[0] in MONITOR_TOOL_NAMES
 }
 
 # Container agent — container lifecycle management
@@ -43,14 +42,12 @@ CONTAINER_TOOLS = [
 ]
 CONTAINER_TOOL_NAMES = {t.__name__ for t in CONTAINER_TOOLS}
 CONTAINER_RISK_LEVELS = {
-    k: v for k, v in TOOL_RISK_LEVELS.items()
-    if k in CONTAINER_TOOL_NAMES or k.split(":")[0] in CONTAINER_TOOL_NAMES
+    k: v for k, v in TOOL_RISK_LEVELS.items() if k in CONTAINER_TOOL_NAMES or k.split(":")[0] in CONTAINER_TOOL_NAMES
 }
 
 # Admin agent — system administration and command execution
 ADMIN_TOOLS = [safe_tool(systemctl), safe_tool(run_command)]
 ADMIN_TOOL_NAMES = {t.__name__ for t in ADMIN_TOOLS}
 ADMIN_RISK_LEVELS = {
-    k: v for k, v in TOOL_RISK_LEVELS.items()
-    if k in ADMIN_TOOL_NAMES or k.split(":")[0] in ADMIN_TOOL_NAMES
+    k: v for k, v in TOOL_RISK_LEVELS.items() if k in ADMIN_TOOL_NAMES or k.split(":")[0] in ADMIN_TOOL_NAMES
 }
