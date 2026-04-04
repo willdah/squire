@@ -1,6 +1,6 @@
 """Tests for RiskUtilityGate — Layer 3: risk vs utility final decision."""
-import pytest
 
+import pytest
 from agent_risk_engine import GateResult, RiskScore, RiskUtilityGate, UtilityScore
 
 

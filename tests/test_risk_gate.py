@@ -147,7 +147,10 @@ class TestRiskEvaluator:
     async def test_pipeline_returns_risk_score(self):
         evaluator = RiskEvaluator(rule_gate=RuleGate(threshold=3))
         action = Action(
-            kind="tool_call", name="docker_compose", parameters={"action": "restart"}, risk=3,
+            kind="tool_call",
+            name="docker_compose",
+            parameters={"action": "restart"},
+            risk=3,
         )
         result = await evaluator.evaluate(action)
         assert result.risk_score.level == 3

@@ -1,15 +1,10 @@
 """Tests for RiskEvaluator — orchestrates the layered risk evaluation pipeline."""
-import pytest
 
 from agent_risk_engine import (
     Action,
     ActionRegistry,
     GateResult,
-    PassthroughActionGate,
-    PassthroughAnalyzer,
     RiskEvaluator,
-    RiskLevel,
-    RiskResult,
     RiskScore,
     RiskUtilityGate,
     RuleGate,

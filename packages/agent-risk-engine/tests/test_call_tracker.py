@@ -1,5 +1,4 @@
 """Tests for CallTracker — standalone loop detection utility."""
-import pytest
 
 from agent_risk_engine import CallTracker
 

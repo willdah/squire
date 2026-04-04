@@ -47,9 +47,7 @@ class CallTracker:
         if len(self._history) >= self._loop_threshold:
             tail = list(self._history)[-self._loop_threshold :]
             if len(set(tail)) == 1:
-                warnings.append(
-                    f"Possible agent loop: '{tail[0]}' called {self._loop_threshold} times consecutively"
-                )
+                warnings.append(f"Possible agent loop: '{tail[0]}' called {self._loop_threshold} times consecutively")
 
         if len(self._history) >= 5:
             counts = Counter(self._history)

@@ -1,6 +1,6 @@
 """Tests for RuleGate — Layer 1: fast static risk evaluation."""
-import pytest
 
+import pytest
 from agent_risk_engine import Action, GateResult, RuleGate
 
 
@@ -8,7 +8,9 @@ class TestThresholdResolution:
     def test_integer(self):
         assert RuleGate(threshold=3).threshold == 3
 
-    @pytest.mark.parametrize(("alias", "expected"), [("read-only", 1), ("cautious", 2), ("standard", 3), ("full-trust", 5)])
+    @pytest.mark.parametrize(
+        ("alias", "expected"), [("read-only", 1), ("cautious", 2), ("standard", 3), ("full-trust", 5)]
+    )
     def test_aliases(self, alias, expected):
         assert RuleGate(threshold=alias).threshold == expected
 

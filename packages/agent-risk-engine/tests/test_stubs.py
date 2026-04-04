@@ -1,6 +1,6 @@
 """Tests for passthrough/stub implementations."""
-import pytest
 
+import pytest
 from agent_risk_engine import (
     Action,
     GateResult,
@@ -20,9 +20,7 @@ class TestPassthroughAnalyzer:
 
     async def test_parameters_ignored(self):
         analyzer = PassthroughAnalyzer()
-        result = await analyzer.analyze(
-            Action(kind="tool_call", name="x", parameters={"key": "val"}, risk=3)
-        )
+        result = await analyzer.analyze(Action(kind="tool_call", name="x", parameters={"key": "val"}, risk=3))
         assert result.level == 3
 
 
@@ -34,10 +32,13 @@ class TestPassthroughActionGate:
 
     def test_ignores_risk(self):
         gate = PassthroughActionGate()
-        assert gate.decide(
-            GateResult.ALLOWED,
-            RiskScore(level=5),
-        ) == GateResult.ALLOWED
+        assert (
+            gate.decide(
+                GateResult.ALLOWED,
+                RiskScore(level=5),
+            )
+            == GateResult.ALLOWED
+        )
 
     def test_accepts_and_ignores_utility(self):
         gate = PassthroughActionGate()

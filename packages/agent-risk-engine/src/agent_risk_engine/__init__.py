@@ -9,6 +9,7 @@ from .analyzer import DEFAULT_PATTERNS, ActionAnalyzer, PassthroughAnalyzer, Pat
 from .assessment import RiskEvaluator
 from .call_tracker import CallTracker
 from .models import (
+    THRESHOLD_ALIASES,
     Action,
     ActionDef,
     GateResult,
@@ -16,7 +17,6 @@ from .models import (
     RiskPattern,
     RiskResult,
     RiskScore,
-    THRESHOLD_ALIASES,
     UtilityScore,
 )
 from .registry import ActionRegistry

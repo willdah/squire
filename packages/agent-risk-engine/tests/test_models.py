@@ -1,16 +1,15 @@
 """Tests for risk evaluation data models."""
-import pytest
 
+import pytest
 from agent_risk_engine import (
+    THRESHOLD_ALIASES,
     Action,
     ActionDef,
     GateResult,
     RiskLevel,
-    RiskPattern,
     RiskResult,
     RiskScore,
     UtilityScore,
-    THRESHOLD_ALIASES,
 )
 
 

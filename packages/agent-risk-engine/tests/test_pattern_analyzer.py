@@ -1,7 +1,6 @@
 """Tests for PatternAnalyzer — regex-based argument risk analysis."""
-import pytest
 
-from agent_risk_engine import Action, PatternAnalyzer, RiskPattern, DEFAULT_PATTERNS
+from agent_risk_engine import DEFAULT_PATTERNS, Action, PatternAnalyzer, RiskPattern
 
 
 class TestNoMatch:
@@ -19,22 +18,30 @@ class TestNoMatch:
 class TestDestructiveCommands:
     async def test_rm_rf(self):
         analyzer = PatternAnalyzer()
-        result = await analyzer.analyze(Action(kind="tool_call", name="exec", parameters={"command": "rm -rf /"}, risk=3))
+        result = await analyzer.analyze(
+            Action(kind="tool_call", name="exec", parameters={"command": "rm -rf /"}, risk=3)
+        )
         assert result.level == 5
 
     async def test_rm_force(self):
         analyzer = PatternAnalyzer()
-        result = await analyzer.analyze(Action(kind="tool_call", name="exec", parameters={"command": "rm --force file"}, risk=3))
+        result = await analyzer.analyze(
+            Action(kind="tool_call", name="exec", parameters={"command": "rm --force file"}, risk=3)
+        )
         assert result.level == 5
 
     async def test_mkfs(self):
         analyzer = PatternAnalyzer()
-        result = await analyzer.analyze(Action(kind="tool_call", name="exec", parameters={"command": "mkfs /dev/sda"}, risk=3))
+        result = await analyzer.analyze(
+            Action(kind="tool_call", name="exec", parameters={"command": "mkfs /dev/sda"}, risk=3)
+        )
         assert result.level == 5
 
     async def test_dd(self):
         analyzer = PatternAnalyzer()
-        result = await analyzer.analyze(Action(kind="tool_call", name="exec", parameters={"command": "dd if=/dev/zero"}, risk=3))
+        result = await analyzer.analyze(
+            Action(kind="tool_call", name="exec", parameters={"command": "dd if=/dev/zero"}, risk=3)
+        )
         assert result.level == 5
 
     async def test_curl_pipe_bash(self):
@@ -49,17 +56,23 @@ class TestDestructiveCommands:
 class TestSQLPatterns:
     async def test_drop_table(self):
         analyzer = PatternAnalyzer()
-        result = await analyzer.analyze(Action(kind="tool_call", name="q", parameters={"sql": "DROP TABLE users"}, risk=2))
+        result = await analyzer.analyze(
+            Action(kind="tool_call", name="q", parameters={"sql": "DROP TABLE users"}, risk=2)
+        )
         assert result.level == 5
 
     async def test_truncate(self):
         analyzer = PatternAnalyzer()
-        result = await analyzer.analyze(Action(kind="tool_call", name="q", parameters={"sql": "TRUNCATE users"}, risk=2))
+        result = await analyzer.analyze(
+            Action(kind="tool_call", name="q", parameters={"sql": "TRUNCATE users"}, risk=2)
+        )
         assert result.level == 5
 
     async def test_delete_from(self):
         analyzer = PatternAnalyzer()
-        result = await analyzer.analyze(Action(kind="tool_call", name="q", parameters={"sql": "DELETE FROM users"}, risk=2))
+        result = await analyzer.analyze(
+            Action(kind="tool_call", name="q", parameters={"sql": "DELETE FROM users"}, risk=2)
+        )
         assert result.level == 4
 
     async def test_alter_table(self):
@@ -71,7 +84,9 @@ class TestSQLPatterns:
 
     async def test_select_not_flagged(self):
         analyzer = PatternAnalyzer()
-        result = await analyzer.analyze(Action(kind="tool_call", name="q", parameters={"sql": "SELECT * FROM users"}, risk=2))
+        result = await analyzer.analyze(
+            Action(kind="tool_call", name="q", parameters={"sql": "SELECT * FROM users"}, risk=2)
+        )
         assert result.level == 2
 
 
@@ -95,12 +110,16 @@ class TestSensitivePaths:
 class TestPrivilegeEscalation:
     async def test_sudo(self):
         analyzer = PatternAnalyzer()
-        result = await analyzer.analyze(Action(kind="tool_call", name="exec", parameters={"command": "sudo apt update"}, risk=2))
+        result = await analyzer.analyze(
+            Action(kind="tool_call", name="exec", parameters={"command": "sudo apt update"}, risk=2)
+        )
         assert result.level == 4
 
     async def test_chmod_777(self):
         analyzer = PatternAnalyzer()
-        result = await analyzer.analyze(Action(kind="tool_call", name="exec", parameters={"command": "chmod 777 /tmp"}, risk=2))
+        result = await analyzer.analyze(
+            Action(kind="tool_call", name="exec", parameters={"command": "chmod 777 /tmp"}, risk=2)
+        )
         assert result.level == 4
 
 
@@ -177,9 +196,7 @@ class TestKindScoping:
     async def test_kind_scoped_pattern_skipped_for_wrong_kind(self):
         custom = RiskPattern(r"\bDROP\b", 5, "SQL drop", kinds=frozenset({"database_query"}))
         analyzer = PatternAnalyzer(extra_patterns=[custom], include_defaults=False)
-        result = await analyzer.analyze(
-            Action(kind="tool_call", name="x", parameters={"cmd": "DROP TABLE x"}, risk=1)
-        )
+        result = await analyzer.analyze(Action(kind="tool_call", name="x", parameters={"cmd": "DROP TABLE x"}, risk=1))
         assert result.level == 1
 
     async def test_none_kinds_matches_all(self):

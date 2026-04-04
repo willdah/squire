@@ -1,5 +1,4 @@
 """Tests for ActionRegistry."""
-import pytest
 
 from agent_risk_engine import ActionDef, ActionRegistry
 
