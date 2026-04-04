@@ -7,16 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- **`agent-risk-engine` migrated to PyPI** — replaced local path dependency (`packages/agent-risk-engine/`) with standard PyPI dependency (`agent-risk-engine>=0.2.0`). The `packages/` directory is removed.
-- **Risk gate supports compound `tool:action` names** — when a tool call includes an `action` parameter, the risk gate now resolves risk using `"tool:action"` compound keys (e.g., `docker_container:stop`). This enables per-action risk levels for consolidated tools. Also adds `force` flag escalation (+1 risk when `force=True`).
-
 ### Added
 
-- **`docker_container` tool** — container lifecycle management (`inspect`, `start`, `stop`, `restart`, `remove`). Supports `force=True` for forced removal of running containers, and auto-resolves the target host via `resolve_host_for_service` when `host="local"`. Per-action `RISK_LEVELS` dict enables compound `tool:action` risk gate entries.
-
-- **`docker_image` tool** — image management (`list`, `inspect`, `pull`, `remove`). Lists all local images with repository, tag, ID, size, and age; inspects detailed image metadata; pulls or updates images from a registry; and removes images (fails gracefully if in use by a running container). Per-action `RISK_LEVELS` dict (`list`/`inspect` = 1, `pull` = 2, `remove` = 3).
+- **Container lifecycle tools** — three new consolidated tools for full container management:
+  - `docker_container` — manage individual containers (inspect, start, stop, restart, remove)
+  - `docker_image` — manage images (list, inspect, pull, remove)
+  - `docker_cleanup` — prune resources and check disk usage (df, prune_containers, prune_images, prune_volumes, prune_all)
+- **Compound action risk evaluation** — risk gate now constructs `tool:action` names for per-action risk levels, enabling fine-grained guardrails configuration (e.g., `tools_deny = ["docker_cleanup:prune_volumes"]`). Also adds `force` flag risk escalation (+1 when `force=True`).
 
 - **Watch mode web integration** — manage and observe watch mode through the web UI at `/watch`.
   - Start/stop watch mode from the browser, with PID-based liveness detection
@@ -50,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`agent-risk-engine` migrated to PyPI** — replaced local path dependency (`packages/agent-risk-engine/`) with standard PyPI dependency (`agent-risk-engine>=0.2.0`). The `packages/` directory is removed.
 - **CI/CD improvements** — split CI into parallel jobs (lint, test, frontend, docker) with dependency caching. Fixed broken Dockerfile (missing `packages/` copy for `agent-risk-engine`). Added `.dockerignore`. Added Dependabot for Python, npm, and GitHub Actions. `make ci` now includes frontend lint and build checks.
 - **Release workflow** — pushing a `v*` tag now builds and publishes the Docker image to `ghcr.io/willdah/squire` and creates a GitHub Release with changelog notes.
 
