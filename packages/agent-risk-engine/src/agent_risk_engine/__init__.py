@@ -6,6 +6,7 @@ with any agent framework by writing a thin adapter (~20 lines).
 
 from .action_gate import ActionGate, PassthroughActionGate, RiskUtilityGate
 from .analyzer import ActionAnalyzer, DEFAULT_PATTERNS, PassthroughAnalyzer, PatternAnalyzer
+from .assessment import RiskEvaluator
 from .call_tracker import CallTracker
 from .models import (
     Action,
@@ -33,6 +34,7 @@ __all__ = [
     "PassthroughActionGate",
     "PassthroughAnalyzer",
     "PatternAnalyzer",
+    "RiskEvaluator",
     "RiskLevel",
     "RiskPattern",
     "RiskResult",
