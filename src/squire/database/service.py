@@ -137,6 +137,22 @@ CREATE TABLE IF NOT EXISTS watch_approvals (
 )
 """
 
+_CREATE_MANAGED_HOSTS = """
+CREATE TABLE IF NOT EXISTS managed_hosts (
+    name         TEXT PRIMARY KEY,
+    address      TEXT NOT NULL,
+    user         TEXT NOT NULL DEFAULT 'root',
+    port         INTEGER NOT NULL DEFAULT 22,
+    key_file     TEXT NOT NULL,
+    tags         TEXT NOT NULL DEFAULT '[]',
+    services     TEXT NOT NULL DEFAULT '[]',
+    service_root TEXT NOT NULL DEFAULT '/opt',
+    status       TEXT NOT NULL DEFAULT 'active',
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+)
+"""
+
 
 class DatabaseService:
     """Async wrapper around aiosqlite for Squire persistence.
@@ -180,6 +196,7 @@ class DatabaseService:
             _CREATE_WATCH_EVENTS_IDX_CYCLE,
             _CREATE_WATCH_COMMANDS,
             _CREATE_WATCH_APPROVALS,
+            _CREATE_MANAGED_HOSTS,
         ):
             await self._conn.execute(stmt)
         await self._conn.commit()
@@ -632,6 +649,78 @@ class DatabaseService:
         )
         await conn.commit()
         return deleted
+
+    # --- Managed Hosts ---
+
+    async def save_managed_host(
+        self,
+        *,
+        name: str,
+        address: str,
+        key_file: str,
+        status: str = "active",
+        user: str = "root",
+        port: int = 22,
+        tags: list[str] | None = None,
+        services: list[str] | None = None,
+        service_root: str = "/opt",
+    ) -> None:
+        """Insert or replace a managed host."""
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        await conn.execute(
+            """
+            INSERT OR REPLACE INTO managed_hosts
+                (name, address, user, port, key_file, tags, services, service_root, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                name,
+                address,
+                user,
+                port,
+                key_file,
+                json.dumps(tags or []),
+                json.dumps(services or []),
+                service_root,
+                status,
+                now,
+                now,
+            ),
+        )
+        await conn.commit()
+
+    async def list_managed_hosts(self) -> list[dict]:
+        """List all managed hosts."""
+        conn = await self._get_conn()
+        cursor = await conn.execute("SELECT * FROM managed_hosts ORDER BY name")
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_managed_host(self, name: str) -> dict | None:
+        """Get a managed host by name."""
+        conn = await self._get_conn()
+        cursor = await conn.execute("SELECT * FROM managed_hosts WHERE name = ?", (name,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def delete_managed_host(self, name: str) -> bool:
+        """Delete a managed host by name. Returns True if deleted."""
+        conn = await self._get_conn()
+        cursor = await conn.execute("DELETE FROM managed_hosts WHERE name = ?", (name,))
+        await conn.commit()
+        return cursor.rowcount > 0
+
+    async def update_managed_host_status(self, name: str, status: str) -> bool:
+        """Update a managed host's status. Returns True if updated."""
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        cursor = await conn.execute(
+            "UPDATE managed_hosts SET status = ?, updated_at = ? WHERE name = ?",
+            (status, now, name),
+        )
+        await conn.commit()
+        return cursor.rowcount > 0
 
     async def close(self) -> None:
         """Close the database connection."""
