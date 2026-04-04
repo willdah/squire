@@ -283,6 +283,7 @@ function HostDetail({ name }: { name: string }) {
     () => apiGet<{ name: string; public_key: string }>(`/api/hosts/${name}/public-key`)
   );
   const [verifying, setVerifying] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<"success" | "failed" | null>(null);
   const [removing, setRemoving] = useState(false);
 
   if (isLoading || !host) {
@@ -298,10 +299,17 @@ function HostDetail({ name }: { name: string }) {
 
   const handleVerify = async () => {
     setVerifying(true);
+    setVerifyResult(null);
     try {
-      await apiPost<HostVerifyResponse>(`/api/hosts/${name}/verify`);
+      const res = await apiPost<HostVerifyResponse>(`/api/hosts/${name}/verify`);
       mutate(`/api/hosts/${name}`);
       mutate("/api/hosts");
+      setVerifyResult(res.reachable ? "success" : "failed");
+      if (res.reachable) {
+        setTimeout(() => setVerifyResult(null), 3000);
+      }
+    } catch {
+      setVerifyResult("failed");
     } finally {
       setVerifying(false);
     }
@@ -401,31 +409,44 @@ function HostDetail({ name }: { name: string }) {
           )}
 
           {host.source === "managed" && (
-            <div className="flex gap-2 pt-2 border-t">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleVerify}
-                disabled={verifying}
-              >
-                {verifying && (
-                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+            <div className="space-y-2 pt-2 border-t">
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleVerify}
+                  disabled={verifying}
+                >
+                  {verifying && (
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  )}
+                  Test Connection
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleRemove}
+                  disabled={removing}
+                >
+                  {removing ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  ) : (
+                    <Trash2 className="h-3 w-3 mr-1" />
+                  )}
+                  Remove
+                </Button>
+                {verifyResult === "success" && (
+                  <span className="text-sm text-green-600 flex items-center gap-1">
+                    <Check className="h-3 w-3" />
+                    Connected
+                  </span>
                 )}
-                Test Connection
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={handleRemove}
-                disabled={removing}
-              >
-                {removing ? (
-                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                ) : (
-                  <Trash2 className="h-3 w-3 mr-1" />
+                {verifyResult === "failed" && (
+                  <span className="text-sm text-destructive">
+                    Connection failed
+                  </span>
                 )}
-                Remove
-              </Button>
+              </div>
             </div>
           )}
         </CardContent>
