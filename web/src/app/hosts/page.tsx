@@ -71,7 +71,6 @@ function AddHostDialog() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<HostEnrollmentResponse | null>(null);
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -109,12 +108,6 @@ function AddHostDialog() {
     }
   };
 
-  const handleCopy = async (text: string) => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const handleClose = () => {
     setOpen(false);
     setResult(null);
@@ -146,30 +139,7 @@ function AddHostDialog() {
               <span className="text-sm">{result.message}</span>
             </div>
             {result.status === "pending_key" && (
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Add this public key to{" "}
-                  <code className="text-xs">~/.ssh/authorized_keys</code> on
-                  the remote host:
-                </p>
-                <div className="relative">
-                  <pre className="bg-muted p-3 rounded text-xs break-all whitespace-pre-wrap">
-                    {result.public_key}
-                  </pre>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="absolute top-1 right-1 h-7 w-7"
-                    onClick={() => handleCopy(result.public_key)}
-                  >
-                    {copied ? (
-                      <Check className="h-3 w-3" />
-                    ) : (
-                      <Copy className="h-3 w-3" />
-                    )}
-                  </Button>
-                </div>
-              </div>
+              <CopyableKey publicKey={result.public_key} />
             )}
             <Button onClick={handleClose} className="w-full">
               Done
@@ -255,10 +225,62 @@ function AddHostDialog() {
   );
 }
 
+function CopyableKey({ publicKey }: { publicKey: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(publicKey);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = publicKey;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-muted-foreground">
+        Add this public key to{" "}
+        <code className="text-xs">~/.ssh/authorized_keys</code> on the remote
+        host:
+      </p>
+      <div className="relative">
+        <pre className="bg-muted p-3 rounded text-xs break-all whitespace-pre-wrap">
+          {publicKey}
+        </pre>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="absolute top-1 right-1 h-7 w-7"
+          onClick={handleCopy}
+        >
+          {copied ? (
+            <Check className="h-3 w-3" />
+          ) : (
+            <Copy className="h-3 w-3" />
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function HostDetail({ name }: { name: string }) {
   const router = useRouter();
   const { data: host, isLoading } = useSWR(`/api/hosts/${name}`, () =>
     apiGet<HostInfo>(`/api/hosts/${name}`)
+  );
+  const { data: keyData } = useSWR(
+    host?.status === "pending_key" ? `/api/hosts/${name}/public-key` : null,
+    () => apiGet<{ name: string; public_key: string }>(`/api/hosts/${name}/public-key`)
   );
   const [verifying, setVerifying] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -372,6 +394,10 @@ function HostDetail({ name }: { name: string }) {
                 ))}
               </div>
             </div>
+          )}
+
+          {host.status === "pending_key" && keyData?.public_key && (
+            <CopyableKey publicKey={keyData.public_key} />
           )}
 
           {host.source === "managed" && (
