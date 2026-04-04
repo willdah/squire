@@ -125,13 +125,15 @@ class TestRiskEvaluator:
     @pytest.mark.asyncio
     async def test_pipeline_needs_approval_above_threshold(self):
         evaluator = RiskEvaluator(rule_gate=RuleGate(threshold=2))
-        result = await evaluator.evaluate(Action(kind="tool_call", name="run_command", parameters={"command": "ls"}, risk=5))
+        action = Action(kind="tool_call", name="run_command", parameters={"command": "ls"}, risk=5)
+        result = await evaluator.evaluate(action)
         assert result.decision == GateResult.NEEDS_APPROVAL
 
     @pytest.mark.asyncio
     async def test_pipeline_denies_strict(self):
         evaluator = RiskEvaluator(rule_gate=RuleGate(threshold=2, strict=True))
-        result = await evaluator.evaluate(Action(kind="tool_call", name="run_command", parameters={"command": "ls"}, risk=5))
+        action = Action(kind="tool_call", name="run_command", parameters={"command": "ls"}, risk=5)
+        result = await evaluator.evaluate(action)
         assert result.decision == GateResult.DENIED
 
     @pytest.mark.asyncio
@@ -144,7 +146,10 @@ class TestRiskEvaluator:
     @pytest.mark.asyncio
     async def test_pipeline_returns_risk_score(self):
         evaluator = RiskEvaluator(rule_gate=RuleGate(threshold=3))
-        result = await evaluator.evaluate(Action(kind="tool_call", name="docker_compose", parameters={"action": "restart"}, risk=3))
+        action = Action(
+            kind="tool_call", name="docker_compose", parameters={"action": "restart"}, risk=3,
+        )
+        result = await evaluator.evaluate(action)
         assert result.risk_score.level == 3
 
     @pytest.mark.asyncio
