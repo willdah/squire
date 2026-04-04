@@ -20,8 +20,14 @@ from ._registry import set_db as set_db
 from ._registry import set_notifier as set_notifier
 from ._registry import set_registry as set_registry
 from ._safe import safe_tool
+from .docker_cleanup import RISK_LEVELS as _dclean_risks
+from .docker_cleanup import docker_cleanup
 from .docker_compose import RISK_LEVEL as _dc_risk
 from .docker_compose import docker_compose
+from .docker_container import RISK_LEVELS as _dcont_risks
+from .docker_container import docker_container
+from .docker_image import RISK_LEVELS as _dimg_risks
+from .docker_image import docker_image
 from .docker_logs import RISK_LEVEL as _dl_risk
 from .docker_logs import docker_logs
 from .docker_ps import RISK_LEVEL as _dp_risk
@@ -45,6 +51,9 @@ ALL_TOOLS = [
     safe_tool(docker_ps),
     safe_tool(docker_logs),
     safe_tool(docker_compose),
+    safe_tool(docker_container),
+    safe_tool(docker_image),
+    safe_tool(docker_cleanup),
     safe_tool(read_config),
     safe_tool(journalctl),
     safe_tool(systemctl),
@@ -57,6 +66,9 @@ TOOL_RISK_LEVELS: dict[str, int] = {
     "docker_ps": _dp_risk,
     "docker_logs": _dl_risk,
     "docker_compose": _dc_risk,
+    **_dcont_risks,
+    **_dimg_risks,
+    **_dclean_risks,
     "read_config": _rc_risk,
     "journalctl": _jctl_risk,
     "systemctl": _sctl_risk,
