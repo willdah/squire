@@ -95,6 +95,44 @@ export interface WatchStatus {
   pid?: string | null;
 }
 
+// Watch event from watch_events table
+export interface WatchEvent {
+  id: number;
+  cycle: number;
+  type: string;
+  content: string | null;
+  created_at: string;
+}
+
+// Aggregated cycle summary
+export interface WatchCycle {
+  cycle: number;
+  started_at: string | null;
+  ended_at: string | null;
+  status: string;
+  duration_seconds: number | null;
+  tool_count: number;
+  event_count: number;
+}
+
+// Watch config from API
+export interface WatchConfigResponse {
+  interval_minutes: number;
+  cycle_timeout_seconds: number;
+  checkin_prompt: string;
+  notify_on_action: boolean;
+  notify_on_blocked: boolean;
+  cycles_per_session: number;
+  risk_tolerance: number | null;
+}
+
+// Watch config update payload
+export interface WatchConfigUpdate {
+  interval_minutes?: number;
+  risk_tolerance?: number;
+  checkin_prompt?: string;
+}
+
 export interface ConfigResponse {
   app: Record<string, unknown>;
   llm: Record<string, unknown>;

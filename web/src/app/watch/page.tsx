@@ -1,0 +1,54 @@
+"use client";
+
+import { useState } from "react";
+import useSWR from "swr";
+import { apiGet } from "@/lib/api";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { WatchStatusCard } from "@/components/watch/watch-status-card";
+import { WatchStatsCard } from "@/components/watch/watch-stats-card";
+import { WatchLiveStream } from "@/components/watch/watch-live-stream";
+import { WatchCycleHistory } from "@/components/watch/watch-cycle-history";
+import { WatchConfigDrawer } from "@/components/watch/watch-config-drawer";
+import type { WatchStatus } from "@/lib/types";
+
+export default function WatchPage() {
+  const [configOpen, setConfigOpen] = useState(false);
+
+  const { data: status, mutate } = useSWR(
+    "/api/watch/status",
+    () => apiGet<WatchStatus>("/api/watch/status"),
+    { refreshInterval: 3000 }
+  );
+
+  const isRunning = status?.status === "running";
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <h1 className="text-2xl">Watch</h1>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <WatchStatusCard
+          status={status ?? null}
+          onConfigure={() => setConfigOpen(true)}
+          onRefresh={() => mutate()}
+        />
+        <WatchStatsCard status={status ?? null} />
+      </div>
+
+      <Tabs defaultValue={isRunning ? "stream" : "history"}>
+        <TabsList>
+          <TabsTrigger value="stream">Live Stream</TabsTrigger>
+          <TabsTrigger value="history">Cycle History</TabsTrigger>
+        </TabsList>
+        <TabsContent value="stream" className="mt-4">
+          <WatchLiveStream enabled={isRunning} />
+        </TabsContent>
+        <TabsContent value="history" className="mt-4">
+          <WatchCycleHistory />
+        </TabsContent>
+      </Tabs>
+
+      <WatchConfigDrawer open={configOpen} onOpenChange={setConfigOpen} />
+    </div>
+  );
+}
