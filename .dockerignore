@@ -14,5 +14,5 @@ web/node_modules
 web/.next
 .claude
 .env
-*.md
+/*.md
 !README.md
