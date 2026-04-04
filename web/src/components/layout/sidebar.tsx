@@ -10,11 +10,13 @@ import {
   Activity,
   History,
   ListChecks,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const mainNav = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
+  { href: "/watch", label: "Watch", icon: Eye },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/sessions", label: "Sessions", icon: History },
   { href: "/skills", label: "Skills", icon: ListChecks },

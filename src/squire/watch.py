@@ -6,6 +6,7 @@ are denied outright; notifications are dispatched for actions and blocks.
 """
 
 import asyncio
+import json
 import logging
 import os
 import signal
@@ -37,10 +38,59 @@ from .main import _collect_all_snapshots
 from .notifications.webhook import WebhookDispatcher
 from .system.registry import BackendRegistry
 from .tools import TOOL_RISK_LEVELS, set_db, set_notifier, set_registry
+from .watch_emitter import WatchEventEmitter
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+
+async def _poll_commands(
+    db: DatabaseService,
+    shutdown: asyncio.Event,
+    watch_config: WatchConfig | None,
+) -> None:
+    """Process any pending watch commands from the database."""
+    commands = await db.get_pending_watch_commands()
+    for cmd in commands:
+        cmd_id = cmd["id"]
+        command = cmd["command"]
+        try:
+            if command == "stop":
+                shutdown.set()
+                await db.update_watch_command_status(cmd_id, "completed")
+            elif command == "update_config" and watch_config is not None:
+                payload = json.loads(cmd["payload"] or "{}")
+                for key in ("interval_minutes", "checkin_prompt"):
+                    if key in payload:
+                        setattr(watch_config, key, payload[key])
+                await db.update_watch_command_status(cmd_id, "completed")
+                logger.info("Applied config update: %s", payload)
+            elif command == "start":
+                await db.update_watch_command_status(cmd_id, "completed")
+            else:
+                await db.update_watch_command_status(cmd_id, "failed", error=f"Unknown command: {command}")
+        except Exception as e:
+            await db.update_watch_command_status(cmd_id, "failed", error=str(e))
+
+
+async def _interruptible_sleep(
+    db: DatabaseService,
+    shutdown: asyncio.Event,
+    interval_seconds: float,
+    poll_seconds: float = 5.0,
+    watch_config: WatchConfig | None = None,
+) -> None:
+    """Sleep in short increments, polling for commands between sleeps."""
+    elapsed = 0.0
+    while elapsed < interval_seconds and not shutdown.is_set():
+        try:
+            await asyncio.wait_for(shutdown.wait(), timeout=min(poll_seconds, interval_seconds - elapsed))
+        except TimeoutError:
+            pass
+        elapsed += poll_seconds
+        if not shutdown.is_set():
+            await _poll_commands(db, shutdown, watch_config)
 
 
 def _configure_logging() -> None:
@@ -82,6 +132,7 @@ async def start_watch() -> None:
 
     # Initialize database and webhook dispatcher
     db = DatabaseService(db_config.path)
+    emitter = WatchEventEmitter(db)
     notifier = WebhookDispatcher(notif_config)
     set_db(db)
     set_notifier(notifier)
@@ -184,6 +235,10 @@ async def start_watch() -> None:
         watch_config.cycles_per_session,
     )
 
+    # Cleanup stale data and process any pending start commands
+    await db.cleanup_watch_data()
+    await _poll_commands(db, shutdown, watch_config)
+
     cycle_count = 0
     last_cycle_error: str | None = None
 
@@ -194,6 +249,11 @@ async def start_watch() -> None:
 
             await db.set_watch_state("cycle", str(cycle_count))
             await db.set_watch_state("last_cycle_at", cycle_start)
+
+            # Poll for commands (e.g. stop or config update) before running cycle
+            await _poll_commands(db, shutdown, watch_config)
+            if shutdown.is_set():
+                break
 
             # Collect fresh snapshots
             try:
@@ -238,9 +298,11 @@ async def start_watch() -> None:
                 logger.debug("Failed to load watch skills", exc_info=True)
 
             # Run the watch cycle
+            cycle_start_time = datetime.now(UTC)
+            await emitter.emit_cycle_start(cycle_count, session.id)
             try:
                 response_text = await asyncio.wait_for(
-                    _run_cycle(runner, session, agent, prompt, app_config),
+                    _run_cycle(runner, session, agent, prompt, app_config, emitter=emitter, cycle=cycle_count),
                     timeout=watch_config.cycle_timeout_seconds,
                 )
                 last_cycle_error = None
@@ -258,6 +320,10 @@ async def start_watch() -> None:
                 logger.error("Cycle %d failed: %s", cycle_count, e, exc_info=True)
                 await db.set_watch_state("last_response", f"[error: {e}]")
                 await _dispatch(notifier, "watch.error", f"Watch cycle {cycle_count} failed.")
+
+            cycle_duration = (datetime.now(UTC) - cycle_start_time).total_seconds()
+            cycle_status = "ok" if last_cycle_error is None else "error"
+            await emitter.emit_cycle_end(cycle_count, cycle_status, cycle_duration, tool_count=0)
 
             # Session rotation
             if cycle_count >= watch_config.cycles_per_session:
@@ -297,11 +363,8 @@ async def start_watch() -> None:
 
                 cycle_count = 0
 
-            # Sleep until next cycle (interruptible by shutdown signal)
-            try:
-                await asyncio.wait_for(shutdown.wait(), timeout=watch_config.interval_minutes * 60)
-            except TimeoutError:
-                pass  # Normal — timeout means it's time for the next cycle
+            # Sleep until next cycle (interruptible by shutdown signal or commands)
+            await _interruptible_sleep(db, shutdown, watch_config.interval_minutes * 60, watch_config=watch_config)
 
     finally:
         await db.set_watch_state("status", "stopped")
@@ -319,6 +382,8 @@ async def _run_cycle(
     agent,
     prompt: str,
     app_config: AppConfig,
+    emitter: WatchEventEmitter | None = None,
+    cycle: int = 0,
 ) -> str:
     """Inject a prompt and collect the agent's response."""
     message = types.Content(parts=[types.Part(text=prompt)])
@@ -334,8 +399,15 @@ async def _run_cycle(
         for part in event.content.parts:
             if getattr(part, "thought", False):
                 continue
-            if part.text and not part.function_call and not part.function_response:
+            if part.function_call and emitter:
+                await emitter.emit_tool_call(cycle, part.function_call.name, dict(part.function_call.args or {}))
+            elif part.function_response and emitter:
+                output = str(part.function_response.response) if part.function_response.response else ""
+                await emitter.emit_tool_result(cycle, part.function_response.name or "", output)
+            elif part.text and not part.function_call and not part.function_response:
                 response_parts.append(part.text)
+                if emitter:
+                    await emitter.emit_token(cycle, part.text)
 
     return "".join(response_parts)
 
