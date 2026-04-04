@@ -529,5 +529,178 @@ def skills_disable(
     typer.echo(f"Skill '{name}' disabled.")
 
 
+# --- Host management ---
+
+hosts_app = typer.Typer(name="hosts", help="Manage remote hosts.")
+app.add_typer(hosts_app)
+
+
+@hosts_app.command("list")
+def hosts_list() -> None:
+    """List all managed hosts."""
+    from .config import DatabaseConfig
+    from .database.service import DatabaseService
+    from .hosts.store import HostStore
+    from .system.registry import BackendRegistry
+
+    async def _run():
+        db_config = DatabaseConfig()
+        db = DatabaseService(db_config.path)
+        registry = BackendRegistry()
+        store = HostStore(db, registry)
+        try:
+            return await store.list_hosts(), await db.list_managed_hosts()
+        finally:
+            await db.close()
+
+    configs, rows = asyncio.run(_run())
+
+    if not configs:
+        typer.echo("No managed hosts. Add one with: squire hosts add")
+        return
+
+    status_map = {r["name"]: r["status"] for r in rows}
+    console = Console()
+    table = Table(title="Managed Hosts")
+    table.add_column("Name", style="cyan", no_wrap=True)
+    table.add_column("Address", style="white")
+    table.add_column("User", style="blue")
+    table.add_column("Port", style="dim")
+    table.add_column("Status", style="green")
+    table.add_column("Tags", style="yellow")
+
+    for cfg in configs:
+        status = status_map.get(cfg.name, "unknown")
+        tags = ", ".join(cfg.tags) if cfg.tags else ""
+        table.add_row(cfg.name, cfg.address, cfg.user, str(cfg.port), status, tags)
+
+    console.print(table)
+
+
+@hosts_app.command("add")
+def hosts_add(
+    name: Annotated[str, typer.Option("--name", "-n", help="Unique host alias")],
+    address: Annotated[str, typer.Option("--address", "-a", help="Hostname or IP address")],
+    user: Annotated[str, typer.Option("--user", "-u", help="SSH username")] = "root",
+    port: Annotated[int, typer.Option("--port", "-p", help="SSH port")] = 22,
+    tags: Annotated[str | None, typer.Option("--tags", "-t", help="Comma-separated tags")] = None,
+    services: Annotated[str | None, typer.Option("--services", "-s", help="Comma-separated service names")] = None,
+    service_root: Annotated[str, typer.Option("--service-root", help="Root directory for compose services")] = "/opt",
+) -> None:
+    """Enroll a new remote host."""
+    from .config import DatabaseConfig
+    from .database.service import DatabaseService
+    from .hosts.store import HostStore
+    from .system.registry import BackendRegistry
+
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
+    svc_list = [s.strip() for s in services.split(",") if s.strip()] if services else []
+
+    async def _run():
+        db_config = DatabaseConfig()
+        db = DatabaseService(db_config.path)
+        registry = BackendRegistry()
+        store = HostStore(db, registry)
+        try:
+            return await store.enroll(
+                name=name,
+                address=address,
+                user=user,
+                port=port,
+                tags=tag_list,
+                services=svc_list,
+                service_root=service_root,
+            )
+        finally:
+            await db.close()
+
+    try:
+        result = asyncio.run(_run())
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"Generated SSH key for '{name}'.")
+    if result.status == "active":
+        typer.echo(result.message)
+        typer.echo(f"Host '{name}' enrolled successfully.")
+    else:
+        typer.echo(result.message)
+        typer.echo()
+        typer.echo("Add this public key to ~/.ssh/authorized_keys on the remote host:")
+        typer.echo()
+        typer.echo(f"  {result.public_key}")
+        typer.echo()
+        typer.echo(f"Then run: squire hosts verify {name}")
+
+
+@hosts_app.command("verify")
+def hosts_verify(
+    name: Annotated[str, typer.Argument(help="Name of the host to verify")],
+) -> None:
+    """Verify connectivity to a managed host."""
+    from .config import DatabaseConfig
+    from .database.service import DatabaseService
+    from .hosts.store import HostStore
+    from .system.registry import BackendRegistry
+
+    async def _run():
+        db_config = DatabaseConfig()
+        db = DatabaseService(db_config.path)
+        registry = BackendRegistry()
+        store = HostStore(db, registry)
+        try:
+            await store.load()
+            return await store.verify(name)
+        finally:
+            await db.close()
+
+    try:
+        reachable = asyncio.run(_run())
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    if reachable:
+        typer.echo(f"Host '{name}' is reachable. Status updated to active.")
+    else:
+        typer.echo(f"Could not connect to '{name}'. Check that the public key is installed.")
+        raise typer.Exit(1)
+
+
+@hosts_app.command("remove")
+def hosts_remove(
+    name: Annotated[str, typer.Argument(help="Name of the host to remove")],
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+) -> None:
+    """Remove a managed host."""
+    from .config import DatabaseConfig
+    from .database.service import DatabaseService
+    from .hosts.store import HostStore
+    from .system.registry import BackendRegistry
+
+    if not yes and not typer.confirm(f"Remove host '{name}'? This deletes the SSH key."):
+        raise typer.Abort()
+
+    async def _run():
+        db_config = DatabaseConfig()
+        db = DatabaseService(db_config.path)
+        registry = BackendRegistry()
+        store = HostStore(db, registry)
+        try:
+            await store.load()
+            await store.remove(name)
+        finally:
+            await db.close()
+
+    try:
+        asyncio.run(_run())
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"Host '{name}' removed.")
+
+
 if __name__ == "__main__":
     app()
