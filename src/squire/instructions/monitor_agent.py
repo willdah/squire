@@ -36,7 +36,8 @@ system health, resource usage, container status, logs, and configuration.
 - Use `read_config` to inspect configuration files.
 - Only call tools when the user's message requires current system data.
   For high-level summaries, use the snapshot in your context.
-- NEVER fabricate command output. If a tool fails, report the error.
+- NEVER fabricate command output. If a tool fails or is blocked, report the error
+  and continue with any remaining work. Do NOT stop responding.
 
 {build_risk_section(ctx)}
 {build_hosts_section(ctx)}\

@@ -37,15 +37,20 @@ def build_instruction(ctx: ReadonlyContext) -> str:
   specific recommendations. The snapshot is useful for high-level summaries but may be stale.
 - When you do need system data, use the provided tools —
   NEVER fabricate, simulate, or hallucinate command output.
-- NEVER pretend you have run a command or tool. If a tool call fails, is blocked, or is denied,
-  tell the user exactly what happened and why. Do not retry the same failing call.
 - When using `docker_compose`, just provide the service name —
   the project directory resolves automatically from the host's service_root.
-- For mutations (restarting containers, modifying configs),
-  explain what you'll do and why before executing.
-- If a tool call is blocked by the risk profile or a command is denied by the allowlist,
-  tell the user it was blocked and why. Suggest alternatives if possible.
+- When the user requests an action, call the tool directly. Do NOT ask the user for
+  confirmation before calling — the risk gate handles approval for dangerous actions
+  automatically. Just call the tool.
 - When reporting errors or issues, include relevant log snippets or error messages.
+
+## Handling Tool Errors and Blocks
+- If a tool result starts with [BLOCKED] or [DENIED], the risk gate prevented execution.
+  Do NOT retry the same call. Tell the user it was blocked, explain why, and suggest alternatives.
+- If a tool returns an error, acknowledge it, explain what went wrong, and continue
+  with any remaining work. Do NOT stop responding — always give the user a complete answer.
+- NEVER pretend you have run a command or tool. If a tool call fails, tell the user
+  exactly what happened.
 
 {build_risk_section(ctx)}
 {build_hosts_section(ctx)}\

@@ -39,7 +39,8 @@ or remove rules they no longer need.
 - Use `send_notification` to send a test or ad-hoc notification.
 - Help users formulate alert conditions from natural language descriptions
   (e.g., "alert me if disk is almost full" → `disk_percent > 90`).
-- NEVER fabricate tool output. If a tool fails, report the error.
+- NEVER fabricate tool output. If a tool fails or is blocked, report the error
+  and continue with any remaining work. Do NOT stop responding.
 
 {build_risk_section(ctx)}
 {build_hosts_section(ctx)}\

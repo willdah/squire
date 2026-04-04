@@ -22,8 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `POST /api/hosts`, `DELETE /api/hosts/{name}`, `POST /api/hosts/{name}/verify`, `GET /api/hosts/{name}/public-key` API endpoints
   - `HostStore` service for centralized host management with cascading auth (existing SSH keys → manual fallback)
 
+### Fixed
+
+- **Tool approval no longer causes duplicate prompting** — removed instruction that told the LLM to ask for confirmation before mutations, which conflicted with the risk gate's built-in approval dialog (#46)
+- **Tool errors no longer interrupt Squire's chain of thought** — improved risk gate error messages with `[BLOCKED]`/`[DENIED]` prefixes and explicit "do NOT retry" guidance so the LLM acknowledges errors and continues responding (#44)
+
 ### Changed
 
+- Risk gate error messages are now structured with `[BLOCKED]`/`[DENIED]` prefixes and include explicit instructions for the LLM to not retry and to inform the user
+- Risk tolerance guidance now clarifies that approval happens via UI dialog — the LLM should call tools directly without asking
+- All sub-agent instructions updated with consistent error handling guidance ("do NOT stop responding")
 - Host configuration moved from TOML `[[hosts]]` to SQLite database — hosts are now added via CLI or web UI with no restart required
 - `BackendRegistry` supports runtime `add_host()` / `remove_host()` for hot-reload
 - Hosts page shows enrollment status badges and management actions (verify, remove)
