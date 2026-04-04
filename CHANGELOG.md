@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`agent-risk-engine` migrated to PyPI** — replaced local path dependency (`packages/agent-risk-engine/`) with standard PyPI dependency (`agent-risk-engine>=0.2.0`). The `packages/` directory is removed.
+
 ### Added
 
 - **Watch mode web integration** — manage and observe watch mode through the web UI at `/watch`.

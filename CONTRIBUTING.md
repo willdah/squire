@@ -4,7 +4,7 @@ Thanks for your interest in contributing! Here's how to get started.
 
 ## Development setup
 
-1. **Clone the repo** (includes `agent-risk-engine` as a local package):
+1. **Clone the repo**:
 
    ```bash
    git clone https://github.com/<owner>/squire.git
@@ -28,8 +28,6 @@ Thanks for your interest in contributing! Here's how to get started.
 
 ```
 src/squire/          Main application
-packages/
-  agent-risk-engine/ Standalone risk evaluation library (zero deps)
 tests/               Pytest test suite
 ```
 
