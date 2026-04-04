@@ -8,6 +8,8 @@
   [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 </div>
 
+Squire is an AI-powered agent that monitors, manages, and guards your homelab. It connects to your machines over SSH, watches system health on a schedule, takes corrective action within configurable risk limits, and talks to you through a web UI, terminal TUI, or CLI.
+
 ---
 
 - [Features](#features)
