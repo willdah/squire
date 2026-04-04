@@ -1,17 +1,16 @@
-"""ActionGate — Layer 4: Final integration gate.
+"""ActionGate — Layer 3: Final integration gate.
 
 Protocol and implementations. RiskUtilityGate weighs risk against
 caller-provided utility for a final go/no-go decision.
-Framework-agnostic — no imports from squire or any agent framework.
+Framework-agnostic — no external dependencies.
 """
 
 from __future__ import annotations
 
 from typing import Protocol
 
-from .models import GateResult, RiskScore, SystemState, UtilityScore
+from .models import GateResult, RiskScore, UtilityScore
 
-# Ordered from least to most restrictive for escalation arithmetic.
 _ESCALATION_ORDER = [GateResult.ALLOWED, GateResult.NEEDS_APPROVAL, GateResult.DENIED]
 
 
@@ -22,20 +21,9 @@ class ActionGate(Protocol):
         self,
         rule_result: GateResult,
         risk_score: RiskScore,
-        system_state: SystemState,
         utility: UtilityScore | None = None,
     ) -> GateResult:
-        """Make the final go/no-go decision.
-
-        Args:
-            rule_result: The RuleGate's initial decision.
-            risk_score: The ToolAnalyzer's evaluated risk.
-            system_state: Current system health from StateMonitor.
-            utility: Optional caller-provided utility estimate.
-
-        Returns:
-            Final GateResult.
-        """
+        """Make the final go/no-go decision."""
         ...
 
 
@@ -46,7 +34,6 @@ class PassthroughActionGate:
         self,
         rule_result: GateResult,
         risk_score: RiskScore,
-        system_state: SystemState,
         utility: UtilityScore | None = None,
     ) -> GateResult:
         return rule_result
@@ -63,30 +50,20 @@ class RiskUtilityGate:
         self,
         rule_result: GateResult,
         risk_score: RiskScore,
-        system_state: SystemState,
         utility: UtilityScore | None = None,
     ) -> GateResult:
-        # No utility provided → passthrough
         if utility is None:
             return rule_result
 
-        # Layer 1 denials are sacred
         if rule_result == GateResult.DENIED:
             return GateResult.DENIED
 
-        effective_risk = risk_score.level + system_state.risk_adjustment
-        gap = effective_risk - utility.level
+        gap = risk_score.level - utility.level
 
         if gap <= 0:
-            # Utility justifies the risk — no escalation
             return rule_result
 
-        # Determine escalation steps
-        steps = min(gap, 2)  # gap==1 → 1 step, gap>=2 → 2 steps
-
-        # Unhealthy system adds +1 escalation when gap > 0
-        if not system_state.healthy:
-            steps += 1
+        steps = min(gap, 2)
 
         idx = _ESCALATION_ORDER.index(rule_result)
         escalated_idx = min(idx + steps, len(_ESCALATION_ORDER) - 1)
