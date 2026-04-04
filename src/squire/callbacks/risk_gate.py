@@ -67,15 +67,26 @@ def create_risk_gate(
         if tool_name in _ADK_INTERNAL_TOOLS:
             return None
 
-        # Unknown tools (not in our scope and not ADK internal) are denied
-        if tool_name not in scoped_risk_levels:
-            return {"error": f"Blocked: unknown tool '{tool_name}'."}
+        # Resolve compound action name: "tool:action" for tools with an action param
+        action_param = args.get("action")
+        if action_param:
+            compound_name = f"{tool_name}:{action_param}"
+        else:
+            compound_name = tool_name
 
-        tool_risk = scoped_risk_levels[tool_name]
+        # Unknown tools/actions (not in our scope and not ADK internal) are denied
+        if compound_name not in scoped_risk_levels:
+            return {"error": f"Blocked: unknown tool '{compound_name}'."}
+
+        tool_risk = scoped_risk_levels[compound_name]
 
         # Bump risk for remote host operations
         host = args.get("host", "local")
         if host != "local":
+            tool_risk = min(tool_risk + 1, 5)
+
+        # Bump risk for forced operations
+        if args.get("force"):
             tool_risk = min(tool_risk + 1, 5)
 
         # Load the risk evaluator from session state
@@ -83,29 +94,29 @@ def create_risk_gate(
         if not evaluator or not isinstance(evaluator, RiskEvaluator):
             evaluator = RiskEvaluator(rule_gate=RuleGate())
 
-        action = Action(kind="tool_call", name=tool_name, parameters=args, risk=tool_risk)
+        action = Action(kind="tool_call", name=compound_name, parameters=args, risk=tool_risk)
         result = await evaluator.evaluate(action)
 
         if result.decision == GateResult.DENIED:
             if headless and notifier:
-                await _notify_blocked(notifier, tool_name, args, result.reasoning)
+                await _notify_blocked(notifier, compound_name, args, result.reasoning)
             return {"error": f"Blocked: {result.reasoning}"}
 
         if result.decision == GateResult.NEEDS_APPROVAL:
             if headless:
                 if notifier:
-                    await _notify_blocked(notifier, tool_name, args, result.reasoning)
-                return {"error": f"Watch mode denied '{tool_name}': above risk threshold."}
+                    await _notify_blocked(notifier, compound_name, args, result.reasoning)
+                return {"error": f"Watch mode denied '{compound_name}': above risk threshold."}
 
             if approval_provider is not None:
                 if isinstance(approval_provider, AsyncApprovalProvider):
-                    approved = await approval_provider.request_approval_async(tool_name, args, result.risk_score.level)
+                    approved = await approval_provider.request_approval_async(compound_name, args, result.risk_score.level)
                 else:
-                    approved = approval_provider.request_approval(tool_name, args, result.risk_score.level)
+                    approved = approval_provider.request_approval(compound_name, args, result.risk_score.level)
                 if not approved:
-                    return {"error": f"User declined to approve '{tool_name}'."}
+                    return {"error": f"User declined to approve '{compound_name}'."}
             else:
-                return {"error": f"No approval provider — auto-denied '{tool_name}'."}
+                return {"error": f"No approval provider — auto-denied '{compound_name}'."}
 
         # GateResult.ALLOWED — proceed
         return None
@@ -113,13 +124,13 @@ def create_risk_gate(
     return _risk_gate_callback
 
 
-async def _notify_blocked(notifier: Any, tool_name: str, args: dict, reasoning: str) -> None:
+async def _notify_blocked(notifier: Any, action_name: str, args: dict, reasoning: str) -> None:
     """Dispatch a watch.blocked notification for a denied tool call."""
     try:
         await notifier.dispatch(
             category="watch.blocked",
-            summary=f"Denied tool '{tool_name}': {reasoning}",
-            tool_name=tool_name,
+            summary=f"Denied tool '{action_name}': {reasoning}",
+            tool_name=action_name,
             details=str(args),
         )
     except Exception:

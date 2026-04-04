@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **`agent-risk-engine` migrated to PyPI** — replaced local path dependency (`packages/agent-risk-engine/`) with standard PyPI dependency (`agent-risk-engine>=0.2.0`). The `packages/` directory is removed.
+- **Risk gate supports compound `tool:action` names** — when a tool call includes an `action` parameter, the risk gate now resolves risk using `"tool:action"` compound keys (e.g., `docker_container:stop`). This enables per-action risk levels for consolidated tools. Also adds `force` flag escalation (+1 risk when `force=True`).
 
 ### Added
 
