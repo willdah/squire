@@ -171,6 +171,31 @@ class WatchStatusResponse(BaseModel):
     pid: str | None = None
 
 
+class WatchConfigUpdate(BaseModel):
+    interval_minutes: int | None = None
+    risk_tolerance: int | None = None
+    checkin_prompt: str | None = None
+
+
+class WatchConfigResponse(BaseModel):
+    interval_minutes: int
+    cycle_timeout_seconds: int
+    checkin_prompt: str
+    notify_on_action: bool
+    notify_on_blocked: bool
+    cycles_per_session: int
+    risk_tolerance: int | None
+
+
+class WatchApprovalAction(BaseModel):
+    approved: bool
+
+
+class WatchCommandResponse(BaseModel):
+    status: str
+    message: str = ""
+
+
 # --- Chat ---
 
 

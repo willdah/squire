@@ -61,3 +61,15 @@ def get_llm_config() -> LLMConfig:
     if llm_config is None:
         raise RuntimeError("LLMConfig not loaded")
     return llm_config
+
+
+def get_watch_config() -> WatchConfig:
+    if watch_config is None:
+        raise RuntimeError("WatchConfig not loaded")
+    return watch_config
+
+
+def get_guardrails() -> GuardrailsConfig:
+    if guardrails is None:
+        raise RuntimeError("GuardrailsConfig not loaded")
+    return guardrails
