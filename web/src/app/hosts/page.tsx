@@ -376,19 +376,17 @@ function HostDetail({ name }: { name: string }) {
 
           {host.source === "managed" && (
             <div className="flex gap-2 pt-2 border-t">
-              {host.status === "pending_key" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleVerify}
-                  disabled={verifying}
-                >
-                  {verifying && (
-                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                  )}
-                  Verify Connection
-                </Button>
-              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleVerify}
+                disabled={verifying}
+              >
+                {verifying && (
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                )}
+                Test Connection
+              </Button>
               <Button
                 size="sm"
                 variant="destructive"
