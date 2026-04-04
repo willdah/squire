@@ -141,10 +141,23 @@ async def remove_host(name: str, host_store=Depends(get_host_store)):
 @router.post("/{name}/verify", response_model=HostVerifyResponse)
 async def verify_host(name: str, host_store=Depends(get_host_store)):
     """Verify connectivity to a managed host."""
+    from ...main import _collect_snapshot
+    from ..app import get_latest_snapshot, set_latest_snapshot
+
     try:
         reachable = await host_store.verify(name)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+    if reachable:
+        try:
+            snap = await _collect_snapshot(host=name)
+            current = await get_latest_snapshot()
+            current[name] = snap
+            await set_latest_snapshot(current)
+        except Exception:
+            pass
+
     return HostVerifyResponse(
         name=name,
         reachable=reachable,
