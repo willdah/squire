@@ -31,6 +31,27 @@ The TUI provides a chat pane, system status panel, activity log, and approval mo
 | `Ctrl+L` | Clear chat |
 | `Ctrl+G` | Toggle activity log |
 | `Ctrl+S` | Toggle status panel |
+| `Ctrl+X` | Clear all sessions |
+
+---
+
+### `squire web`
+
+Start the web interface — a browser-based frontend backed by FastAPI.
+
+```bash
+squire web                   # default: http://0.0.0.0:8420
+squire web --port 9000       # custom port
+squire web --reload          # auto-reload for development
+```
+
+| Option | Short | Default | Description |
+|---|---|---|---|
+| `--port` | `-p` | `8420` | Port to listen on |
+| `--host` | `-H` | `0.0.0.0` | Host to bind to |
+| `--reload` | | `false` | Enable auto-reload for development |
+
+The web UI provides pages for Chat, Activity, Sessions, Skills, Watch, Hosts, Notifications, and Config.
 
 ---
 
@@ -53,20 +74,25 @@ Tools above the configured risk tolerance are auto-denied (no interactive approv
 
 Logs to stdout in structured format, suitable for systemd/journald.
 
-**Configuration** (`[watch]` section in `squire.toml`):
+**Operational config** (`[watch]` section in `squire.toml`):
 
 | Field | Default | Description |
 |---|---|---|
 | `interval_minutes` | `5` | Minutes between watch cycles |
-| `risk_tolerance` | `read-only` | Risk tolerance for watch mode |
 | `max_tool_calls_per_cycle` | `15` | Tool call budget per cycle |
 | `cycle_timeout_seconds` | `300` | Max wall-clock time per cycle |
 | `cycles_per_session` | `50` | Rotate ADK session after this many cycles |
 | `checkin_prompt` | *(built-in)* | Prompt injected each cycle |
 | `notify_on_action` | `true` | Notify when agent takes corrective action |
 | `notify_on_blocked` | `true` | Notify when a tool call is blocked |
-| `allow` | `[]` | Tools always auto-allowed in watch mode |
-| `deny` | `[]` | Tools always denied in watch mode |
+
+**Risk policy** (`[guardrails.watch]` section):
+
+| Field | Default | Description |
+|---|---|---|
+| `tolerance` | `read-only` | Risk tolerance for watch mode |
+| `tools_allow` | `[]` | Additional tools to auto-allow in watch mode |
+| `tools_deny` | `[]` | Additional tools to deny in watch mode |
 
 **Notification categories:**
 
