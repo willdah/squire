@@ -9,15 +9,12 @@ resolution-markers = [
 
 [[package]]
 name = "agent-risk-engine"
-version = "0.1.0"
-source = { editable = "packages/agent-risk-engine" }
-
-[package.metadata]
-requires-dist = [
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=8" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.25" },
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d4/4a/0dbdaa93504b5d1fb04d1ecfe0b6beb90b01e9ea7371b7a0edb1cde9dc40/agent_risk_engine-0.2.0.tar.gz", hash = "sha256:a44f88363dc422293a2bc3d0a5c1e691e5e3171e898e916110a00d4ae2bd508e", size = 19146, upload-time = "2026-04-04T14:44:23.131Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2c/f2/c91c563e228a5be68a9526927571f958833f942e03d80b415f262d1a4e39/agent_risk_engine-0.2.0-py3-none-any.whl", hash = "sha256:230a8b4f9a2b6e9a3ec36111adef234b54a6a03d464dc10d8cebea91a4647bef", size = 13292, upload-time = "2026-04-04T14:44:21.814Z" },
 ]
-provides-extras = ["test"]
 
 [[package]]
 name = "aiohappyeyeballs"
@@ -3020,7 +3017,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agent-risk-engine", editable = "packages/agent-risk-engine" },
+    { name = "agent-risk-engine", specifier = ">=0.2.0" },
     { name = "aiosqlite", specifier = ">=0.19.0" },
     { name = "asyncssh", specifier = ">=2.17.0" },
     { name = "fastapi", specifier = ">=0.115.0" },

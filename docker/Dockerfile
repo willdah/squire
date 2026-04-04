@@ -7,7 +7,6 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Copy dependency metadata first (cache-friendly layer ordering)
 COPY pyproject.toml uv.lock ./
-COPY packages/ packages/
 COPY README.md ./
 
 # Install dependencies

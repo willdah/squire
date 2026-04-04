@@ -16,7 +16,7 @@ Squire is an AI-powered homelab monitoring and management agent. It uses Google 
 - aiosqlite — SQLite database
 - asyncssh — remote host management
 - httpx — HTTP client
-- agent-risk-engine — local package for risk evaluation (zero external deps)
+- agent-risk-engine — risk evaluation library (PyPI package, zero external deps)
 
 **Frontend (`web/`, Next.js 16):**
 - React 19 with App Router
@@ -53,9 +53,6 @@ src/squire/              Main application
   cli.py                 Typer CLI entry point
   main.py                Orchestration & snapshot collection
   watch.py               Autonomous watch loop
-
-packages/
-  agent-risk-engine/     Standalone risk evaluation library
 
 web/                     Next.js frontend
   src/app/               Pages (chat, skills, sessions, hosts, notifications, config, activity)

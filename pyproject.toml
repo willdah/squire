@@ -36,7 +36,7 @@ dependencies = [
     "httpx>=0.27.0",
     "asyncssh>=2.17.0",
     "pyyaml>=6.0",
-    "agent-risk-engine",
+    "agent-risk-engine>=0.2.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
 ]
@@ -58,9 +58,6 @@ packages = ["src/squire"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-
-[tool.uv.sources]
-agent-risk-engine = { path = "packages/agent-risk-engine", editable = true }
 
 [tool.ruff]
 line-length = 120
