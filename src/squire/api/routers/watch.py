@@ -1,9 +1,10 @@
 """Watch mode API endpoints — control, status, and history."""
 
+import asyncio
 import json
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 
 from ..dependencies import get_db, get_guardrails, get_watch_config
 from ..schemas import (
@@ -15,6 +16,22 @@ from ..schemas import (
 )
 
 router = APIRouter()
+
+
+async def _increment_supervisor_count(db) -> None:
+    """Increment supervisor connection count."""
+    current = await db.get_watch_state("supervisor_count")
+    count = int(current or "0") + 1
+    await db.set_watch_state("supervisor_count", str(count))
+    await db.set_watch_state("supervisor_connected", "true")
+
+
+async def _decrement_supervisor_count(db) -> None:
+    """Decrement supervisor connection count."""
+    current = await db.get_watch_state("supervisor_count")
+    count = max(0, int(current or "0") - 1)
+    await db.set_watch_state("supervisor_count", str(count))
+    await db.set_watch_state("supervisor_connected", str(count > 0).lower())
 
 
 @router.get("/status", response_model=WatchStatusResponse)
@@ -118,3 +135,41 @@ async def watch_approve(
     status = "approved" if action.approved else "denied"
     await db.update_watch_approval(request_id, status)
     return WatchCommandResponse(status="ok", message=f"Tool {status}")
+
+
+@router.websocket("/ws")
+async def watch_ws(websocket: WebSocket, db=Depends(get_db)):
+    """Live watch event stream via WebSocket."""
+    await websocket.accept()
+    await _increment_supervisor_count(db)
+
+    try:
+        # Send initial burst of current cycle events
+        state = await db.get_all_watch_state()
+        current_cycle = int(state.get("cycle", "0"))
+        if current_cycle > 0:
+            events = await db.get_watch_events_for_cycle(current_cycle)
+            for event in events:
+                await websocket.send_json(event)
+            last_id = events[-1]["id"] if events else 0
+        else:
+            last_id = 0
+
+        # Tail loop — poll for new events every 200ms
+        while True:
+            new_events = await db.get_watch_events_since(last_id, limit=100)
+            for event in new_events:
+                await websocket.send_json(event)
+                last_id = event["id"]
+
+            try:
+                await asyncio.wait_for(websocket.receive_text(), timeout=0.2)
+            except asyncio.TimeoutError:
+                pass
+            except WebSocketDisconnect:
+                break
+
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await _decrement_supervisor_count(db)
