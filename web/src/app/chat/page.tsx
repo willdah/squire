@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { apiGet, apiPost } from "@/lib/api";
 import { useWebSocket } from "@/hooks/use-websocket";
@@ -102,7 +102,7 @@ function ChatPageInner() {
     }
     return null;
   });
-  const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [approvalRequest, setApprovalRequest] =
     useState<WsApprovalRequest | null>(null);
@@ -123,11 +123,11 @@ function ChatPageInner() {
   }, [sessionId]);
 
   // Load prior messages when reconnecting to an existing session
-  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const historyLoadedRef = useRef(false);
 
   useEffect(() => {
-    if (!sessionId || historyLoaded) return;
-    setHistoryLoaded(true);
+    if (!sessionId || historyLoadedRef.current) return;
+    historyLoadedRef.current = true;
 
     apiGet<MessageInfo[]>(`/api/sessions/${sessionId}/messages`)
       .then((msgs) => {
@@ -144,7 +144,7 @@ function ChatPageInner() {
       .catch(() => {
         // No history — new session or session not yet persisted
       });
-  }, [sessionId, historyLoaded]);
+  }, [sessionId]);
 
   const wsQueryParams = skillName ? { skill: skillName } : undefined;
   const { status, send, setOnMessage } = useWebSocket(sessionId, wsQueryParams);
@@ -267,25 +267,27 @@ function ChatPageInner() {
     skillSentRef.current = true;
     const text = `Execute your active skill "${skillName}" now. Use your tools.`;
     const displayText = `Execute skill "${skillName}"`;
-    setMessages((prev) => [
-      ...prev,
-      { id: nextId(), role: "user", content: displayText },
-    ]);
-    setAgentState("thinking");
+    startTransition(() => {
+      setMessages((prev) => [
+        ...prev,
+        { id: nextId(), role: "user", content: displayText },
+      ]);
+      setAgentState("thinking");
+    });
     send({ type: "message", content: text });
   }, [skillName, status, send]);
 
   // Create a new session if needed
   useEffect(() => {
-    if (sessionId || creating) return;
-    setCreating(true);
+    if (sessionId || creatingRef.current) return;
+    creatingRef.current = true;
     apiPost<{ session_id: string }>("/api/chat/sessions")
       .then((res) => {
         setSessionId(res.session_id);
       })
       .catch((err) => console.error("Failed to create session:", err))
-      .finally(() => setCreating(false));
-  }, [sessionId, creating]);
+      .finally(() => { creatingRef.current = false; });
+  }, [sessionId]);
 
   const handleSend = useCallback(
     (text: string) => {
@@ -334,7 +336,7 @@ function ChatPageInner() {
     sessionStorage.removeItem(SESSION_KEY);
     setSessionId(null);
     setMessages([]);
-    setHistoryLoaded(false);
+    historyLoadedRef.current = false;
     streamingRef.current = { text: "", id: "", finalized: false };
     router.replace("/chat");
     requestAnimationFrame(() => chatInputRef.current?.focus());
