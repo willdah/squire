@@ -61,6 +61,11 @@ async def test_interruptible_sleep_responds_to_commands(db):
 
     shutdown = asyncio.Event()
 
+    # Ensure schema is created before spawning the background task.
+    # Without this, the background insert and the poll can race to
+    # initialize the DB connection concurrently on Python 3.13+.
+    await db.get_pending_watch_commands()
+
     async def insert_stop():
         await asyncio.sleep(0.2)
         await db.insert_watch_command("stop")

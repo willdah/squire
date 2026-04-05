@@ -6,6 +6,7 @@ Uses aiosqlite for non-blocking async SQLite access.
 Connection is opened lazily on first use.
 """
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -163,17 +164,25 @@ class DatabaseService:
     def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
         self._conn: aiosqlite.Connection | None = None
+        self._conn_lock = asyncio.Lock()
 
     async def _get_conn(self) -> aiosqlite.Connection:
-        """Open and return the database connection, creating schema on first call."""
-        if self._conn is None:
-            self._db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = await aiosqlite.connect(self._db_path)
-            self._conn.row_factory = aiosqlite.Row
-            await self._conn.execute("PRAGMA journal_mode=WAL")
-            await self._conn.execute("PRAGMA busy_timeout=5000")
-            await self._conn.execute("PRAGMA foreign_keys=ON")
-            await self._ensure_schema()
+        """Open and return the database connection, creating schema on first call.
+
+        Uses a lock to prevent concurrent coroutines from racing to
+        initialize the connection and schema simultaneously.
+        """
+        if self._conn is not None:
+            return self._conn
+        async with self._conn_lock:
+            if self._conn is None:
+                self._db_path.parent.mkdir(parents=True, exist_ok=True)
+                self._conn = await aiosqlite.connect(self._db_path)
+                self._conn.row_factory = aiosqlite.Row
+                await self._conn.execute("PRAGMA journal_mode=WAL")
+                await self._conn.execute("PRAGMA busy_timeout=5000")
+                await self._conn.execute("PRAGMA foreign_keys=ON")
+                await self._ensure_schema()
         return self._conn
 
     async def _ensure_schema(self) -> None:
