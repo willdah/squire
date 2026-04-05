@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Pattern-based risk analysis** — replaced `PassthroughAnalyzer` with `PatternAnalyzer` from `agent-risk-engine` in the risk evaluation pipeline. Tool call arguments are now inspected for dangerous patterns (e.g., `rm -rf`, `sudo`, SQL drops, sensitive file types) and risk is escalated accordingly. Added homelab-specific custom patterns for privileged containers, firewall modifications, service disablement, Docker data paths, SSH key operations, and crontab changes. (#41)
+
 ## [0.7.0] — 2026-04-05
 
 ### Changed

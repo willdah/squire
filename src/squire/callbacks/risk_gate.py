@@ -8,7 +8,7 @@ and headless (auto-deny + optional notification) modes.
 import logging
 from typing import Any
 
-from agent_risk_engine import Action, GateResult, RiskEvaluator, RuleGate
+from agent_risk_engine import Action, GateResult, PatternAnalyzer, RiskEvaluator, RiskPattern, RuleGate
 from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
 
@@ -28,6 +28,22 @@ ADK_INTERNAL_TOOLS = frozenset(
 
 # Keep the private alias for backwards compatibility within this module.
 _ADK_INTERNAL_TOOLS = ADK_INTERNAL_TOOLS
+
+# Homelab-specific risk patterns that supplement agent-risk-engine defaults.
+HOMELAB_PATTERNS: list[RiskPattern] = [
+    RiskPattern(r"--privileged", 5, "Privileged container mode"),
+    RiskPattern(r"\biptables\b|\bufw\b|\bnftables\b", 4, "Firewall rule modification"),
+    RiskPattern(r"\bsystemctl\s+(mask|disable)\b", 4, "Service disablement"),
+    RiskPattern(r"/var/lib/docker/", 4, "Docker data directory access"),
+    RiskPattern(r"/etc/docker/", 4, "Docker daemon configuration"),
+    RiskPattern(r"\bssh-keygen\b|\bauthorized_keys\b", 4, "SSH key modification"),
+    RiskPattern(r"\bcrontab\s+-[re]", 3, "Crontab modification"),
+]
+
+
+def build_pattern_analyzer() -> PatternAnalyzer:
+    """Build a PatternAnalyzer with default + homelab-specific patterns."""
+    return PatternAnalyzer(extra_patterns=HOMELAB_PATTERNS)
 
 
 def create_risk_gate(
@@ -107,10 +123,17 @@ def create_risk_gate(
         # Load the risk evaluator from session state
         evaluator = tool_context.state.get("risk_evaluator")
         if not evaluator or not isinstance(evaluator, RiskEvaluator):
-            evaluator = RiskEvaluator(rule_gate=RuleGate())
+            evaluator = RiskEvaluator(rule_gate=RuleGate(), analyzer=build_pattern_analyzer())
 
         action = Action(kind="tool_call", name=compound_name, parameters=args, risk=tool_risk)
         result = await evaluator.evaluate(action)
+
+        # The PatternAnalyzer may have escalated risk beyond what the RuleGate
+        # saw (which only used the static tool_risk). If the analyzed risk now
+        # exceeds the threshold, treat it as NEEDS_APPROVAL so the existing
+        # approval/headless flow handles it.
+        risk_threshold = tool_context.state.get("risk_tolerance", 3)
+        analyzer_escalated = result.decision == GateResult.ALLOWED and result.risk_score.level > risk_threshold
 
         if result.decision == GateResult.DENIED:
             if headless and notifier:
@@ -122,7 +145,7 @@ def create_risk_gate(
                 )
             }
 
-        if result.decision == GateResult.NEEDS_APPROVAL:
+        if result.decision == GateResult.NEEDS_APPROVAL or analyzer_escalated:
             if headless:
                 if notifier:
                     await _notify_blocked(notifier, compound_name, args, result.reasoning)
