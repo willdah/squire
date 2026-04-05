@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- **Architecture overview** — new `docs/architecture.md` with Mermaid diagrams covering system overview, agent modes, request flow, risk pipeline, watch loop, tech stack, database schema, and backend registry
+- **Usage guide** — new `docs/usage.md` comprehensive guide covering all three interfaces, configuration, remote hosts, multi-agent mode, watch mode, alert rules, skills, notifications, and Docker deployment
+- **CONTRIBUTING.md** — expand from 54 lines to ~200 lines; add prerequisites, project structure, detailed code conventions, step-by-step tool-authoring guide with accurate registration instructions, testing section with fixture usage, and PR workflow
+- **README.md** — restructured as a concise "front door" landing page (~110 lines); detailed content moved to `docs/usage.md`; added documentation hub table linking all docs
 - **Configuration reference** — document email notifications (`[notifications.email]`), per-tool risk overrides (`tools_risk_overrides`), host fields (`key_file`, `service_root`), and fix misleading claim about `[[hosts]]` in TOML
 - **squire.example.toml** — add `multi_agent`, `tools_risk_overrides`, and `[notifications.email]` sections
 - **Tested models** — add model recommendations section with tested Ollama models and cloud provider guidance
