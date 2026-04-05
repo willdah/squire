@@ -10,7 +10,6 @@ import { AppConfigForm } from "./app-config-form";
 import { LLMConfigForm } from "./llm-config-form";
 import { WatchConfigForm } from "./watch-config-form";
 import { GuardrailsConfigForm } from "./guardrails-config-form";
-import { NotificationsConfigForm } from "./notifications-config-form";
 
 interface ConfigEditorProps {
   config: ConfigDetailResponse;
@@ -98,7 +97,6 @@ export function ConfigEditor({ config, onSaved }: ConfigEditorProps) {
         <TabsTrigger value="database">Database</TabsTrigger>
         <TabsTrigger value="guardrails">Guardrails</TabsTrigger>
         <TabsTrigger value="watch">Watch</TabsTrigger>
-        <TabsTrigger value="notifications">Notifications</TabsTrigger>
         <TabsTrigger value="hosts">Hosts</TabsTrigger>
       </TabsList>
 
@@ -137,15 +135,6 @@ export function ConfigEditor({ config, onSaved }: ConfigEditorProps) {
         <WatchConfigForm
           values={config.watch.values}
           envOverrides={config.watch.env_overrides}
-          tomlPath={config.toml_path}
-          onSaved={onSaved}
-        />
-      </TabsContent>
-
-      <TabsContent value="notifications">
-        <NotificationsConfigForm
-          values={config.notifications.values}
-          envOverrides={config.notifications.env_overrides}
           tomlPath={config.toml_path}
           onSaved={onSaved}
         />
