@@ -22,10 +22,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
   if (role === "tool") {
     return (
-      <div className="flex items-start gap-2 text-xs text-muted-foreground px-2 py-1 ml-10 animate-fade-in">
-        <Wrench className="h-3 w-3 mt-0.5 shrink-0" />
+      <div className="flex items-start gap-2 text-xs text-muted-foreground px-2 py-1 ml-11 animate-fade-in">
+        <Wrench className="h-3 w-3 mt-0.5 shrink-0 text-primary/50" />
         <span>
-          <span className="font-medium">{toolName}</span>: {content}
+          <span className="font-medium text-foreground/70">{toolName}</span>{" "}
+          <span className="opacity-75">{content}</span>
         </span>
       </div>
     );
@@ -33,7 +34,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
   if (role === "system") {
     return (
-      <div className="text-muted-foreground text-xs italic px-2 py-1 ml-10 animate-fade-in">
+      <div className="text-muted-foreground text-xs italic px-2 py-1 ml-11 animate-fade-in">
         {content}
       </div>
     );
@@ -51,11 +52,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       {/* Avatar */}
       <div className="shrink-0 mt-0.5">
         {isUser ? (
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-            <User className="h-4 w-4 text-muted-foreground" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+            <User className="h-4 w-4 text-primary/70" />
           </div>
         ) : (
-          <div className="h-8 w-8 rounded-full overflow-hidden bg-muted shrink-0">
+          <div className="h-8 w-8 rounded-full overflow-hidden bg-muted shrink-0 ring-1 ring-border/50">
             <img
               src="/squire-avatar.png"
               alt="Squire"
@@ -68,11 +69,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       {/* Bubble */}
       <div
         className={cn(
-          "max-w-[80%] rounded-lg px-4 py-3 text-sm",
+          "max-w-[80%] rounded-xl px-4 py-3 text-sm",
           isUser
-            ? "bg-gradient-to-br from-primary to-primary/90 text-primary-foreground"
-            : "bg-card border",
-          isStreaming && "border-primary/30 shadow-[0_0_12px_-3px] shadow-primary/20"
+            ? "bg-primary text-primary-foreground"
+            : "bg-card ring-1 ring-border/50",
+          isStreaming && "ring-1 ring-primary/30 shadow-[0_0_16px_-4px] shadow-primary/15"
         )}
       >
         {isUser ? (
@@ -86,13 +87,13 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                   const isBlock = className?.includes("language-");
                   if (isBlock) {
                     return (
-                      <pre className="bg-muted rounded-md p-3 font-mono text-xs overflow-x-auto">
+                      <pre className="bg-muted/80 rounded-lg p-3 font-mono text-xs overflow-x-auto ring-1 ring-border/30">
                         <code className={className} {...props}>{children}</code>
                       </pre>
                     );
                   }
                   return (
-                    <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs" {...props}>
+                    <code className="bg-muted/80 rounded-md px-1.5 py-0.5 font-mono text-xs ring-1 ring-border/20" {...props}>
                       {children}
                     </code>
                   );

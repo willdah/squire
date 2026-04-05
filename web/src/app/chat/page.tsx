@@ -59,24 +59,24 @@ function ConnectionDot({ status }: { status: string }) {
 
 function WelcomeState({ onSuggestion }: { onSuggestion: (text: string) => void }) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-4 px-4 animate-fade-in">
-      <div className="h-16 w-16 rounded-full overflow-hidden bg-muted">
+    <div className="flex-1 flex flex-col items-center justify-center gap-5 px-4">
+      <div className="animate-fade-in-up h-14 w-14 rounded-2xl overflow-hidden bg-primary/10 ring-1 ring-primary/20 flex items-center justify-center">
         <img
           src="/squire-avatar.png"
           alt="Squire"
           className="h-full w-full object-cover"
         />
       </div>
-      <div className="text-center space-y-1">
-        <h2 className="text-lg">How can I help?</h2>
+      <div className="text-center space-y-1.5 animate-stagger-1">
+        <h2 className="font-display text-xl font-semibold">How can I help?</h2>
         <p className="text-sm text-muted-foreground">Ask about your homelab, containers, or system health.</p>
       </div>
-      <div className="flex flex-wrap justify-center gap-2 mt-2">
+      <div className="flex flex-wrap justify-center gap-2 mt-1 animate-stagger-2">
         {suggestions.map((s) => (
           <button
             key={s}
             onClick={() => onSuggestion(s)}
-            className="rounded-full border bg-card px-4 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+            className="rounded-full ring-1 ring-border/60 bg-card px-4 py-2 text-sm text-muted-foreground hover:bg-primary/8 hover:text-foreground hover:ring-primary/30 transition-all duration-200"
           >
             {s}
           </button>
