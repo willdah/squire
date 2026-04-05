@@ -78,6 +78,7 @@ export function WatchCycleHistory() {
   );
 
   const allCycles = firstPage ? [...firstPage, ...extraCycles] : null;
+  const showLoadMore = hasMore && (firstPage?.length ?? 0) >= PER_PAGE;
 
   const handleLoadMore = useCallback(async () => {
     setLoadingMore(true);
@@ -183,7 +184,7 @@ export function WatchCycleHistory() {
             </div>
           );
         })}
-        {hasMore && (
+        {showLoadMore && (
           <div className="p-3 text-center">
             <Button variant="ghost" size="sm" onClick={handleLoadMore} disabled={loadingMore}>
               {loadingMore ? "Loading..." : "Load more"}
