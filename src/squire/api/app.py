@@ -31,7 +31,7 @@ from ..tools import set_db as tools_set_db
 from ..tools import set_notifier as tools_set_notifier
 from ..tools import set_registry as tools_set_registry
 from . import dependencies as deps
-from .routers import alerts, chat, config, events, hosts, notifications, sessions, skills, system, watch
+from .routers import alerts, chat, config, events, hosts, notifications, sessions, skills, system, tools, watch
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -168,6 +168,7 @@ def create_app() -> FastAPI:
     app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
     app.include_router(alerts.router, prefix="/api/alerts", tags=["alerts"])
     app.include_router(skills.router, prefix="/api/skills", tags=["skills"])
+    app.include_router(tools.router, prefix="/api/tools", tags=["tools"])
     app.include_router(events.router, prefix="/api/events", tags=["events"])
     app.include_router(config.router, prefix="/api/config", tags=["config"])
     app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
