@@ -9,12 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Notifications page with tabs** — `/notifications` page now uses a tabbed layout (History, Alert Rules, Channels) as the single source of truth for all notification settings; category filter dropdown added to the history table; notifications config removed from `/config` page
-- **Channels tab** — `web/src/components/notifications/channels-tab.tsx` provides full webhook and email channel management (add/edit/delete webhooks, SMTP config form with tag inputs for recipients/events, test email button, master enable/disable switch)
-- **`update_alert_rule` tool** — new Notifier tool to modify existing alert rules in-place (condition, severity, host, cooldown, or enabled state); registered with RISK_LEVEL=2
-- **NotificationRouter** — `NotificationRouter` class in `src/squire/notifications/router.py` routes notifications to all configured channels (webhook and email); failures in one channel are logged but do not block others; drop-in replacement for `WebhookDispatcher`
-- **EmailNotifier** — `EmailNotifier` class in `src/squire/notifications/email.py` sends SMTP email notifications; blocking SMTP calls run in an executor to avoid blocking the event loop; failures are logged but never raised
-- **EmailConfig model** — added `EmailConfig` Pydantic model to `NotificationsConfig` for SMTP-based email notifications (9 fields: host, port, TLS, credentials, sender, recipients, event filter); updated `get_section` loader to support a `preserve` set for nested model fields instead of flattening them
+- **Notifications & alerting overhaul** — alerts actually fire and email notifications are supported
+  - Wired `evaluate_alerts()` into the watch loop — alert rules now trigger automatically during watch cycles
+  - Email notification channel via SMTP alongside existing webhooks, configured under `[notifications.email]` in `squire.toml`
+  - `NotificationRouter` dispatches to all configured channels (webhooks + email); failures in one channel don't block others
+  - `update_alert_rule` LLM tool — the Notifier agent can now modify and toggle existing alert rules
+  - `POST /api/notifications/test-email` endpoint for verifying email configuration
+  - `/notifications` page expanded with three tabs: History (with category filter), Alert Rules (full CRUD), and Channels (webhook + email management)
+  - Improved Notifier agent instructions with condition syntax examples and honest capability boundaries
 - **Runtime config editing from Web UI** — the `/config` page is now editable instead of read-only
   - `PATCH /api/config/{section}` endpoint for app, llm, watch, guardrails, and notifications sections
   - Per-section editable forms with appropriate input types (selects, switches, tag inputs)
@@ -35,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Notification channel management moved from `/config` to `/notifications` page as the single source of truth
+- `deps.notifier` is now a `NotificationRouter` instead of `WebhookDispatcher` (same `dispatch()` interface)
 - Risk gate error messages are now structured with `[BLOCKED]`/`[DENIED]` prefixes and include explicit instructions for the LLM to not retry and to inform the user
 - Risk tolerance guidance now clarifies that approval happens via UI dialog — the LLM should call tools directly without asking
 - All sub-agent instructions updated with consistent error handling guidance ("do NOT stop responding")
