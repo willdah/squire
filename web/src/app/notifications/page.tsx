@@ -43,7 +43,7 @@ export default function NotificationsPage() {
   );
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in-up">
       <h1 className="text-2xl">Notifications</h1>
 
       <Tabs defaultValue="history">

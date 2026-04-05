@@ -14,6 +14,7 @@ import {
   ListChecks,
   Eye,
   Wrench,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ConfigDetailResponse } from "@/lib/types";
@@ -50,44 +51,53 @@ export function Sidebar() {
         key={href}
         href={href}
         className={cn(
-          "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+          "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
           isActive
-            ? "bg-primary/10 text-primary border-l-[3px] border-primary"
-            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground border-l-[3px] border-transparent"
+            ? "bg-primary/12 text-primary"
+            : "text-muted-foreground hover:bg-accent hover:text-foreground"
         )}
       >
-        <Icon className="h-4 w-4" />
+        {isActive && (
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-primary" />
+        )}
+        <Icon className={cn(
+          "h-4 w-4 shrink-0 transition-colors",
+          isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+        )} />
         {label}
       </Link>
     );
   };
 
   const renderGroup = (label: string, items: typeof chatNav) => (
-    <>
-      <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className="space-y-0.5">
+      <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
         {label}
       </p>
-      <div className="space-y-1">
-        {items.map(renderLink)}
-      </div>
-    </>
+      {items.map(renderLink)}
+    </div>
   );
 
   return (
-    <aside className="hidden md:flex w-56 flex-col border-r bg-card">
-      <div className="flex h-14 items-center gap-2 border-b px-4">
-        <span className="font-semibold text-lg tracking-tight">Squire</span>
+    <aside className="hidden md:flex w-56 flex-col border-r border-border/60 bg-sidebar backdrop-blur-sm">
+      {/* Brand */}
+      <div className="flex h-14 items-center gap-2.5 border-b border-border/60 px-4">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/12">
+          <Shield className="h-3.5 w-3.5 text-primary" />
+        </div>
+        <span className="font-display text-base font-semibold tracking-tight">Squire</span>
       </div>
-      <nav className="flex-1 flex flex-col p-2">
+
+      {/* Navigation */}
+      <nav className="flex-1 flex flex-col gap-4 p-3 pt-4">
         {renderGroup("Chat", chatNav)}
-        <div className="my-3 mx-3 border-t" />
         {renderGroup("Monitoring", monitorNav)}
-        <div className="my-3 mx-3 border-t" />
         {renderGroup("System", systemNav)}
 
-        <div className="mt-auto px-3 py-3">
-          <p className="text-[10px] text-muted-foreground">
-            Squire{version ? ` v${version}` : ""}
+        {/* Version footer */}
+        <div className="mt-auto px-3 pb-1">
+          <p className="text-[10px] text-muted-foreground/50 font-medium tracking-wide">
+            {version ? `v${version}` : ""}
           </p>
         </div>
       </nav>

@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useEffect, useState } from "react";
-import { Moon, Sun, Menu } from "lucide-react";
+import { Moon, Sun, Menu, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -18,13 +18,19 @@ import {
   Settings,
   Activity,
   History,
+  ListChecks,
+  Eye,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
-  { href: "/activity", label: "Activity", icon: Activity },
   { href: "/sessions", label: "Sessions", icon: History },
+  { href: "/watch", label: "Watch", icon: Eye },
+  { href: "/activity", label: "Activity", icon: Activity },
+  { href: "/skills", label: "Skills", icon: ListChecks },
+  { href: "/tools", label: "Tools", icon: Wrench },
   { href: "/hosts", label: "Hosts", icon: Server },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/config", label: "Config", icon: Settings },
@@ -52,7 +58,7 @@ export function Header() {
   };
 
   return (
-    <header className="flex h-14 items-center justify-between border-b bg-card px-4">
+    <header className="flex h-12 items-center justify-between border-b border-border/60 bg-card/80 backdrop-blur-sm px-4">
       {/* Mobile menu */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetTrigger
@@ -60,9 +66,16 @@ export function Header() {
         >
           <Menu className="h-5 w-5" />
         </SheetTrigger>
-        <SheetContent side="left" className="w-56 p-0">
+        <SheetContent side="left" className="w-60 p-0">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <nav className="space-y-1 p-4 pt-10">
+          {/* Mobile brand */}
+          <div className="flex h-14 items-center gap-2.5 border-b px-4">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/12">
+              <Shield className="h-3.5 w-3.5 text-primary" />
+            </div>
+            <span className="font-display text-base font-semibold tracking-tight">Squire</span>
+          </div>
+          <nav className="space-y-0.5 p-3">
             {navItems.map(({ href, label, icon: Icon }) => {
               const isActive =
                 pathname === href || pathname.startsWith(href + "/");
@@ -72,10 +85,10 @@ export function Header() {
                   href={href}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
                     isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      ? "bg-primary/12 text-primary"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
                   )}
                 >
                   <Icon className="h-4 w-4" />
@@ -89,7 +102,13 @@ export function Header() {
 
       <div className="flex-1" />
 
-      <Button variant="ghost" size="icon" onClick={toggleTheme}>
+      {/* Theme toggle */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={toggleTheme}
+        className="h-8 w-8 rounded-lg"
+      >
         <span className="relative h-4 w-4">
           <Sun
             className={cn(

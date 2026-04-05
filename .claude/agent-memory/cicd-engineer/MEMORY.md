@@ -1,0 +1,1 @@
+- [project_cicd_baseline.md](project_cicd_baseline.md) -- CI/CD state as of 2026-04-04: single GHA workflow, broken Dockerfile, no frontend CI, no caching, no security

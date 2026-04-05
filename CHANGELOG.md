@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Web UI design revamp** — warm palette, display typography, refined components
+  - Replaced cold purple primary with warm amber/gold accent across light and dark modes
+  - Added Fraunces display serif for headings, paired with Plus Jakarta Sans body
+  - Redesigned sidebar with Shield brand icon, animated active indicators, grouped navigation
+  - Refined cards (subtle shadows), tables (uppercase headers), dialogs (frosted glass overlay)
+  - Chat: warmer message bubbles, staggered welcome animation, tool name accent chips
+  - All pages use smooth fade-in-up entrance animations
+  - Dynamic version from `importlib.metadata` (replaces hardcoded)
+
 ### Added
 
 - **Tools visibility & configuration page** — view all tools with metadata and configure per-tool policies
