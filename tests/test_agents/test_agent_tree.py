@@ -77,7 +77,7 @@ class TestMultiAgentMode:
             risk_gate_factory=_make_factory(),
         )
         tool_counts = {sa.name: len(sa.tools) for sa in agent.sub_agents}
-        assert tool_counts == {"Monitor": 5, "Container": 5, "Admin": 2, "Notifier": 4}
+        assert tool_counts == {"Monitor": 5, "Container": 5, "Admin": 2, "Notifier": 5}
 
     def test_requires_risk_gate_factory(self):
         config = AppConfig(multi_agent=True)
