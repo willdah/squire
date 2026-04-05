@@ -1,4 +1,5 @@
 from enum import StrEnum
+from importlib.metadata import version as _pkg_version
 from typing import Annotated, Any
 
 from pydantic import BeforeValidator, Field
@@ -58,6 +59,10 @@ class AppConfig(BaseSettings):
             file_secret_settings,
         )
 
+    version: str = Field(
+        default_factory=lambda: _pkg_version("squire"),
+        description="Package version (read-only, from importlib.metadata)",
+    )
     app_name: str = Field(
         default="Squire",
         description="Application name passed to the ADK runner",

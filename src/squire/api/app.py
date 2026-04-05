@@ -145,10 +145,12 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     static_dir = _find_static_dir()
 
+    from importlib.metadata import version as pkg_version
+
     app = FastAPI(
         title="Squire",
         description="AI-powered homelab management",
-        version="0.4.0",
+        version=pkg_version("squire"),
         lifespan=lifespan,
     )
 
