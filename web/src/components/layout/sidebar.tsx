@@ -11,6 +11,7 @@ import {
   History,
   ListChecks,
   Eye,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,7 @@ const mainNav = [
 ];
 
 const systemNav = [
+  { href: "/tools", label: "Tools", icon: Wrench },
   { href: "/hosts", label: "Hosts", icon: Server },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/config", label: "Config", icon: Settings },
