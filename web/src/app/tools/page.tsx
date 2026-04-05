@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Wrench, ChevronRight, Save, Loader2 } from "lucide-react";
+import { Wrench, ChevronRight, Save, Loader2, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { ToolInfo, ToolAction } from "@/lib/types";
 
 const RISK_COLORS: Record<number, string> = {
@@ -92,6 +92,13 @@ export default function ToolsPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [persist, setPersist] = useState(false);
+
+  // Search, filter, sort
+  const [search, setSearch] = useState("");
+  const [groupFilter, setGroupFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortCol, setSortCol] = useState<"name" | "group" | "risk" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   // Track pending config changes
   const [pendingOverrides, setPendingOverrides] = useState<Record<string, number | null>>({});
@@ -208,6 +215,46 @@ export default function ToolsPage() {
     }
   };
 
+  const toggleSort = (col: "name" | "group" | "risk") => {
+    if (sortCol === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  };
+
+  const getMaxRisk = (tool: ToolInfo): number => {
+    if (tool.actions) return Math.max(...tool.actions.map((a) => a.risk_override ?? a.risk_level));
+    return tool.risk_override ?? tool.risk_level ?? 0;
+  };
+
+  const filteredTools = (tools ?? [])
+    .filter((t) => {
+      if (search) {
+        const q = search.toLowerCase();
+        if (!t.name.toLowerCase().includes(q) && !t.description.toLowerCase().includes(q)) return false;
+      }
+      if (groupFilter !== "all" && t.group !== groupFilter) return false;
+      if (statusFilter !== "all" && t.status !== statusFilter) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (!sortCol) return 0;
+      const dir = sortDir === "asc" ? 1 : -1;
+      if (sortCol === "name") return a.name.localeCompare(b.name) * dir;
+      if (sortCol === "group") return a.group.localeCompare(b.group) * dir;
+      if (sortCol === "risk") return (getMaxRisk(a) - getMaxRisk(b)) * dir;
+      return 0;
+    });
+
+  const SortIcon = ({ col }: { col: "name" | "group" | "risk" }) => {
+    if (sortCol !== col) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+    return sortDir === "asc"
+      ? <ArrowUp className="h-3 w-3 ml-1" />
+      : <ArrowDown className="h-3 w-3 ml-1" />;
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -222,6 +269,41 @@ export default function ToolsPage() {
         View and configure the tools Squire has access to.
       </p>
 
+      {tools && tools.length > 0 && (
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Search tools..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8 h-8 text-sm"
+            />
+          </div>
+          <Select value={groupFilter} onValueChange={(v) => setGroupFilter(v ?? "all")}>
+            <SelectTrigger className="h-8 w-[130px] text-xs">
+              <SelectValue placeholder="All groups" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All groups</SelectItem>
+              <SelectItem value="monitor">Monitor</SelectItem>
+              <SelectItem value="container">Container</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? "all")}>
+            <SelectTrigger className="h-8 w-[130px] text-xs">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="enabled">Enabled</SelectItem>
+              <SelectItem value="disabled">Disabled</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {!tools || tools.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
           <Wrench className="h-8 w-8" />
@@ -232,16 +314,29 @@ export default function ToolsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Group</TableHead>
-                <TableHead>Risk</TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("name")}>
+                  <span className="flex items-center">Name<SortIcon col="name" /></span>
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("group")}>
+                  <span className="flex items-center">Group<SortIcon col="group" /></span>
+                </TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("risk")}>
+                  <span className="flex items-center">Risk<SortIcon col="risk" /></span>
+                </TableHead>
                 <TableHead>Approval</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Override</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {tools.map((tool) => {
+              {filteredTools.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
+                    No tools match your filters
+                  </TableCell>
+                </TableRow>
+              )}
+              {filteredTools.map((tool) => {
                 const isMulti = tool.actions && tool.actions.length > 0;
                 const isExpanded = expanded.has(tool.name);
                 return (
