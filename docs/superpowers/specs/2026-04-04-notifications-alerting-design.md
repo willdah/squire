@@ -115,23 +115,31 @@ Update `src/squire/instructions/notifier_agent.py` to:
 - Toggle enabled/disabled via inline switch (calls `POST /api/alerts/{name}/toggle`)
 - Delete with confirmation dialog
 
-**Tab 3: Channels** (new, informational)
-- Card per configured channel showing: type (webhook/email), name, status (enabled/disabled), event filter
-- "Configure" link to `/config` (notifications tab)
-- Read-only — full editing stays on `/config`
+**Tab 3: Channels** (new, fully editable)
+- Master enable/disable switch for the notification system
+- **Webhooks section:**
+  - List of configured webhooks showing: name, URL (redacted), events, status
+  - "Add Webhook" button opens dialog: name, URL, events (tag input), headers (key-value)
+  - Edit/delete per webhook
+- **Email section:**
+  - Email configuration form: SMTP host, port, TLS toggle, from address, to addresses (tag input), events filter
+  - SMTP credentials: user + password (password shown as redacted, editable for new values)
+  - Test email button (calls `POST /api/notifications/test-email`)
+- All changes use `PATCH /api/config/notifications?persist=true` (existing endpoint)
+- The notifications section on `/config` is removed to avoid duplication — `/notifications` is the single source of truth
+
+**New endpoint:**
+- `POST /api/notifications/test-email` — sends a test email using the current email config. Returns success/failure message.
 
 **Data fetching:**
 - History: `GET /api/events?limit=200` (existing)
 - Alert rules: `GET /api/alerts` (existing)
-- Channels: extracted from `GET /api/config` response (existing)
+- Channels: `GET /api/config` → `notifications` section (existing)
 
 **Mutations:**
-- Create: `POST /api/alerts`
-- Update: `PUT /api/alerts/{name}`
-- Toggle: `POST /api/alerts/{name}/toggle`
-- Delete: `DELETE /api/alerts/{name}`
-
-All endpoints already exist.
+- Alert rules: `POST /api/alerts`, `PUT /api/alerts/{name}`, `POST /api/alerts/{name}/toggle`, `DELETE /api/alerts/{name}` (all existing)
+- Channels: `PATCH /api/config/notifications` (existing)
+- Test email: `POST /api/notifications/test-email` (new)
 
 ---
 
@@ -234,10 +242,13 @@ Add to the /notifications History tab:
 | `src/squire/api/routers/config.py` | Redact email password in GET, handle in PATCH |
 | `src/squire/tools/notifications/__init__.py` | Add `update_alert_rule` tool |
 | `src/squire/instructions/notifier_agent.py` | Improve instructions with tool list + condition examples |
+| `src/squire/api/routers/notifications.py` | New: `POST /api/notifications/test-email` endpoint |
 | `web/src/app/notifications/page.tsx` | Add tabs, integrate alert rules and channels |
 | `web/src/components/notifications/alert-rules-tab.tsx` | New: alert rule CRUD table |
 | `web/src/components/notifications/alert-rule-form.tsx` | New: create/edit dialog |
-| `web/src/components/notifications/channels-tab.tsx` | New: channel overview cards |
+| `web/src/components/notifications/channels-tab.tsx` | New: full channel management (webhooks + email) |
+| `web/src/components/config/notifications-config-form.tsx` | Remove (channel editing moves to /notifications) |
+| `web/src/components/config/config-editor.tsx` | Remove notifications tab (replaced by /notifications page) |
 | `web/src/lib/types.ts` | Add AlertRule types |
 | `tests/test_notifications/` | Tests for email notifier, router, evaluator integration |
 | `tests/test_config_api.py` | Email password redaction tests |
