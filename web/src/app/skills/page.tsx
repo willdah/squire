@@ -100,8 +100,8 @@ export default function SkillsPage() {
       </p>
 
       {!skills || skills.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
-          <ListChecks className="h-8 w-8" />
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+          <ListChecks className="h-8 w-8 opacity-40" />
           <p className="text-sm">No skills configured</p>
           <p className="text-xs">
             Create a skill to give Squire guided, repeatable behavior.

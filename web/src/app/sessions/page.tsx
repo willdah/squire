@@ -59,7 +59,7 @@ export default function SessionsPage() {
       </div>
 
       {!sessions || sessions.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
           <History className="h-8 w-8" />
           <p className="text-sm">No sessions found</p>
         </div>

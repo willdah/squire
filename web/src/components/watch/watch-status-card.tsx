@@ -56,9 +56,10 @@ export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusC
     <Card>
       <CardContent className="pt-6">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Watch Mode</h2>
-          <Badge variant={isRunning ? "default" : "secondary"}>
-            {loading === "starting" ? "Starting…" : loading === "stopping" ? "Stopping…" : isRunning ? "● Running" : "● Stopped"}
+          <h2 className="text-base font-display font-semibold">Watch Mode</h2>
+          <Badge variant={isRunning ? "default" : "secondary"} className="gap-1.5">
+            <span className={`inline-block h-1.5 w-1.5 rounded-full ${isRunning ? "bg-gauge-ok animate-pulse-dot" : "bg-muted-foreground"}`} />
+            {loading === "starting" ? "Starting…" : loading === "stopping" ? "Stopping…" : isRunning ? "Running" : "Stopped"}
           </Badge>
         </div>
         <div className="text-sm text-muted-foreground space-y-1">

@@ -34,9 +34,9 @@ const RISK_COLORS: Record<number, string> = {
 };
 
 const GROUP_COLORS: Record<string, string> = {
-  monitor: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
-  container: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
-  admin: "bg-orange-500/15 text-orange-700 dark:text-orange-400",
+  monitor: "bg-sky-500/12 text-sky-700 dark:text-sky-400",
+  container: "bg-violet-500/12 text-violet-700 dark:text-violet-400",
+  admin: "bg-amber-500/12 text-amber-700 dark:text-amber-400",
 };
 
 function RiskBadge({ level, override }: { level: number; override?: number | null }) {
@@ -305,7 +305,7 @@ export default function ToolsPage() {
       )}
 
       {!tools || tools.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
           <Wrench className="h-8 w-8" />
           <p className="text-sm">No tools registered</p>
         </div>
