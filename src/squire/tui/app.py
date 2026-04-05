@@ -5,6 +5,7 @@ import logging
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.theme import Theme
 from textual.widgets import Footer, Header
 
 from .approval_bridge import ApprovalBridge, ApprovalRequest
@@ -12,6 +13,21 @@ from .approval_modal import ApprovalModal, ConfirmModal
 from .chat_pane import ChatPane
 from .log_viewer import LogViewer
 from .status_panel import StatusPanel
+
+SQUIRE_THEME = Theme(
+    name="squire-dark",
+    primary="#8931c4",
+    secondary="#5b257e",
+    accent="#ff7621",
+    warning="#f0ad4e",
+    error="#b41c2b",
+    success="#009f42",
+    foreground="#c6c6c6",
+    background="#1c1022",
+    surface="#30183f",
+    panel="#451f5e",
+    dark=True,
+)
 
 
 class SquireApp(App):
@@ -94,6 +110,9 @@ class SquireApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        self.register_theme(SQUIRE_THEME)
+        self.theme = "squire-dark"
+
         # Register this app with the approval bridge
         if self._approval_bridge:
             self._approval_bridge.set_app(self)
