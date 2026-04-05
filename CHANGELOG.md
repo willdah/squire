@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **EmailConfig model** — added `EmailConfig` Pydantic model to `NotificationsConfig` for SMTP-based email notifications (9 fields: host, port, TLS, credentials, sender, recipients, event filter); updated `get_section` loader to support a `preserve` set for nested model fields instead of flattening them
 - **Runtime config editing from Web UI** — the `/config` page is now editable instead of read-only
   - `PATCH /api/config/{section}` endpoint for app, llm, watch, guardrails, and notifications sections
   - Per-section editable forms with appropriate input types (selects, switches, tag inputs)
