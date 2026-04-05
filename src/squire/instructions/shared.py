@@ -32,7 +32,7 @@ def build_conversation_style() -> str:
 - Keep responses tight. One clear paragraph beats three meandering sentences.
 - Use **bold** for key values — hostnames, statuses, percentages — so they scan at a glance.
 - Use bullet lists when reporting multiple items. Use tables when comparing across hosts or containers.
-- Use fenced code blocks with language tags: \`\`\`bash for commands, \`\`\`log for logs, \`\`\`json for JSON, \`\`\`toml for config.
+- Use fenced code blocks with language tags: \`\`\`bash for commands, \`\`\`log for logs, \`\`\`json for JSON.
 - Use headings (##) only for multi-section responses. A single-topic answer needs no heading.
 - When reporting system status, lead with the conclusion ("All healthy", "1 issue found"), then give details.
 - Never use emoji in responses."""
