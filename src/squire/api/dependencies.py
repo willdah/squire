@@ -7,14 +7,14 @@ injection. Tools also receive these via the global tool registry.
 from squire.config import AppConfig, DatabaseConfig, GuardrailsConfig, LLMConfig, NotificationsConfig, WatchConfig
 from squire.database.service import DatabaseService
 from squire.hosts.store import HostStore
-from squire.notifications.webhook import WebhookDispatcher
+from squire.notifications.router import NotificationRouter
 from squire.skills import SkillService
 from squire.system.registry import BackendRegistry
 
 # Singletons — populated by the lifespan context manager in app.py
 db: DatabaseService | None = None
 registry: BackendRegistry | None = None
-notifier: WebhookDispatcher | None = None
+notifier: NotificationRouter | None = None
 skills_service: SkillService | None = None
 
 # Configs — loaded once at startup
@@ -39,9 +39,9 @@ def get_registry() -> BackendRegistry:
     return registry
 
 
-def get_notifier() -> WebhookDispatcher:
+def get_notifier() -> NotificationRouter:
     if notifier is None:
-        raise RuntimeError("WebhookDispatcher not initialized")
+        raise RuntimeError("NotificationRouter not initialized")
     return notifier
 
 

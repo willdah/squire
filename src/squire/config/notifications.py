@@ -21,6 +21,20 @@ class WebhookConfig(BaseModel):
     )
 
 
+class EmailConfig(BaseModel):
+    """Configuration for email notification delivery."""
+
+    enabled: bool = Field(default=False, description="Whether email notifications are enabled")
+    smtp_host: str = Field(default="", description="SMTP server hostname")
+    smtp_port: int = Field(default=587, description="SMTP port (typically 587 for TLS)")
+    use_tls: bool = Field(default=True, description="Use STARTTLS for SMTP connection")
+    smtp_user: str = Field(default="", description="SMTP authentication username")
+    smtp_password: str = Field(default="", description="SMTP authentication password")
+    from_address: str = Field(default="", description="Email sender address")
+    to_addresses: list[str] = Field(default_factory=list, description="Recipient email addresses")
+    events: list[str] = Field(default=["*"], description="Event categories to send (or '*' for all)")
+
+
 class NotificationsConfig(BaseSettings):
     """Notification system configuration.
 
@@ -43,7 +57,7 @@ class NotificationsConfig(BaseSettings):
             init_settings,
             env_settings,
             dotenv_settings,
-            TomlSectionSource(settings_cls, partial(get_section, "notifications")),
+            TomlSectionSource(settings_cls, partial(get_section, "notifications", preserve={"email"})),
             file_secret_settings,
         )
 
@@ -54,4 +68,8 @@ class NotificationsConfig(BaseSettings):
     webhooks: list[WebhookConfig] = Field(
         default_factory=list,
         description="List of webhook endpoints to send notifications to",
+    )
+    email: EmailConfig | None = Field(
+        default=None,
+        description="Email notification configuration",
     )

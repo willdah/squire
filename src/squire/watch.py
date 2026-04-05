@@ -34,6 +34,9 @@ from .config import (
 from .database.service import DatabaseService
 from .hosts.store import HostStore
 from .main import _collect_all_snapshots
+from .notifications.alert_evaluator import evaluate_alerts
+from .notifications.email import EmailNotifier
+from .notifications.router import NotificationRouter
 from .notifications.webhook import WebhookDispatcher
 from .system.registry import BackendRegistry
 from .tools import TOOL_RISK_LEVELS, set_db, set_notifier, set_registry
@@ -130,7 +133,11 @@ async def start_watch() -> None:
     # Initialize database and webhook dispatcher
     db = DatabaseService(db_config.path)
     emitter = WatchEventEmitter(db)
-    notifier = WebhookDispatcher(notif_config)
+    webhook_dispatcher = WebhookDispatcher(notif_config)
+    email_notifier = None
+    if notif_config.email and notif_config.email.enabled:
+        email_notifier = EmailNotifier(notif_config.email)
+    notifier = NotificationRouter(webhook=webhook_dispatcher, email=email_notifier)
     set_db(db)
     set_notifier(notifier)
 
@@ -261,6 +268,14 @@ async def start_watch() -> None:
                 if "local" in snapshot:
                     await db.save_snapshot(snapshot["local"])
                 session.state["latest_snapshot"] = snapshot
+
+                # Evaluate alert rules against fresh snapshot
+                try:
+                    fired = await evaluate_alerts(db, notifier, snapshot)
+                    if fired > 0 and emitter:
+                        await emitter.emit_tool_result(cycle_count, "alert_evaluator", f"{fired} alert(s) fired")
+                except Exception:
+                    logger.debug("Alert evaluation failed", exc_info=True)
             except Exception:
                 logger.debug("Snapshot collection failed", exc_info=True)
 
@@ -415,7 +430,7 @@ async def _update_watch_state(db: DatabaseService, state: dict[str, str]) -> Non
         await db.set_watch_state(key, value)
 
 
-async def _dispatch(notifier: WebhookDispatcher, category: str, summary: str) -> None:
+async def _dispatch(notifier: NotificationRouter, category: str, summary: str) -> None:
     """Best-effort notification dispatch."""
     try:
         await notifier.dispatch(category=category, summary=summary)

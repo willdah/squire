@@ -44,20 +44,26 @@ def _load_toml() -> dict:
     return _cached
 
 
-def get_section(name: str) -> dict:
+def get_section(name: str, preserve: set[str] | None = None) -> dict:
     """Get a TOML section by name, returning {} if not found.
 
     Nested sub-tables are flattened with underscore-joined keys.
     For example, ``[guardrails.watch]`` with ``tolerance = "read-only"``
     becomes ``{"watch_tolerance": "read-only"}`` in the returned dict.
+
+    Args:
+        name: TOML section name (e.g. ``"guardrails"``).
+        preserve: Sub-table keys to keep as nested dicts instead of flattening.
+            Use this for fields that map to nested Pydantic models (e.g. ``{"email"}``).
     """
     data = _load_toml()
     section = data.get(name, {})
     if not isinstance(section, dict):
         return {}
     section = dict(section)  # shallow copy to avoid mutating cache
+    preserve = preserve or set()
     for sub_key in list(section):
-        if isinstance(section[sub_key], dict):
+        if isinstance(section[sub_key], dict) and sub_key not in preserve:
             nested = section.pop(sub_key)
             for k, v in nested.items():
                 section[f"{sub_key}_{k}"] = v

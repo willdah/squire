@@ -88,6 +88,14 @@ export interface AlertRule {
   created_at?: string;
 }
 
+export interface AlertRuleCreate {
+  name: string;
+  condition: string;
+  host?: string;
+  severity?: string;
+  cooldown_minutes?: number;
+}
+
 export interface Skill {
   name: string;
   description: string;

@@ -31,7 +31,7 @@ from ..tools import set_db as tools_set_db
 from ..tools import set_notifier as tools_set_notifier
 from ..tools import set_registry as tools_set_registry
 from . import dependencies as deps
-from .routers import alerts, chat, config, events, hosts, sessions, skills, system, watch
+from .routers import alerts, chat, config, events, hosts, notifications, sessions, skills, system, watch
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -80,7 +80,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # Create service singletons
     deps.registry = BackendRegistry()
     deps.db = DatabaseService(deps.db_config.path)
-    deps.notifier = WebhookDispatcher(deps.notif_config)
+    from ..notifications.email import EmailNotifier
+    from ..notifications.router import NotificationRouter
+
+    webhook_dispatcher = WebhookDispatcher(deps.notif_config)
+    email_notifier = None
+    if deps.notif_config.email and deps.notif_config.email.enabled:
+        email_notifier = EmailNotifier(deps.notif_config.email)
+    deps.notifier = NotificationRouter(webhook=webhook_dispatcher, email=email_notifier)
     deps.skills_service = SkillService(skills_config.path)
 
     # Load managed hosts from DB into the registry
@@ -163,6 +170,7 @@ def create_app() -> FastAPI:
     app.include_router(skills.router, prefix="/api/skills", tags=["skills"])
     app.include_router(events.router, prefix="/api/events", tags=["events"])
     app.include_router(config.router, prefix="/api/config", tags=["config"])
+    app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
     app.include_router(watch.router, prefix="/api/watch", tags=["watch"])
 
     if static_dir:

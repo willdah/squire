@@ -2,12 +2,12 @@
 
 import useSWR from "swr";
 import { apiGet } from "@/lib/api";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { NotificationHistory } from "@/components/notifications/notification-history";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Bell, Webhook, ShieldAlert, Eye } from "lucide-react";
-import type { EventInfo, ConfigResponse } from "@/lib/types";
+import { AlertRulesTab } from "@/components/notifications/alert-rules-tab";
+import { ChannelsTab } from "@/components/notifications/channels-tab";
+import type { EventInfo } from "@/lib/types";
 
 const NOTIFICATION_CATEGORIES = [
   "watch.alert",
@@ -17,95 +17,54 @@ const NOTIFICATION_CATEGORIES = [
   "error",
 ];
 
+function NotificationsSkeleton() {
+  return (
+    <div className="space-y-6">
+      <Skeleton className="h-8 w-48" />
+      <Skeleton className="h-10 w-full max-w-xl" />
+      <Skeleton className="h-64 rounded-lg" />
+    </div>
+  );
+}
+
 export default function NotificationsPage() {
-  const { data: allEvents } = useSWR(
+  const { data: allEvents, isLoading } = useSWR(
     `/api/events?limit=200`,
     () => apiGet<EventInfo[]>(`/api/events?limit=200`),
     { refreshInterval: 15000 }
   );
 
-  const { data: config } = useSWR("/api/config", () =>
-    apiGet<ConfigResponse>("/api/config")
-  );
+  if (isLoading) {
+    return <NotificationsSkeleton />;
+  }
 
-  const notificationEvents = (allEvents ?? []).filter((e) =>
+  const events = (allEvents ?? []).filter((e) =>
     NOTIFICATION_CATEGORIES.includes(e.category)
   );
 
-  const webhookUrl =
-    (config?.notifications as Record<string, unknown>)?.webhook_url as
-      | string
-      | undefined;
-
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl">Notifications</h1>
-        {notificationEvents.length > 0 && (
-          <Badge variant="secondary">{notificationEvents.length}</Badge>
-        )}
-      </div>
-      <p className="text-sm text-muted-foreground">
-        Configure where Squire sends alerts and review recent notification history.
-        Alert rules are managed conversationally — ask Squire to create or modify them.
-      </p>
+      <h1 className="text-2xl">Notifications</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Eye className="h-4 w-4" />
-              Watch Mode Events
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              Alerts fired during autonomous watch cycles, blocked tools, and watch start/stop events.
-            </p>
-          </CardContent>
-        </Card>
+      <Tabs defaultValue="history">
+        <TabsList className="flex flex-wrap">
+          <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="rules">Alert Rules</TabsTrigger>
+          <TabsTrigger value="channels">Channels</TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4" />
-              Risk Gate Denials
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              Tool calls that exceeded the risk tolerance and were denied automatically.
-            </p>
-          </CardContent>
-        </Card>
+        <TabsContent value="history">
+          <NotificationHistory events={events} />
+        </TabsContent>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Webhook className="h-4 w-4" />
-              Webhook Destination
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs font-mono text-muted-foreground truncate">
-              {webhookUrl || "Not configured"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Set <code className="text-xs">webhook_url</code> in{" "}
-              <code className="text-xs">[notifications]</code> config.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+        <TabsContent value="rules">
+          <AlertRulesTab />
+        </TabsContent>
 
-      <Separator />
-
-      <div className="flex items-center gap-3">
-        <h2 className="text-lg">Recent Notifications</h2>
-        <Bell className="h-4 w-4 text-muted-foreground" />
-      </div>
-
-      <NotificationHistory events={notificationEvents} />
+        <TabsContent value="channels">
+          <ChannelsTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -77,6 +77,30 @@ class TestNotificationsConfig:
         assert config.enabled is False
         assert config.webhooks == []
 
+    def test_email_defaults_none(self):
+        config = NotificationsConfig()
+        assert config.email is None
+
+    def test_email_from_toml(self, monkeypatch):
+        monkeypatch.setattr(
+            loader_mod,
+            "_cached",
+            {
+                "notifications": {
+                    "enabled": True,
+                    "email": {
+                        "enabled": True,
+                        "smtp_host": "smtp.example.com",
+                        "from_address": "squire@example.com",
+                        "to_addresses": ["admin@example.com"],
+                    },
+                }
+            },
+        )
+        config = NotificationsConfig()
+        assert config.email is not None
+        assert config.email.smtp_host == "smtp.example.com"
+
 
 class TestTomlLoading:
     """Test that config classes load values from squire.toml."""
