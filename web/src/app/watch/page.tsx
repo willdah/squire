@@ -35,7 +35,7 @@ export default function WatchPage() {
         <WatchStatsCard status={status ?? null} />
       </div>
 
-      <Tabs defaultValue={isRunning ? "stream" : "history"}>
+      <Tabs defaultValue="stream">
         <TabsList>
           <TabsTrigger value="stream">Live Stream</TabsTrigger>
           <TabsTrigger value="history">Cycle History</TabsTrigger>
