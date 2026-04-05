@@ -54,6 +54,10 @@ class GuardrailsConfig(BaseSettings):
         default_factory=list,
         description="Tool names that are hard-blocked, never run",
     )
+    tools_risk_overrides: dict[str, int] = Field(
+        default_factory=dict,
+        description="Per-tool risk level overrides (tool name or tool:action -> 1-5)",
+    )
 
     # --- Per-agent tolerance overrides ---
 
