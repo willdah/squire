@@ -113,6 +113,13 @@ async def watch_cycles(
     return await db.get_watch_cycles(page=page, per_page=per_page)
 
 
+@router.delete("/cycles", response_model=WatchCommandResponse)
+async def watch_delete_cycles(db=Depends(get_db)) -> WatchCommandResponse:
+    """Delete all cycle history."""
+    await db.delete_watch_cycles()
+    return WatchCommandResponse(status="ok", message="Cycle history cleared")
+
+
 @router.get("/cycles/{cycle}")
 async def watch_cycle_detail(cycle: int, db=Depends(get_db)) -> list[dict]:
     """Full event stream for a specific cycle."""

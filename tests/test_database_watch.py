@@ -108,6 +108,29 @@ async def test_approval_not_found(db):
 
 
 @pytest.mark.asyncio
+async def test_delete_watch_cycles(db):
+    """delete_watch_cycles removes all watch events but preserves commands/approvals."""
+    await db.insert_watch_event(cycle=1, type="cycle_start", content="{}")
+    await db.insert_watch_event(cycle=1, type="cycle_end", content="{}")
+    await db.insert_watch_event(cycle=2, type="cycle_start", content="{}")
+    await db.insert_watch_event(cycle=2, type="cycle_end", content="{}")
+    await db.insert_watch_command("stop")
+    await db.insert_watch_approval(request_id="req-1", tool_name="test", args="{}", risk_level=3)
+
+    await db.delete_watch_cycles()
+
+    events = await db.get_watch_events_since(0)
+    assert events == []
+    cycles = await db.get_watch_cycles()
+    assert cycles == []
+    # Commands and approvals must be preserved
+    commands = await db.get_pending_watch_commands()
+    assert len(commands) == 1
+    approval = await db.get_watch_approval("req-1")
+    assert approval is not None
+
+
+@pytest.mark.asyncio
 async def test_cleanup_watch_data(db):
     """Cleanup removes old events but keeps recent ones."""
     await db.insert_watch_event(cycle=1, type="cycle_start", content="{}")

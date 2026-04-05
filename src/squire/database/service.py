@@ -561,6 +561,12 @@ class DatabaseService:
             )
         return cycles
 
+    async def delete_watch_cycles(self) -> None:
+        """Delete all watch events (cycle history)."""
+        conn = await self._get_conn()
+        await conn.execute("DELETE FROM watch_events")
+        await conn.commit()
+
     # --- Watch Commands ---
 
     async def insert_watch_command(self, command: str, payload: str | None = None) -> int:
