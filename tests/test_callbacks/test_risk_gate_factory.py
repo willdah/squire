@@ -284,3 +284,75 @@ class TestCompoundActionNames:
         )
         assert result is not None
         assert "unknown" in result["error"].lower()
+
+
+class TestRiskOverrides:
+    @pytest.mark.asyncio
+    async def test_override_lowers_risk(self):
+        """A risk override should substitute the base risk level."""
+        gate = create_risk_gate(
+            tool_risk_levels={"run_command": 5},
+            risk_overrides={"run_command": 1},
+        )
+        result = await gate(_make_tool("run_command"), {"command": "ls"}, _make_context(threshold=3))
+        assert result is None  # risk 1 <= threshold 3
+
+    @pytest.mark.asyncio
+    async def test_override_raises_risk(self):
+        """A risk override can raise the risk above threshold."""
+        gate = create_risk_gate(
+            tool_risk_levels={"system_info": 1},
+            risk_overrides={"system_info": 5},
+        )
+        result = await gate(_make_tool("system_info"), {}, _make_context(threshold=3))
+        assert result is not None  # risk 5 > threshold 3
+
+    @pytest.mark.asyncio
+    async def test_override_compound_action(self):
+        """Risk overrides work with compound action names."""
+        gate = create_risk_gate(
+            tool_risk_levels={"docker_container:remove": 4},
+            risk_overrides={"docker_container:remove": 1},
+        )
+        result = await gate(
+            _make_tool("docker_container"),
+            {"action": "remove"},
+            _make_context(threshold=3),
+        )
+        assert result is None  # overridden to risk 1
+
+    @pytest.mark.asyncio
+    async def test_override_only_affects_specified_tool(self):
+        """An override for one tool should not affect another."""
+        gate = create_risk_gate(
+            tool_risk_levels={"system_info": 1, "run_command": 5},
+            risk_overrides={"run_command": 1},
+        )
+        # system_info should still use its base risk of 1
+        result = await gate(_make_tool("system_info"), {}, _make_context(threshold=3))
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_no_overrides_is_default_behavior(self):
+        """When risk_overrides is None/empty, behavior is unchanged."""
+        gate = create_risk_gate(
+            tool_risk_levels={"run_command": 5},
+            risk_overrides={},
+        )
+        result = await gate(_make_tool("run_command"), {"command": "ls"}, _make_context(threshold=3))
+        assert result is not None  # risk 5 > threshold 3
+
+    @pytest.mark.asyncio
+    async def test_remote_host_still_bumps_after_override(self):
+        """Remote host escalation should apply on top of the override."""
+        gate = create_risk_gate(
+            tool_risk_levels={"system_info": 1},
+            risk_overrides={"system_info": 3},
+        )
+        # Override to 3, remote bump to 4, threshold 3 → needs approval
+        result = await gate(
+            _make_tool("system_info"),
+            {"host": "remote-server"},
+            _make_context(threshold=3),
+        )
+        assert result is not None
