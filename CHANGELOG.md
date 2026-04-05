@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Watch:** "Clear History" button on Cycle History tab with confirmation dialog; calls `DELETE /api/watch/cycles` to truncate cycle data (#36)
+- **Watch:** "Clear Stream" button on Live Stream tab to clear in-memory event buffer (#36)
+- **Watch:** Accumulating "Load More" pagination on Cycle History — cycles append instead of replacing; "Back to Latest" button resets to page 1 (#22)
+
 ### Documentation
 
 - **Configuration reference** — document email notifications (`[notifications.email]`), per-tool risk overrides (`tools_risk_overrides`), host fields (`key_file`, `service_root`), and fix misleading claim about `[[hosts]]` in TOML

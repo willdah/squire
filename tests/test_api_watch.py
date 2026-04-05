@@ -105,3 +105,18 @@ async def test_watch_approve_already_resolved(db):
     with pytest.raises(HTTPException) as exc_info:
         await watch_approve(request_id="req-1", action=WatchApprovalAction(approved=True), db=db)
     assert exc_info.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_watch_delete_cycles(db):
+    from squire.api.routers.watch import watch_delete_cycles
+
+    await db.insert_watch_event(1, "cycle_start", "{}")
+    await db.insert_watch_event(1, "cycle_end", "{}")
+
+    result = await watch_delete_cycles(db=db)
+    assert result.status == "ok"
+    assert result.message == "Cycle history cleared"
+
+    cycles = await db.get_watch_cycles()
+    assert cycles == []
