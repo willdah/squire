@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-04-05
+
 ### Changed
 
 - **Web UI design revamp** — warm palette, display typography, refined components
