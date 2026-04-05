@@ -23,7 +23,11 @@ class TestNotificationRouter:
         router = NotificationRouter(webhook=mock_webhook)
         await router.dispatch(category="test", summary="hello")
         mock_webhook.dispatch.assert_called_once_with(
-            category="test", summary="hello", details=None, session_id=None, tool_name=None,
+            category="test",
+            summary="hello",
+            details=None,
+            session_id=None,
+            tool_name=None,
         )
 
     @pytest.mark.asyncio

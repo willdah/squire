@@ -82,17 +82,21 @@ class TestNotificationsConfig:
         assert config.email is None
 
     def test_email_from_toml(self, monkeypatch):
-        monkeypatch.setattr(loader_mod, "_cached", {
-            "notifications": {
-                "enabled": True,
-                "email": {
+        monkeypatch.setattr(
+            loader_mod,
+            "_cached",
+            {
+                "notifications": {
                     "enabled": True,
-                    "smtp_host": "smtp.example.com",
-                    "from_address": "squire@example.com",
-                    "to_addresses": ["admin@example.com"],
-                },
-            }
-        })
+                    "email": {
+                        "enabled": True,
+                        "smtp_host": "smtp.example.com",
+                        "from_address": "squire@example.com",
+                        "to_addresses": ["admin@example.com"],
+                    },
+                }
+            },
+        )
         config = NotificationsConfig()
         assert config.email is not None
         assert config.email.smtp_host == "smtp.example.com"
