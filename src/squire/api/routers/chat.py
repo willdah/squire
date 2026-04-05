@@ -163,8 +163,10 @@ async def chat_websocket(
 
     # Build agent with approval bridge wired in
     def _make_risk_gate(tool_risk_levels: dict[str, int]):
+        guardrails = GuardrailsConfig()
         return create_risk_gate(
             tool_risk_levels=tool_risk_levels,
+            risk_overrides=dict(guardrails.tools_risk_overrides),
             approval_provider=approval_bridge,
         )
 
@@ -180,8 +182,10 @@ async def chat_websocket(
             risk_gate_factory=_make_risk_gate,
         )
     else:
+        guardrails_for_gate = GuardrailsConfig()
         risk_gate_callback = create_risk_gate(
             tool_risk_levels=TOOL_RISK_LEVELS,
+            risk_overrides=dict(guardrails_for_gate.tools_risk_overrides),
             approval_provider=approval_bridge,
         )
         # Override multi_agent so create_squire_agent takes the

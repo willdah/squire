@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import useSWR from "swr";
+import { apiGet } from "@/lib/api";
 import {
   MessageSquare,
   Server,
@@ -11,18 +13,24 @@ import {
   History,
   ListChecks,
   Eye,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { ConfigDetailResponse } from "@/lib/types";
 
-const mainNav = [
+const chatNav = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
+  { href: "/sessions", label: "Sessions", icon: History },
+];
+
+const monitorNav = [
   { href: "/watch", label: "Watch", icon: Eye },
   { href: "/activity", label: "Activity", icon: Activity },
-  { href: "/sessions", label: "Sessions", icon: History },
-  { href: "/skills", label: "Skills", icon: ListChecks },
 ];
 
 const systemNav = [
+  { href: "/skills", label: "Skills", icon: ListChecks },
+  { href: "/tools", label: "Tools", icon: Wrench },
   { href: "/hosts", label: "Hosts", icon: Server },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/config", label: "Config", icon: Settings },
@@ -30,8 +38,12 @@ const systemNav = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: config } = useSWR("/api/config", () =>
+    apiGet<ConfigDetailResponse>("/api/config")
+  );
+  const version = config?.app?.values?.version as string | undefined;
 
-  const renderLink = ({ href, label, icon: Icon }: typeof mainNav[number]) => {
+  const renderLink = ({ href, label, icon: Icon }: typeof chatNav[number]) => {
     const isActive = pathname === href || pathname.startsWith(href + "/");
     return (
       <Link
@@ -50,30 +62,33 @@ export function Sidebar() {
     );
   };
 
+  const renderGroup = (label: string, items: typeof chatNav) => (
+    <>
+      <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <div className="space-y-1">
+        {items.map(renderLink)}
+      </div>
+    </>
+  );
+
   return (
     <aside className="hidden md:flex w-56 flex-col border-r bg-card">
       <div className="flex h-14 items-center gap-2 border-b px-4">
         <span className="font-semibold text-lg tracking-tight">Squire</span>
       </div>
       <nav className="flex-1 flex flex-col p-2">
-        <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Navigation
-        </p>
-        <div className="space-y-1">
-          {mainNav.map(renderLink)}
-        </div>
-
+        {renderGroup("Chat", chatNav)}
         <div className="my-3 mx-3 border-t" />
-
-        <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          System
-        </p>
-        <div className="space-y-1">
-          {systemNav.map(renderLink)}
-        </div>
+        {renderGroup("Monitoring", monitorNav)}
+        <div className="my-3 mx-3 border-t" />
+        {renderGroup("System", systemNav)}
 
         <div className="mt-auto px-3 py-3">
-          <p className="text-[10px] text-muted-foreground">Squire v0.4</p>
+          <p className="text-[10px] text-muted-foreground">
+            Squire{version ? ` v${version}` : ""}
+          </p>
         </div>
       </nav>
     </aside>

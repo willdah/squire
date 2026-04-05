@@ -167,6 +167,34 @@ class EventInfo(BaseModel):
     details: str | None = None
 
 
+# --- Tools ---
+
+
+class ToolParameter(BaseModel):
+    name: str
+    type: str
+    required: bool = True
+    default: str | None = None
+
+
+class ToolAction(BaseModel):
+    name: str
+    risk_level: int
+    risk_override: int | None = None
+
+
+class ToolInfo(BaseModel):
+    name: str
+    description: str
+    group: str
+    parameters: list[ToolParameter]
+    actions: list[ToolAction] | None = None
+    risk_level: int | None = None  # single-action tools only
+    risk_override: int | None = None  # single-action tools only
+    status: str  # "enabled" | "disabled"
+    approval_policy: str | None = None  # "always" | "never" | null
+
+
 # --- Config ---
 
 
@@ -222,6 +250,7 @@ class GuardrailsConfigUpdate(BaseModel):
     tools_allow: list[str] | None = None
     tools_require_approval: list[str] | None = None
     tools_deny: list[str] | None = None
+    tools_risk_overrides: dict[str, int] | None = None
     monitor_tolerance: str | None = None
     container_tolerance: str | None = None
     admin_tolerance: str | None = None

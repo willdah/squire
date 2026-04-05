@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Tools visibility & configuration page** — view all tools with metadata and configure per-tool policies
+  - `GET /api/tools` endpoint returns the full tool catalog with name, description, group, parameters, risk levels, and effective guardrails
+  - `tools_risk_overrides` field on `GuardrailsConfig` for per-tool (or per-action) risk level overrides
+  - Risk gate applies overrides before evaluation — overridden risk levels flow through host/force escalation
+  - `/tools` page with table, collapsible multi-action rows, inline risk override inputs, approval policy dropdown, and enable/disable toggle
+  - Config changes save through existing `PATCH /api/config/guardrails` with optional persist to `squire.toml`
 - **Notifications & alerting overhaul** — alerts actually fire and email notifications are supported
   - Wired `evaluate_alerts()` into the watch loop — alert rules now trigger automatically during watch cycles
   - Email notification channel via SMTP alongside existing webhooks, configured under `[notifications.email]` in `squire.toml`

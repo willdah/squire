@@ -32,6 +32,7 @@ _ADK_INTERNAL_TOOLS = ADK_INTERNAL_TOOLS
 
 def create_risk_gate(
     tool_risk_levels: dict[str, int] | None = None,
+    risk_overrides: dict[str, int] | None = None,
     approval_provider: ApprovalProvider | None = None,
     default_threshold: int | None = None,
     headless: bool = False,
@@ -42,6 +43,8 @@ def create_risk_gate(
     Args:
         tool_risk_levels: Tool-to-risk-level mapping for this scope.
             Defaults to the global TOOL_RISK_LEVELS if not provided.
+        risk_overrides: Per-tool risk level overrides from guardrails config.
+            Keys are tool names or tool:action compound names.
         approval_provider: Provider for interactive approval requests.
             If None, NEEDS_APPROVAL results are auto-denied.
         default_threshold: Optional risk threshold override. When set,
@@ -55,6 +58,7 @@ def create_risk_gate(
         An async callback matching ADK's before_tool_callback signature.
     """
     scoped_risk_levels = tool_risk_levels or TOOL_RISK_LEVELS
+    _overrides = risk_overrides or {}
 
     async def _risk_gate_callback(
         tool: BaseTool,
@@ -84,6 +88,12 @@ def create_risk_gate(
                 return {"error": f"Blocked: unknown tool '{compound_name}'."}
 
         tool_risk = scoped_risk_levels[compound_name]
+
+        # Apply per-tool risk override if configured
+        if compound_name in _overrides:
+            tool_risk = _overrides[compound_name]
+        elif tool_name in _overrides:
+            tool_risk = _overrides[tool_name]
 
         # Bump risk for remote host operations
         host = args.get("host", "local")

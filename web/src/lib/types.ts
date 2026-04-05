@@ -166,6 +166,33 @@ export interface WatchConfigUpdate {
   checkin_prompt?: string;
 }
 
+// --- Tools ---
+
+export interface ToolParameter {
+  name: string;
+  type: string;
+  required: boolean;
+  default?: string | null;
+}
+
+export interface ToolAction {
+  name: string;
+  risk_level: number;
+  risk_override: number | null;
+}
+
+export interface ToolInfo {
+  name: string;
+  description: string;
+  group: string;
+  parameters: ToolParameter[];
+  actions: ToolAction[] | null;
+  risk_level: number | null;
+  risk_override: number | null;
+  status: "enabled" | "disabled";
+  approval_policy: "always" | "never" | null;
+}
+
 export interface ConfigResponse {
   app: Record<string, unknown>;
   llm: Record<string, unknown>;
