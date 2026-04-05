@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Web:** Watch nav item missing from sidebar on initial page load due to hydration mismatch (#35)
+- Watch page now defaults to Live Stream tab instead of Cycle History (#37)
 
 ## [0.7.0] — 2026-04-05
 
