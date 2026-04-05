@@ -6,7 +6,7 @@ import pytest
 from agent_risk_engine import RiskEvaluator, RuleGate
 
 from squire.approval import ApprovalProvider, DenyAllApproval
-from squire.callbacks.risk_gate import create_risk_gate
+from squire.callbacks.risk_gate import HOMELAB_PATTERNS, build_pattern_analyzer, create_risk_gate
 
 
 def _make_tool(name: str):
@@ -356,3 +356,87 @@ class TestRiskOverrides:
             _make_context(threshold=3),
         )
         assert result is not None
+
+
+class TestPatternAnalyzerIntegration:
+    """Tests for PatternAnalyzer replacing PassthroughAnalyzer in the risk pipeline."""
+
+    def test_build_pattern_analyzer_includes_defaults_and_homelab(self):
+        """build_pattern_analyzer should include both default and homelab patterns."""
+        analyzer = build_pattern_analyzer()
+        # _patterns is a list of RiskPattern; homelab patterns are appended to defaults
+        assert len(analyzer._patterns) > len(HOMELAB_PATTERNS)
+
+    @pytest.mark.asyncio
+    async def test_dangerous_command_escalates_risk(self):
+        """A low-risk tool with dangerous args should be escalated by PatternAnalyzer."""
+        # run_command has static risk 2, but "rm -rf /" matches a default pattern at risk 5
+        analyzer = build_pattern_analyzer()
+        evaluator = RiskEvaluator(rule_gate=RuleGate(threshold=3), analyzer=analyzer)
+        gate = create_risk_gate(tool_risk_levels={"run_command": 2})
+        ctx = _make_context(threshold=3, evaluator=evaluator)
+        result = await gate(_make_tool("run_command"), {"command": "rm -rf /tmp/data"}, ctx)
+        assert result is not None
+        assert "blocked" in result["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_safe_command_not_escalated(self):
+        """A low-risk tool with safe args should not be escalated."""
+        analyzer = build_pattern_analyzer()
+        evaluator = RiskEvaluator(rule_gate=RuleGate(threshold=3), analyzer=analyzer)
+        gate = create_risk_gate(tool_risk_levels={"run_command": 2})
+        ctx = _make_context(threshold=3, evaluator=evaluator)
+        result = await gate(_make_tool("run_command"), {"command": "ls -la /home"}, ctx)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_privileged_flag_escalates(self):
+        """Homelab pattern: --privileged flag should escalate risk."""
+        analyzer = build_pattern_analyzer()
+        evaluator = RiskEvaluator(rule_gate=RuleGate(threshold=3), analyzer=analyzer)
+        gate = create_risk_gate(tool_risk_levels={"run_command": 2})
+        ctx = _make_context(threshold=3, evaluator=evaluator)
+        result = await gate(_make_tool("run_command"), {"command": "docker run --privileged nginx"}, ctx)
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_firewall_modification_escalates(self):
+        """Homelab pattern: firewall commands should escalate risk."""
+        analyzer = build_pattern_analyzer()
+        evaluator = RiskEvaluator(rule_gate=RuleGate(threshold=3), analyzer=analyzer)
+        gate = create_risk_gate(tool_risk_levels={"run_command": 2})
+        ctx = _make_context(threshold=3, evaluator=evaluator)
+        result = await gate(_make_tool("run_command"), {"command": "ufw allow 8080"}, ctx)
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_sensitive_file_type_escalates(self):
+        """Default pattern: .env file access should escalate risk."""
+        analyzer = build_pattern_analyzer()
+        evaluator = RiskEvaluator(rule_gate=RuleGate(threshold=3), analyzer=analyzer)
+        gate = create_risk_gate(tool_risk_levels={"read_config": 2})
+        ctx = _make_context(threshold=3, evaluator=evaluator)
+        result = await gate(_make_tool("read_config"), {"path": "/app/.env"}, ctx)
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_sudo_escalates(self):
+        """Default pattern: sudo should escalate risk."""
+        analyzer = build_pattern_analyzer()
+        evaluator = RiskEvaluator(rule_gate=RuleGate(threshold=3), analyzer=analyzer)
+        gate = create_risk_gate(tool_risk_levels={"run_command": 2})
+        ctx = _make_context(threshold=3, evaluator=evaluator)
+        result = await gate(_make_tool("run_command"), {"command": "sudo systemctl restart nginx"}, ctx)
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_fallback_evaluator_uses_pattern_analyzer(self):
+        """When no evaluator is in session state, the fallback should use PatternAnalyzer."""
+        gate = create_risk_gate(tool_risk_levels={"run_command": 2})
+        # Context with no evaluator — forces fallback
+        ctx = MagicMock()
+        ctx.state = _FakeState({"risk_evaluator": None, "risk_tolerance": 3})
+        # "rm -rf" should be caught by the fallback PatternAnalyzer
+        result = await gate(_make_tool("run_command"), {"command": "rm -rf /data"}, ctx)
+        assert result is not None
+        assert "blocked" in result["error"].lower()

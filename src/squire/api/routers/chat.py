@@ -15,7 +15,7 @@ from google.adk.runners import InMemoryRunner
 from google.genai import types
 
 from ...agents import create_squire_agent
-from ...callbacks.risk_gate import ADK_INTERNAL_TOOLS, create_risk_gate
+from ...callbacks.risk_gate import ADK_INTERNAL_TOOLS, build_pattern_analyzer, create_risk_gate
 from ...config import GuardrailsConfig
 from ...tools import TOOL_RISK_LEVELS
 from ..dependencies import get_app_config, get_db, get_llm_config, get_registry
@@ -116,7 +116,7 @@ async def create_chat_session(
         approve=set(guardrails.tools_require_approval),
         denied=set(guardrails.tools_deny),
     )
-    risk_evaluator = RiskEvaluator(rule_gate=rule_gate)
+    risk_evaluator = RiskEvaluator(rule_gate=rule_gate, analyzer=build_pattern_analyzer())
 
     snapshot = await get_latest_snapshot()
     session_state = {
@@ -209,7 +209,7 @@ async def chat_websocket(
         approve=set(guardrails.tools_require_approval),
         denied=set(guardrails.tools_deny),
     )
-    risk_evaluator = RiskEvaluator(rule_gate=rule_gate)
+    risk_evaluator = RiskEvaluator(rule_gate=rule_gate, analyzer=build_pattern_analyzer())
     snapshot = await get_latest_snapshot()
 
     session_state = {

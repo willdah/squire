@@ -13,7 +13,7 @@ from google.adk.runners import InMemoryRunner
 from google.genai import types
 
 from .agents import create_squire_agent
-from .callbacks.risk_gate import create_risk_gate
+from .callbacks.risk_gate import build_pattern_analyzer, create_risk_gate
 from .config import AppConfig, DatabaseConfig, GuardrailsConfig, LLMConfig, NotificationsConfig
 from .database.service import DatabaseService
 from .hosts.store import HostStore
@@ -191,7 +191,7 @@ async def start_chat(resume_session_id: str | None = None) -> None:
         approve=set(guardrails.tools_require_approval),
         denied=set(guardrails.tools_deny),
     )
-    risk_evaluator = RiskEvaluator(rule_gate=rule_gate)
+    risk_evaluator = RiskEvaluator(rule_gate=rule_gate, analyzer=build_pattern_analyzer())
 
     # Collect initial system snapshots (all hosts in parallel)
     snapshot = await _collect_all_snapshots(registry)

@@ -21,7 +21,7 @@ from google.adk.runners import InMemoryRunner
 from google.genai import types
 
 from .agents.squire_agent import create_squire_agent
-from .callbacks.risk_gate import create_risk_gate
+from .callbacks.risk_gate import build_pattern_analyzer, create_risk_gate
 from .config import (
     AppConfig,
     DatabaseConfig,
@@ -155,7 +155,7 @@ async def start_watch() -> None:
         # approve intentionally omitted — watch mode has no approval provider
         denied=set(guardrails.tools_deny) | set(guardrails.watch_tools_deny),
     )
-    risk_evaluator = RiskEvaluator(rule_gate=rule_gate)
+    risk_evaluator = RiskEvaluator(rule_gate=rule_gate, analyzer=build_pattern_analyzer())
 
     # Build the agent with headless risk gate
     block_notifier = notifier if watch_config.notify_on_blocked else None
