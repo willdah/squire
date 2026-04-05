@@ -30,7 +30,7 @@ async def docker_ps(all_containers: bool = True, format: str = "table", host: st
             ]
         )
 
-    result = await backend.run(cmd)
+    result = await backend.run(cmd, timeout=30.0)
 
     if result.returncode != 0:
         return f"Error running docker ps: {result.stderr}"

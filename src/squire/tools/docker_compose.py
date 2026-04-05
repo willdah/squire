@@ -2,7 +2,15 @@
 
 from ._registry import get_registry
 
-RISK_LEVEL = 3  # Moderate
+RISK_LEVELS: dict[str, int] = {
+    "docker_compose:ps": 1,
+    "docker_compose:config": 1,
+    "docker_compose:logs": 1,
+    "docker_compose:pull": 2,
+    "docker_compose:restart": 3,
+    "docker_compose:up": 3,
+    "docker_compose:down": 4,
+}
 
 
 async def docker_compose(

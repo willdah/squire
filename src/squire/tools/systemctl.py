@@ -2,7 +2,14 @@
 
 from ._registry import get_registry
 
-RISK_LEVEL = 3  # Moderate
+RISK_LEVELS: dict[str, int] = {
+    "systemctl:status": 1,
+    "systemctl:is-active": 1,
+    "systemctl:is-enabled": 1,
+    "systemctl:start": 3,
+    "systemctl:restart": 3,
+    "systemctl:stop": 4,
+}
 
 
 async def systemctl(
