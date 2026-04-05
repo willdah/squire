@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import useSWR from "swr";
@@ -40,11 +40,7 @@ const systemNav = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const { data: config } = useSWR("/api/config", () =>
     apiGet<ConfigDetailResponse>("/api/config")
   );
