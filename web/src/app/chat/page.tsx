@@ -354,8 +354,8 @@ function ChatPageInner() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden" style={{ maxHeight: "calc(100vh - 5rem)" }}>
-      <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0 bg-card">
-        <h1 className="text-lg">Chat</h1>
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-border/60 shrink-0 bg-card/80">
+        <h1 className="text-base font-display font-semibold">Chat</h1>
         <ConnectionDot status={status} />
         <Button variant="ghost" size="icon" onClick={handleNewChat} className="ml-auto">
           <SquarePen className="h-4 w-4" />

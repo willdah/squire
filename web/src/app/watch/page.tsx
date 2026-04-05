@@ -23,7 +23,7 @@ export default function WatchPage() {
   const isRunning = status?.status === "running";
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in-up">
       <h1 className="text-2xl">Watch</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

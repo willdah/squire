@@ -26,7 +26,7 @@ export default function ConfigPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in-up">
       <h1 className="text-2xl">Configuration</h1>
       <ConfigEditor config={config} onSaved={() => mutate()} />
     </div>

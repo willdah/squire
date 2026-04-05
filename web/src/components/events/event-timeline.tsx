@@ -31,8 +31,8 @@ const dotColors: Record<string, string> = {
 export function EventTimeline({ events }: EventTimelineProps) {
   if (events.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
-        <Activity className="h-8 w-8" />
+      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+        <Activity className="h-8 w-8 opacity-40" />
         <p className="text-sm">No events found</p>
       </div>
     );
@@ -41,13 +41,14 @@ export function EventTimeline({ events }: EventTimelineProps) {
   return (
     <div className="relative pl-6">
       {/* Vertical timeline line */}
-      <div className="absolute left-2.5 top-2 bottom-2 w-px bg-border" />
+      <div className="absolute left-2.5 top-2 bottom-2 w-px bg-border/60" />
 
       <div className="space-y-2">
-        {events.map((event) => (
+        {events.map((event, i) => (
           <div
             key={event.id}
-            className="relative flex items-start gap-3 rounded-md border p-3 animate-fade-in"
+            className="relative flex items-start gap-3 rounded-lg ring-1 ring-border/40 bg-card/50 p-3 animate-fade-in-up"
+            style={{ animationDelay: `${Math.min(i * 0.03, 0.3)}s` }}
           >
             {/* Timeline dot */}
             <div
@@ -56,7 +57,7 @@ export function EventTimeline({ events }: EventTimelineProps) {
               }`}
             />
 
-            <div className="flex flex-col gap-1 flex-1 min-w-0">
+            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <Badge
                   variant={
@@ -67,17 +68,17 @@ export function EventTimeline({ events }: EventTimelineProps) {
                   {event.category}
                 </Badge>
                 {event.tool_name && (
-                  <span className="text-xs font-mono text-muted-foreground">
+                  <span className="text-xs font-mono text-muted-foreground bg-muted/60 rounded-md px-1.5 py-0.5">
                     {event.tool_name}
                   </span>
                 )}
-                <span className="text-xs text-muted-foreground ml-auto shrink-0">
+                <span className="text-[11px] text-muted-foreground/60 ml-auto shrink-0 tabular-nums">
                   {event.timestamp.substring(0, 19)}
                 </span>
               </div>
-              <p className="text-sm">{event.summary}</p>
+              <p className="text-sm text-foreground/90">{event.summary}</p>
               {event.details && (
-                <pre className="text-xs text-muted-foreground bg-muted rounded p-2 overflow-auto max-h-24 mt-1">
+                <pre className="text-xs text-muted-foreground bg-muted/40 ring-1 ring-border/20 rounded-lg p-2.5 overflow-auto max-h-24 mt-0.5 font-mono">
                   {event.details.substring(0, 500)}
                 </pre>
               )}

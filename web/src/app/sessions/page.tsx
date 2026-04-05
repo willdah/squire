@@ -47,7 +47,7 @@ export default function SessionsPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in-up">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl">Session History</h1>
         {sessions && sessions.length > 0 && (

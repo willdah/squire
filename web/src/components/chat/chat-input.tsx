@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -49,14 +49,14 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
     };
 
     return (
-      <div className="flex items-end gap-2 border-t p-4">
+      <div className="flex items-end gap-2 border-t border-border/60 bg-card/50 p-4">
         <Textarea
           ref={textareaRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Ask Squire something..."
-          className="min-h-[44px] max-h-[200px] resize-none"
+          className="min-h-[44px] max-h-[200px] resize-none bg-background"
           disabled={disabled}
           rows={1}
         />
@@ -64,8 +64,9 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
           size="icon"
           onClick={handleSubmit}
           disabled={!canSend || !value.trim()}
+          className="rounded-lg shrink-0"
         >
-          <Send className="h-4 w-4" />
+          <ArrowUp className="h-4 w-4" />
         </Button>
       </div>
     );

@@ -328,7 +328,7 @@ function HostDetail({ name }: { name: string }) {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in-up">
       <div className="flex items-center gap-3">
         <Link href="/hosts">
           <Button variant="ghost" size="icon">
@@ -461,7 +461,7 @@ function HostList() {
   );
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in-up">
       <div className="flex items-center gap-3">
         <h1 className="text-2xl">Hosts</h1>
         {hosts && <Badge variant="secondary">{hosts.length}</Badge>}
