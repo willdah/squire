@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Channels tab** — `web/src/components/notifications/channels-tab.tsx` provides full webhook and email channel management (add/edit/delete webhooks, SMTP config form with tag inputs for recipients/events, test email button, master enable/disable switch)
 - **`update_alert_rule` tool** — new Notifier tool to modify existing alert rules in-place (condition, severity, host, cooldown, or enabled state); registered with RISK_LEVEL=2
 - **NotificationRouter** — `NotificationRouter` class in `src/squire/notifications/router.py` routes notifications to all configured channels (webhook and email); failures in one channel are logged but do not block others; drop-in replacement for `WebhookDispatcher`
 - **EmailNotifier** — `EmailNotifier` class in `src/squire/notifications/email.py` sends SMTP email notifications; blocking SMTP calls run in an executor to avoid blocking the event loop; failures are logged but never raised
