@@ -163,6 +163,7 @@ async def start_watch() -> None:
     def _make_headless_risk_gate(tool_risk_levels: dict[str, int]):
         return create_risk_gate(
             tool_risk_levels=tool_risk_levels,
+            risk_overrides=dict(guardrails.tools_risk_overrides),
             headless=True,
             notifier=block_notifier,
         )

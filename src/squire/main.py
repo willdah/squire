@@ -154,10 +154,14 @@ async def start_chat(resume_session_id: str | None = None) -> None:
     # Build the approval provider
     approval_bridge = ApprovalBridge()
 
+    # Build the risk evaluation pipeline
+    guardrails = GuardrailsConfig()
+
     # Build the agent — multi-agent mode uses a factory for per-agent risk gates
     def _make_risk_gate(tool_risk_levels: dict[str, int]):
         return create_risk_gate(
             tool_risk_levels=tool_risk_levels,
+            risk_overrides=dict(guardrails.tools_risk_overrides),
             approval_provider=approval_bridge,
         )
 
@@ -170,6 +174,7 @@ async def start_chat(resume_session_id: str | None = None) -> None:
     else:
         risk_gate_callback = create_risk_gate(
             tool_risk_levels=TOOL_RISK_LEVELS,
+            risk_overrides=dict(guardrails.tools_risk_overrides),
             approval_provider=approval_bridge,
         )
         agent = create_squire_agent(
@@ -179,9 +184,6 @@ async def start_chat(resume_session_id: str | None = None) -> None:
         )
     adk_app = App(name=app_config.app_name, root_agent=agent)
     runner = InMemoryRunner(app_name=app_config.app_name, app=adk_app)
-
-    # Build the risk evaluation pipeline
-    guardrails = GuardrailsConfig()
     rule_gate = RuleGate(
         threshold=app_config.risk_tolerance,
         strict=app_config.risk_strict,
