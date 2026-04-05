@@ -15,6 +15,7 @@
 # risk_strict = false              # true = deny above threshold; false = prompt for approval
 # history_limit = 50               # Max messages in conversation context
 # max_tool_rounds = 10             # Max tool-call rounds per user message
+# multi_agent = false              # Enable sub-agent decomposition (Monitor, Container, Admin, Notifier)
 
 # --- LLM provider ---
 [llm]
@@ -33,6 +34,7 @@
 # tools_allow = ["docker_logs"]            # bypass risk check, auto-run
 # tools_require_approval = ["docker_compose"]  # always ask user first
 # tools_deny = ["run_command"]             # hard block, never run
+# tools_risk_overrides = {}                # per-tool risk overrides (tool name or tool:action -> 1-5)
 
 # Per-agent tolerance overrides (only relevant when multi_agent = true)
 # monitor_tolerance = "standard"
@@ -92,4 +94,16 @@
 # [[notifications.webhooks]]
 # name = "ntfy"
 # url = "https://ntfy.sh/squire-alerts"
+# events = ["*"]
+
+# --- Email notifications ---
+# [notifications.email]
+# enabled = false
+# smtp_host = ""
+# smtp_port = 587
+# use_tls = true
+# smtp_user = ""
+# smtp_password = ""
+# from_address = ""
+# to_addresses = []
 # events = ["*"]
