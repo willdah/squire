@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **Configuration reference** — document email notifications (`[notifications.email]`), per-tool risk overrides (`tools_risk_overrides`), host fields (`key_file`, `service_root`), and fix misleading claim about `[[hosts]]` in TOML
+- **squire.example.toml** — add `multi_agent`, `tools_risk_overrides`, and `[notifications.email]` sections
+- **Tested models** — add model recommendations section with tested Ollama models and cloud provider guidance
+
 ### Changed
 
 - **UI color palette** — migrated web and TUI from amber/gold to purple primary (#8931c4) + orange accent (#ff7621) palette with matching semantic colors (danger, success, warning, info)

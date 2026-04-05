@@ -19,6 +19,8 @@ To get started, copy the example config:
 cp squire.example.toml squire.toml
 ```
 
+> **Looking for model recommendations?** See [Tested Models](#tested-models) for what's been validated.
+
 ---
 
 ## Top-Level Settings
@@ -103,6 +105,16 @@ tools_deny = ["run_command"]             # hard block, never execute
 | `tools_allow` | `[]` | `SQUIRE_GUARDRAILS_TOOLS_ALLOW` | Tool names that bypass risk check |
 | `tools_require_approval` | `[]` | `SQUIRE_GUARDRAILS_TOOLS_REQUIRE_APPROVAL` | Tool names that always require approval |
 | `tools_deny` | `[]` | `SQUIRE_GUARDRAILS_TOOLS_DENY` | Tool names that are hard-blocked |
+| `tools_risk_overrides` | `{}` | `SQUIRE_GUARDRAILS_TOOLS_RISK_OVERRIDES` | Per-tool risk level overrides (see below) |
+
+### Per-Tool Risk Level Overrides
+
+Override the built-in risk level for specific tools or tool actions. Values are integers 1--5. Keys can be a tool name (applies to all actions) or `tool:action` for granular control:
+
+```toml
+[guardrails]
+tools_risk_overrides = { "docker_compose:restart" = 4, "run_command" = 3 }
+```
 
 ### Command Guards
 
@@ -238,6 +250,19 @@ model = "gemini/gemini-2.0-flash"
 # Set GEMINI_API_KEY env var
 ```
 
+### Tested Models
+
+Squire relies heavily on tool/function calling. Models with strong tool-calling support produce the best results, especially for multi-step orchestration in watch mode.
+
+| Model | Provider | Status | Notes |
+|---|---|---|---|
+| `ollama_chat/mistral-small3.2:24b` | Ollama | **Recommended** | Current development model (v0.5.0+). Reliable tool-calling accuracy. |
+| `ollama_chat/llama3.1:8b` | Ollama | Not recommended | Used pre-v0.4.0. Tool-call accuracy was limited; suitable for basic queries only. |
+
+**Cloud providers (Anthropic, OpenAI, Gemini):** These are supported via LiteLLM and expected to perform well -- particularly larger models with strong tool-calling capabilities -- but have not been validated with Squire yet. If you try a cloud model, feedback is welcome via [GitHub issues](https://github.com/willdahern/squire/issues).
+
+**General guidance:** Larger parameter counts and models specifically fine-tuned for function calling tend to produce better results with Squire. If a model struggles with tool calls (wrong arguments, skipped calls, hallucinated tool names), try a larger variant or a different model family.
+
 ---
 
 ## Skills -- `[skills]`
@@ -305,7 +330,9 @@ snapshot_interval_minutes = 15
 
 ## Remote Hosts
 
-Hosts are managed at runtime through the CLI or web UI — there are no `[[hosts]]` entries in `squire.toml`. Squire persists host configuration in SQLite and makes changes available immediately without a restart.
+Hosts are managed at runtime through the CLI or web UI. Squire persists host configuration in SQLite and makes changes available immediately without a restart.
+
+> **Note:** While `[[hosts]]` entries can appear in `squire.toml`, they are **not loaded** by the application. Use the CLI or web UI to manage hosts.
 
 ### Adding a Host
 
@@ -320,8 +347,10 @@ squire hosts add --name nas --address 192.168.1.20 --user will --port 2222 --tag
 | `--address` | *(required)* | Hostname or IP address |
 | `--user` | `"root"` | SSH username |
 | `--port` | `22` | SSH port |
+| `--key-file` | *(auto-generated)* | Path to SSH private key (uses auto-generated ed25519 key by default) |
 | `--tags` | `[]` | Comma-separated tags for grouping |
 | `--services` | `[]` | Comma-separated Docker Compose service names on this host |
+| `--service-root` | `"/opt"` | Root directory for compose service directories on the host |
 
 ### Enrollment Flow
 
@@ -444,6 +473,35 @@ url = "https://ntfy.sh/squire-alerts"
 events = ["*"]
 headers = { Authorization = "Bearer tk_..." }
 ```
+
+### Email -- `[notifications.email]`
+
+Email-based notifications as an alternative (or complement) to webhooks.
+
+```toml
+[notifications.email]
+enabled = true
+smtp_host = "smtp.example.com"
+smtp_port = 587
+use_tls = true
+smtp_user = "squire@example.com"
+smtp_password = "app-password"
+from_address = "squire@example.com"
+to_addresses = ["admin@example.com"]
+events = ["watch.alert", "watch.action"]
+```
+
+| Key | Default | Description |
+|---|---|---|
+| `enabled` | `false` | Whether email notifications are enabled |
+| `smtp_host` | `""` | SMTP server hostname |
+| `smtp_port` | `587` | SMTP port (typically 587 for TLS) |
+| `use_tls` | `true` | Use STARTTLS for SMTP connection |
+| `smtp_user` | `""` | SMTP authentication username |
+| `smtp_password` | `""` | SMTP authentication password |
+| `from_address` | `""` | Email sender address |
+| `to_addresses` | `[]` | Recipient email addresses |
+| `events` | `["*"]` | Event categories to send (`"*"` for all) |
 
 ### Event Categories
 
