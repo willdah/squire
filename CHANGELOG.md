@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Tools visibility** — foundational data models for the tools visibility feature
+  - `tools_risk_overrides: dict[str, int]` field on `GuardrailsConfig` (and `GuardrailsConfigUpdate`) — enables per-tool or per-action risk level overrides via `squire.toml` / env vars
+  - `ToolParameter`, `ToolAction`, and `ToolInfo` Pydantic schemas in `api/schemas.py` — used by the upcoming `GET /api/tools` endpoint
 - **Notifications & alerting overhaul** — alerts actually fire and email notifications are supported
   - Wired `evaluate_alerts()` into the watch loop — alert rules now trigger automatically during watch cycles
   - Email notification channel via SMTP alongside existing webhooks, configured under `[notifications.email]` in `squire.toml`
