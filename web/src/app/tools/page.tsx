@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import useSWR from "swr";
 import { apiGet, apiPatch } from "@/lib/api";
 import {
@@ -49,12 +49,14 @@ function RiskBadge({ level, override }: { level: number; override?: number | nul
   );
 }
 
-function ActionRow({ toolName, action, onOverride }: {
+function ActionRow({ toolName, action, onOverride, pendingValue }: {
   toolName: string;
   action: ToolAction;
   onOverride: (compound: string, value: number | null) => void;
+  pendingValue?: number | null;
 }) {
   const compound = `${toolName}:${action.name}`;
+  const hasPending = pendingValue !== undefined;
   return (
     <TableRow className="bg-muted/30">
       <TableCell className="pl-10 text-sm text-muted-foreground">{action.name}</TableCell>
@@ -71,7 +73,7 @@ function ActionRow({ toolName, action, onOverride }: {
           max={5}
           className="w-16 h-7 text-xs"
           placeholder="-"
-          value={action.risk_override ?? ""}
+          value={hasPending ? (pendingValue ?? "") : (action.risk_override ?? "")}
           onChange={(e) => {
             const v = e.target.value ? parseInt(e.target.value, 10) : null;
             if (v !== null && (v < 1 || v > 5)) return;
@@ -243,10 +245,9 @@ export default function ToolsPage() {
                 const isMulti = tool.actions && tool.actions.length > 0;
                 const isExpanded = expanded.has(tool.name);
                 return (
-                  <>
+                  <Fragment key={tool.name}>
                     <TableRow
-                      key={tool.name}
-                      className="hover:bg-muted/50 cursor-pointer"
+                      className={`hover:bg-muted/50${isMulti ? " cursor-pointer" : ""}`}
                       onClick={() => isMulti && toggleExpand(tool.name)}
                     >
                       <TableCell className="font-medium">
@@ -322,9 +323,10 @@ export default function ToolsPage() {
                           toolName={tool.name}
                           action={action}
                           onOverride={handleOverride}
+                          pendingValue={pendingOverrides[`${tool.name}:${action.name}`]}
                         />
                       ))}
-                  </>
+                  </Fragment>
                 );
               })}
             </TableBody>
