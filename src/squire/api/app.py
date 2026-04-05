@@ -80,7 +80,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # Create service singletons
     deps.registry = BackendRegistry()
     deps.db = DatabaseService(deps.db_config.path)
-    deps.notifier = WebhookDispatcher(deps.notif_config)
+    from ..notifications.email import EmailNotifier
+    from ..notifications.router import NotificationRouter
+
+    webhook_dispatcher = WebhookDispatcher(deps.notif_config)
+    email_notifier = None
+    if deps.notif_config.email and deps.notif_config.email.enabled:
+        email_notifier = EmailNotifier(deps.notif_config.email)
+    deps.notifier = NotificationRouter(webhook=webhook_dispatcher, email=email_notifier)
     deps.skills_service = SkillService(skills_config.path)
 
     # Load managed hosts from DB into the registry
