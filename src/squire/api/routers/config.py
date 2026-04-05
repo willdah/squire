@@ -37,12 +37,16 @@ def _redact_llm(data: dict) -> dict:
 
 
 def _redact_notifications(data: dict) -> dict:
-    """Redact webhook URLs and auth headers."""
+    """Redact webhook URLs, auth headers, and email password."""
     for wh in data.get("webhooks", []):
         if wh.get("url"):
             wh["url"] = _REDACTED
         if wh.get("headers"):
             wh["headers"] = {k: _REDACTED for k in wh["headers"]}
+    email = data.get("email")
+    if email and isinstance(email, dict):
+        if email.get("smtp_password"):
+            email["smtp_password"] = _REDACTED
     return data
 
 
