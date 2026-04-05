@@ -4,13 +4,14 @@ RISK_LEVEL = 3
 
 
 async def delete_alert_rule(name: str) -> str:
-    """Delete an alert rule by name.
+    """Delete an existing alert rule by name.
 
     Args:
-        name: The name of the alert rule to delete.
+        name: The name of the alert rule to delete (e.g., "disk-full").
 
     Returns:
-        Confirmation message or error description.
+        Confirmation message on success, or an error string if the rule
+        does not exist or the database is unavailable.
     """
     from .._registry import get_db
 

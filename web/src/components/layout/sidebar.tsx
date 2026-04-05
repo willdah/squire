@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import useSWR from "swr";
@@ -39,13 +40,14 @@ const systemNav = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const { data: config } = useSWR("/api/config", () =>
     apiGet<ConfigDetailResponse>("/api/config")
   );
   const version = config?.app?.values?.version as string | undefined;
 
   const renderLink = ({ href, label, icon: Icon }: typeof chatNav[number]) => {
-    const isActive = pathname === href || pathname.startsWith(href + "/");
+    const isActive = mounted && (pathname === href || pathname.startsWith(href + "/"));
     return (
       <Link
         key={href}

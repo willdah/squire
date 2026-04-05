@@ -39,6 +39,8 @@ async def create_alert_rule(
     if db is None:
         return "Error: database not configured."
 
+    import sqlite3
+
     try:
         rule_id = await db.save_alert_rule(
             name=name,
@@ -48,7 +50,7 @@ async def create_alert_rule(
             cooldown_minutes=cooldown_minutes,
         )
         return f"Alert rule '{name}' created (id={rule_id}): {condition} on host={host}, severity={severity}."
-    except Exception as e:
-        if "UNIQUE" in str(e):
-            return f"Error: an alert rule named '{name}' already exists."
+    except sqlite3.IntegrityError:
+        return f"Error: an alert rule named '{name}' already exists."
+    except (ValueError, sqlite3.Error) as e:
         return f"Error creating alert rule: {e}"

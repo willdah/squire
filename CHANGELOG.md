@@ -7,9 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Web:** Watch nav item missing from sidebar on initial page load due to hydration mismatch (#35)
+- Watch page now defaults to Live Stream tab instead of Cycle History (#37)
+- **docker_ps**: add missing `timeout=30.0` to `backend.run()` call to prevent indefinite hangs
+- **docker_logs**: remove vestigial `hasattr()` guard — use same direct-call pattern as other tools
+
 ### Changed
 
 - **Pattern-based risk analysis** — replaced `PassthroughAnalyzer` with `PatternAnalyzer` from `agent-risk-engine` in the risk evaluation pipeline. Tool call arguments are now inspected for dangerous patterns (e.g., `rm -rf`, `sudo`, SQL drops, sensitive file types) and risk is escalated accordingly. Added homelab-specific custom patterns for privileged containers, firewall modifications, service disablement, Docker data paths, SSH key operations, and crontab changes. (#41)
+- **docker_compose**: convert flat `RISK_LEVEL=3` to per-action `RISK_LEVELS` dict (ps/config/logs=1, pull=2, restart/up=3, down=4)
+- **systemctl**: convert flat `RISK_LEVEL=3` to per-action `RISK_LEVELS` dict (status/is-active/is-enabled=1, start/restart=3, stop=4)
+- **Notification tools**: replace broad `except Exception` with specific catches (`sqlite3.IntegrityError`, `ValueError`, `OSError`)
+- **system_info**: add `logger.debug()` to silent except blocks for traceability
+- **Notification tool docstrings**: improve `delete_alert_rule` and `list_alert_rules` to match project standard
 
 ## [0.7.0] — 2026-04-05
 
