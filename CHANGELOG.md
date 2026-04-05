@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Web:** Watch nav item missing from sidebar on initial page load due to hydration mismatch (#35)
+- Watch page now defaults to Live Stream tab instead of Cycle History (#37)
 - **docker_ps**: add missing `timeout=30.0` to `backend.run()` call to prevent indefinite hangs
 - **docker_logs**: remove vestigial `hasattr()` guard — use same direct-call pattern as other tools
 
