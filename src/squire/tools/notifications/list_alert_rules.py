@@ -4,10 +4,12 @@ RISK_LEVEL = 1
 
 
 async def list_alert_rules() -> str:
-    """List all configured alert rules and their status.
+    """List all configured alert rules and their current status.
 
     Returns:
-        A formatted list of alert rules, or a message if none exist.
+        A Markdown-formatted list of alert rules showing name, condition,
+        host, severity, cooldown, and last-fired time — or a message
+        if no rules are configured.
     """
     from .._registry import get_db
 

@@ -263,7 +263,7 @@ class TestCompoundActionNames:
         gate = create_risk_gate(
             tool_risk_levels={"docker_compose": 3},
         )
-        # docker_compose has an action param but uses a single RISK_LEVEL
+        # Simulates a tool with an action param but only a bare-name risk entry
         result = await gate(
             _make_tool("docker_compose"),
             {"action": "ps"},

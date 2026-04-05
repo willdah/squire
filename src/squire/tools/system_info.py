@@ -1,9 +1,12 @@
 """system_info tool — OS, CPU, memory, disk, uptime."""
 
 import json
+import logging
 import platform
 
 from ._registry import get_registry
+
+logger = logging.getLogger(__name__)
 
 RISK_LEVEL = 1  # Info
 
@@ -53,6 +56,7 @@ async def system_info(host: str = "local") -> str:
             values = [float(line.strip()) for line in cpu_usage.stdout.strip().split("\n")[1:] if line.strip()]
             info["cpu_percent"] = round(sum(values), 1)
         except (ValueError, IndexError):
+            logger.debug("failed to parse CPU usage on Darwin", exc_info=True)
             info["cpu_percent"] = -1
     else:
         cpu_result = await backend.run(["nproc"])
@@ -65,6 +69,7 @@ async def system_info(host: str = "local") -> str:
             total = sum(int(f) for f in fields[1:])
             info["cpu_percent"] = round((1 - idle / total) * 100, 1) if total > 0 else -1
         except (ValueError, IndexError):
+            logger.debug("failed to parse CPU usage from /proc/stat", exc_info=True)
             info["cpu_percent"] = -1
 
     # Memory
@@ -74,6 +79,7 @@ async def system_info(host: str = "local") -> str:
             total_bytes = int(mem_result.stdout.strip())
             info["memory_total_mb"] = round(total_bytes / (1024 * 1024))
         except ValueError:
+            logger.debug("failed to parse memory total on Darwin", exc_info=True)
             info["memory_total_mb"] = -1
 
         vm_result = await backend.run(["vm_stat"])
@@ -92,6 +98,7 @@ async def system_info(host: str = "local") -> str:
             free_mb = (free_pages * page_size) / (1024 * 1024)
             info["memory_used_mb"] = round(info.get("memory_total_mb", 0) - free_mb)
         except (ValueError, IndexError):
+            logger.debug("failed to parse vm_stat output on Darwin", exc_info=True)
             info["memory_used_mb"] = -1
     else:
         mem_result = await backend.run(["free", "-m"])
@@ -101,6 +108,7 @@ async def system_info(host: str = "local") -> str:
             info["memory_total_mb"] = int(parts[1])
             info["memory_used_mb"] = int(parts[2])
         except (ValueError, IndexError):
+            logger.debug("failed to parse 'free -m' output", exc_info=True)
             info["memory_total_mb"] = -1
             info["memory_used_mb"] = -1
 

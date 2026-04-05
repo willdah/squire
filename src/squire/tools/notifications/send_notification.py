@@ -22,5 +22,5 @@ async def send_notification(message: str, category: str = "user") -> str:
     try:
         await notifier.dispatch(category=category, summary=message)
         return f"Notification sent: {message}"
-    except Exception as e:
+    except (OSError, ValueError) as e:
         return f"Error sending notification: {e}"

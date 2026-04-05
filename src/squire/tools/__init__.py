@@ -9,8 +9,10 @@ Tool conventions:
 - Errors are returned as descriptive strings (never raised) so the LLM
   can relay them to the user. Only use exceptions for truly unexpected
   failures that should surface as system errors.
-- Each module sets a module-level ``RISK_LEVEL`` int (1–5) used by the
-  risk gate callback to decide whether user approval is needed.
+- Single-action tools set a module-level ``RISK_LEVEL`` int (1–5).
+  Multi-action tools set ``RISK_LEVELS: dict[str, int]`` with
+  ``"tool:action"`` keys.  Both are used by the risk gate callback
+  to decide whether user approval is needed.
 """
 
 from ._registry import get_db as get_db
@@ -22,7 +24,7 @@ from ._registry import set_registry as set_registry
 from ._safe import safe_tool
 from .docker_cleanup import RISK_LEVELS as _dclean_risks
 from .docker_cleanup import docker_cleanup
-from .docker_compose import RISK_LEVEL as _dc_risk
+from .docker_compose import RISK_LEVELS as _dc_risks
 from .docker_compose import docker_compose
 from .docker_container import RISK_LEVELS as _dcont_risks
 from .docker_container import docker_container
@@ -42,7 +44,7 @@ from .run_command import RISK_LEVEL as _runcmd_risk
 from .run_command import run_command
 from .system_info import RISK_LEVEL as _si_risk
 from .system_info import system_info
-from .systemctl import RISK_LEVEL as _sctl_risk
+from .systemctl import RISK_LEVELS as _sctl_risks
 from .systemctl import systemctl
 
 ALL_TOOLS = [
@@ -65,12 +67,12 @@ TOOL_RISK_LEVELS: dict[str, int] = {
     "network_info": _ni_risk,
     "docker_ps": _dp_risk,
     "docker_logs": _dl_risk,
-    "docker_compose": _dc_risk,
+    **_dc_risks,
     **_dcont_risks,
     **_dimg_risks,
     **_dclean_risks,
     "read_config": _rc_risk,
     "journalctl": _jctl_risk,
-    "systemctl": _sctl_risk,
+    **_sctl_risks,
     "run_command": _runcmd_risk,
 }
