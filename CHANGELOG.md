@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Keys:** `SQUIRE_KEYS_DIR` env var overrides the SSH keys storage directory (default `~/.config/squire/keys/`), enabling Docker containers to persist keys under `/data/keys/`
 - **API:** `/api/health` endpoint for Docker HEALTHCHECK and docker-compose healthcheck directives — lightweight liveness check that returns `{"status": "ok"}`
 - **Watch:** "Clear History" button on Cycle History tab with confirmation dialog; calls `DELETE /api/watch/cycles` to truncate cycle data (#36)
 - **Watch:** "Clear Stream" button on Live Stream tab to clear in-memory event buffer (#36)
