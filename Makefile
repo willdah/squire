@@ -81,8 +81,8 @@ docker-build: ## Build Docker image
 	docker build -f docker/Dockerfile -t squire .
 
 .PHONY: docker-run
-docker-run: ## Run Docker container
-	docker run --rm -it -v squire-data:/data squire
+docker-run: ## Run Docker container (web UI on port 8420)
+	docker run --rm -d -p 8420:8420 -v squire-data:/data --name squire squire
 
 # ---------------------------------------------------------------------------
 # Cleanup
