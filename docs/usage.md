@@ -473,28 +473,149 @@ Use `"*"` to subscribe to all events. See [Configuration Reference](configuratio
 
 ## Docker Deployment
 
+The Docker image runs the **web interface** by default — the TUI is not supported in containers. The image includes a pre-built frontend, so no separate Node.js process is needed.
+
+### Quick Start (docker-compose)
+
+The recommended way to run Squire in Docker:
+
 ```bash
-make docker-build              # build the image
-make docker-run                # run with default settings
+docker compose up -d
 ```
 
-Or manually:
+The web UI is available at **http://localhost:8420**.
+
+The default `docker-compose.yml` assumes Ollama is running on the Docker host. Edit the `environment` section to configure your LLM provider — see the comments in the file for examples with Anthropic, OpenAI, and Gemini.
+
+### Manual Docker Run
 
 ```bash
-docker build -f docker/Dockerfile -t squire .
+# Build the image
+make docker-build
+# or: docker build -f docker/Dockerfile -t squire .
 
-docker run -v squire-data:/data \
+# Run the web UI
+docker run -d -p 8420:8420 -v squire-data:/data \
   -e SQUIRE_LLM_MODEL=ollama_chat/llama3.1:8b \
   -e SQUIRE_LLM_API_BASE=http://host.docker.internal:11434 \
-  squire chat
+  --name squire squire
 ```
 
-The container stores the SQLite database at `/data` — mount a named volume for persistence. The entrypoint is `squire`, so any command works:
+### Ports
+
+| Port | Service |
+|---|---|
+| **8420** | Web UI + REST API + WebSocket (single port) |
+
+### Data Volume
+
+All persistent data lives under `/data` inside the container. Mount a named volume or host directory to preserve state across restarts:
+
+| Path | Contents |
+|---|---|
+| `/data/squire.db` | SQLite database (sessions, events, alert rules, watch state) |
+| `/data/skills/` | Skill definitions (Open Agent Skills format) |
+| `/data/keys/` | SSH key pairs for managed remote hosts |
 
 ```bash
-docker run -v squire-data:/data squire watch
-docker run -v squire-data:/data squire web
-docker run -v squire-data:/data squire alerts list
+# Use a named volume (recommended)
+docker run -v squire-data:/data ...
+
+# Or bind-mount a host directory
+docker run -v /opt/squire/data:/data ...
 ```
 
-All configuration can be passed via `SQUIRE_*` environment variables or by mounting a config file at `/app/squire.toml`.
+### Configuration
+
+Configuration can be provided via environment variables or a config file:
+
+**Environment variables** (recommended for Docker):
+
+```bash
+docker run -d -p 8420:8420 -v squire-data:/data \
+  -e SQUIRE_LLM_MODEL=anthropic/claude-sonnet-4-20250514 \
+  -e ANTHROPIC_API_KEY=sk-ant-... \
+  -e SQUIRE_RISK_TOLERANCE=standard \
+  squire
+```
+
+**Config file** (bind-mount):
+
+```bash
+docker run -d -p 8420:8420 \
+  -v squire-data:/data \
+  -v ./squire.toml:/app/squire.toml:ro \
+  squire
+```
+
+See the [Configuration Reference](configuration.md) for all available options.
+
+### LLM Provider Setup
+
+**Ollama (local):** If Ollama runs on the Docker host, use `host.docker.internal` to reach it:
+
+```bash
+-e SQUIRE_LLM_MODEL=ollama_chat/llama3.1:8b
+-e SQUIRE_LLM_API_BASE=http://host.docker.internal:11434
+```
+
+> **Note:** `host.docker.internal` works on Docker Desktop (macOS/Windows). On Linux, add `--add-host=host.docker.internal:host-gateway` to your `docker run` command, or use the host's LAN IP address.
+
+**Cloud providers:** Set the model and API key as environment variables:
+
+```bash
+# Anthropic
+-e SQUIRE_LLM_MODEL=anthropic/claude-sonnet-4-20250514 -e ANTHROPIC_API_KEY=sk-ant-...
+
+# OpenAI
+-e SQUIRE_LLM_MODEL=openai/gpt-4o -e OPENAI_API_KEY=sk-...
+
+# Google Gemini
+-e SQUIRE_LLM_MODEL=gemini/gemini-2.0-flash -e GEMINI_API_KEY=...
+```
+
+### Watch Mode
+
+To run autonomous monitoring instead of the web UI, override the command:
+
+```bash
+# docker-compose: uncomment "command: watch" in docker-compose.yml
+
+# Manual:
+docker run -d -v squire-data:/data \
+  -e SQUIRE_LLM_MODEL=ollama_chat/llama3.1:8b \
+  -e SQUIRE_LLM_API_BASE=http://host.docker.internal:11434 \
+  --name squire-watch squire watch
+```
+
+You can run both side by side — the web UI on one container and watch mode on another — sharing the same data volume:
+
+```bash
+docker run -d -p 8420:8420 -v squire-data:/data --name squire-web squire
+docker run -d -v squire-data:/data --name squire-watch squire watch
+```
+
+### CLI Commands
+
+Run one-off CLI commands against a running container or the data volume:
+
+```bash
+# Against a running container
+docker exec squire uv run squire alerts list
+docker exec squire uv run squire sessions list
+
+# One-off with the data volume
+docker run --rm -v squire-data:/data squire alerts list
+docker run --rm -v squire-data:/data squire hosts list
+```
+
+### Health Check
+
+The container includes a built-in health check (`GET /api/health`) that verifies the web server is responsive. Docker reports health status in `docker ps`:
+
+```
+CONTAINER ID   IMAGE    STATUS                    PORTS
+abc123         squire   Up 2 minutes (healthy)    0.0.0.0:8420->8420/tcp
+```
+
+The health check runs every 30 seconds with a 10-second startup grace period.
