@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Docker:** Multi-stage Dockerfile — Node.js stage builds the Next.js frontend static export; Python stage serves the full web UI; default CMD changed from `chat` to `web`; adds `EXPOSE 8420`, `HEALTHCHECK` via `/api/health`, and `SQUIRE_SKILLS_PATH`/`SQUIRE_KEYS_DIR` env vars to consolidate all persistent data under `/data`
 - **Keys:** `SQUIRE_KEYS_DIR` env var overrides the SSH keys storage directory (default `~/.config/squire/keys/`), enabling Docker containers to persist keys under `/data/keys/`
 - **API:** `/api/health` endpoint for Docker HEALTHCHECK and docker-compose healthcheck directives — lightweight liveness check that returns `{"status": "ok"}`
 - **Watch:** "Clear History" button on Cycle History tab with confirmation dialog; calls `DELETE /api/watch/cycles` to truncate cycle data (#36)
