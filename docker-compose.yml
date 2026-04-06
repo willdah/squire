@@ -1,0 +1,48 @@
+# Squire — AI-powered homelab monitoring and management
+# Quick start: docker compose up -d
+# Web UI: http://localhost:8420
+
+services:
+  squire:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8420:8420"
+    volumes:
+      - squire-data:/data
+    environment:
+      # LLM provider — configure one of these:
+      # Ollama (default — assumes Ollama running on the Docker host)
+      - SQUIRE_LLM_MODEL=ollama_chat/llama3.1:8b
+      - SQUIRE_LLM_API_BASE=http://host.docker.internal:11434
+      # Anthropic:
+      # - SQUIRE_LLM_MODEL=anthropic/claude-sonnet-4-20250514
+      # - ANTHROPIC_API_KEY=sk-ant-...
+      # OpenAI:
+      # - SQUIRE_LLM_MODEL=openai/gpt-4o
+      # - OPENAI_API_KEY=sk-...
+      # Google Gemini:
+      # - SQUIRE_LLM_MODEL=gemini/gemini-2.0-flash
+      # - GEMINI_API_KEY=...
+
+      # Risk tolerance (read-only | cautious | standard | full-trust)
+      # - SQUIRE_RISK_TOLERANCE=cautious
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8420/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    # To mount a config file instead of using env vars:
+    # volumes:
+    #   - squire-data:/data
+    #   - ./squire.toml:/app/squire.toml:ro
+
+    # To run watch mode instead of the web UI:
+    # command: watch
+
+volumes:
+  squire-data:
