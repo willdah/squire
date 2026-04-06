@@ -1,6 +1,6 @@
 """SSH key management — generate, retrieve, and delete ed25519 key pairs.
 
-Keys are stored in ~/.config/squire/keys/ with one file per host:
+Keys are stored in SQUIRE_KEYS_DIR (default ~/.config/squire/keys/) with one file per host:
   {name}       — private key (mode 0600)
   {name}.pub   — public key (mode 0644)
 """
@@ -14,7 +14,12 @@ import asyncssh
 
 
 def _keys_dir() -> Path:
-    """Return the keys storage directory."""
+    """Return the keys storage directory.
+
+    Reads SQUIRE_KEYS_DIR env var, falling back to ~/.config/squire/keys/.
+    """
+    if env := os.environ.get("SQUIRE_KEYS_DIR"):
+        return Path(env)
     return Path.home() / ".config" / "squire" / "keys"
 
 
