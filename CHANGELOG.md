@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **squire.example.toml** — add `multi_agent`, `tools_risk_overrides`, and `[notifications.email]` sections
 - **Tested models** — add model recommendations section with tested Ollama models and cloud provider guidance
 
+### Security
+
+- Pin runtime and dev dependencies in `pyproject.toml` to exact versions (aligned with `uv.lock`) so installs do not float to newer PyPI releases without an explicit lock update (#65)
+
 ### Changed
 
 - **UI color palette** — migrated web and TUI from amber/gold to purple primary (#8931c4) + orange accent (#ff7621) palette with matching semantic colors (danger, success, warning, info)
