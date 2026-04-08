@@ -62,7 +62,7 @@ In both modes, the user always sees the single "Squire" persona — sub-agent na
 | Agent | Domain | Tools | Characteristic Risk |
 |---|---|---|---|
 | Monitor | System observation | `system_info`, `network_info`, `docker_ps`, `journalctl`, `read_config` | Read-only, risk 1 |
-| Container | Docker lifecycle | `docker_logs`, `docker_compose`, `docker_container`, `docker_image`, `docker_cleanup` | Cautious, risk 1–4 |
+| Container | Docker lifecycle | `docker_logs`, `docker_compose`, `docker_container`, `docker_image`, `docker_cleanup`, `wait_for_state` | Cautious, risk 1–4 |
 | Admin | System administration | `systemctl`, `run_command` | Elevated, risk 1–4 |
 | Notifier | Alert management | `send_notification`, `list_alert_rules`, `create_alert_rule`, `update_alert_rule`, `delete_alert_rule` | Mostly read-only, risk 1–2 |
 
@@ -74,7 +74,7 @@ flowchart TD
     Root["Root Agent<br/>(Squire — no tools)"]
 
     Monitor["Monitor<br/>system_info · network_info<br/>docker_ps · journalctl · read_config"]
-    Container["Container<br/>docker_logs · docker_compose<br/>docker_container · docker_image · docker_cleanup"]
+    Container["Container<br/>docker_logs · docker_compose<br/>docker_container · docker_image<br/>docker_cleanup · wait_for_state"]
     Admin["Admin<br/>systemctl · run_command"]
     Notifier["Notifier<br/>send_notification · alert rule tools"]
 

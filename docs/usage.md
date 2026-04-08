@@ -214,7 +214,7 @@ multi_agent = true
 | Sub-agent | Role | Default risk tolerance | Tools |
 |---|---|---|---|
 | Monitor | Read-only system observation | `read-only` | `system_info`, `network_info`, `docker_ps`, `journalctl`, `read_config` |
-| Container | Docker lifecycle management | `cautious` | `docker_logs`, `docker_compose`, `docker_container`, `docker_image`, `docker_cleanup` |
+| Container | Docker lifecycle management | `cautious` | `docker_logs`, `docker_compose`, `docker_container`, `docker_image`, `docker_cleanup`, `wait_for_state` |
 | Admin | Systemd and command execution | `standard` | `systemctl`, `run_command` |
 | Notifier | Alerts and notifications | `read-only` | `send_notification`, `list_alert_rules`, `create_alert_rule`, `delete_alert_rule` |
 

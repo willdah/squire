@@ -19,6 +19,9 @@ COPY src/ src/
 ENV SQUIRE_RISK_PROFILE=cautious
 ENV SQUIRE_DB_PATH=/data/squire.db
 
+# Strict host key checking requires known_hosts to exist; mount over /root/.ssh for persistence (#66)
+RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh && touch /root/.ssh/known_hosts
+
 VOLUME ["/data"]
 
 ENTRYPOINT ["uv", "run", "squire"]

@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- **Multi-agent tool tables** — Container sub-agent lists `wait_for_state` alongside Docker lifecycle tools (aligned with `CONTAINER_TOOLS`)
 - **Architecture overview** — new `docs/architecture.md` with Mermaid diagrams covering system overview, agent modes, request flow, risk pipeline, watch loop, tech stack, database schema, and backend registry
 - **Usage guide** — new `docs/usage.md` comprehensive guide covering all three interfaces, configuration, remote hosts, multi-agent mode, watch mode, alert rules, skills, notifications, and Docker deployment
 - **CONTRIBUTING.md** — expand from 54 lines to ~200 lines; add prerequisites, project structure, detailed code conventions, step-by-step tool-authoring guide with accurate registration instructions, testing section with fixture usage, and PR workflow
@@ -28,8 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **UI color palette** — migrated web and TUI from amber/gold to purple primary (#8931c4) + orange accent (#ff7621) palette with matching semantic colors (danger, success, warning, info)
 
+### Security
+
+- Pin runtime and dev dependencies in `pyproject.toml` to exact versions (aligned with `uv.lock`) so installs do not float to newer PyPI releases without an explicit lock update (#65)
+
 ### Fixed
 
+- **Tests:** `NotificationsConfig` and `WatchConfig` default tests no longer pick up `~/.config/squire/squire.toml` from the developer machine
+- **Docker:** create `/root/.ssh/known_hosts` in the image so SSH to remote hosts works with strict host key checking (#66)
 - **Web:** Watch nav item missing from sidebar on initial page load due to hydration mismatch (#35)
 - Watch page now defaults to Live Stream tab instead of Cycle History (#37)
 - **docker_ps**: add missing `timeout=30.0` to `backend.run()` call to prevent indefinite hangs

@@ -1,6 +1,7 @@
 """Container sub-agent — container lifecycle management.
 
-Tools: docker_logs, docker_compose
+Tools: docker_logs, docker_compose, docker_container, docker_image, docker_cleanup,
+wait_for_state
 """
 
 from google.adk.agents.llm_agent import Agent
@@ -13,8 +14,9 @@ from ..tools.groups import CONTAINER_RISK_LEVELS, CONTAINER_TOOLS
 from ..types import RiskGateFactory
 
 DESCRIPTION = (
-    "Container lifecycle management: viewing container logs, restarting services, "
-    "and managing Docker Compose stacks. Use for container operations and troubleshooting."
+    "Container lifecycle management: logs, Compose stacks, container and image lifecycle, "
+    "Docker cleanup, and async wait-for-container-state after deploys. "
+    "Use for container operations and troubleshooting."
 )
 
 
