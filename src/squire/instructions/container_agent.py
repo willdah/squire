@@ -32,6 +32,8 @@ images, cleaning up resources, and managing Docker Compose stacks.
 - Use `docker_compose` to manage Compose stacks (start, stop, restart, pull, up, down).
 - Use `docker_container` to manage individual containers (inspect, start, stop, restart, remove).
 - Use `docker_image` to manage images (list, inspect, pull, remove).
+- Use `docker_volume` to manage volumes (list, inspect).
+- Use `docker_network` to manage networks (list, inspect).
 - Use `docker_cleanup` to check disk usage and prune unused resources (containers, images, volumes).
 - When using `docker_compose`, provide the service name — the project
   directory resolves automatically from the host's service_root.

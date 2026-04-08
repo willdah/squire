@@ -11,7 +11,9 @@ from .docker_compose import docker_compose
 from .docker_container import docker_container
 from .docker_image import docker_image
 from .docker_logs import docker_logs
+from .docker_network import docker_network
 from .docker_ps import docker_ps
+from .docker_volume import docker_volume
 from .journalctl import journalctl
 from .network_info import network_info
 from .read_config import read_config
@@ -39,6 +41,8 @@ CONTAINER_TOOLS = [
     safe_tool(docker_container),
     safe_tool(docker_image),
     safe_tool(docker_cleanup),
+    safe_tool(docker_volume),
+    safe_tool(docker_network),
 ]
 CONTAINER_TOOL_NAMES = {t.__name__ for t in CONTAINER_TOOLS}
 CONTAINER_RISK_LEVELS = {

@@ -32,8 +32,12 @@ from .docker_image import RISK_LEVELS as _dimg_risks
 from .docker_image import docker_image
 from .docker_logs import RISK_LEVEL as _dl_risk
 from .docker_logs import docker_logs
+from .docker_network import RISK_LEVELS as _dnet_risks
+from .docker_network import docker_network
 from .docker_ps import RISK_LEVEL as _dp_risk
 from .docker_ps import docker_ps
+from .docker_volume import RISK_LEVELS as _dvol_risks
+from .docker_volume import docker_volume
 from .journalctl import RISK_LEVEL as _jctl_risk
 from .journalctl import journalctl
 from .network_info import RISK_LEVEL as _ni_risk
@@ -56,6 +60,8 @@ ALL_TOOLS = [
     safe_tool(docker_container),
     safe_tool(docker_image),
     safe_tool(docker_cleanup),
+    safe_tool(docker_volume),
+    safe_tool(docker_network),
     safe_tool(read_config),
     safe_tool(journalctl),
     safe_tool(systemctl),
@@ -71,6 +77,8 @@ TOOL_RISK_LEVELS: dict[str, int] = {
     **_dcont_risks,
     **_dimg_risks,
     **_dclean_risks,
+    **_dvol_risks,
+    **_dnet_risks,
     "read_config": _rc_risk,
     "journalctl": _jctl_risk,
     **_sctl_risks,
