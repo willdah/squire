@@ -1,7 +1,5 @@
 """wait_for_state — poll until a Docker container reaches a target condition."""
 
-from __future__ import annotations
-
 import asyncio
 import logging
 import uuid
@@ -20,6 +18,7 @@ RISK_LEVEL = 1  # read-only polling
 _MAX_TIMEOUT = 3600
 _MAX_INTERVAL = 120
 _KIND_DOCKER_CONTAINER = "docker_container"
+_INITIAL_DELAY = 2.0
 
 
 async def wait_for_state(
@@ -86,6 +85,7 @@ async def wait_for_state(
                 condition=cond,
                 interval_seconds=interval,
                 timeout_seconds=timeout,
+                initial_delay_seconds=_INITIAL_DELAY,
                 on_progress=None,
             )
             if result.status == "success":
@@ -117,6 +117,7 @@ async def wait_for_state(
             condition=cond,
             interval_seconds=interval,
             timeout_seconds=timeout,
+            initial_delay_seconds=_INITIAL_DELAY,
             on_progress=_progress,
         )
     except Exception as exc:

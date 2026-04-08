@@ -132,6 +132,19 @@ class ChatPane(Static):
 
             session_id = self._session.id
 
+            runner = self._runner
+            session_obj = self._session
+
+            async def _inject_monitor_event(content: str) -> None:
+                from google.adk.events.event import Event as AdkEvent
+
+                evt = AdkEvent(
+                    author="Squire",
+                    invocation_id=AdkEvent.new_id(),
+                    content=types.Content(role="model", parts=[types.Part(text=content)]),
+                )
+                await runner.session_service.append_event(session_obj, evt)
+
             register_monitor_session_sink(
                 session_id,
                 TuiChatMonitorSink(
@@ -140,6 +153,7 @@ class ChatPane(Static):
                     session_id=session_id,
                     app=self.app,
                     add_message=self._add_message,
+                    _on_complete=_inject_monitor_event,
                 ),
             )
 

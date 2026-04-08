@@ -272,9 +272,25 @@ async def chat_websocket(
                 )
                 await runner.session_service.append_event(session, event)
 
+    async def _inject_monitor_event(content: str) -> None:
+        """Append the monitor result to the ADK session so the LLM has context on the next turn."""
+        from google.adk.events.event import Event as AdkEvent
+
+        evt = AdkEvent(
+            author=agent.name,
+            invocation_id=AdkEvent.new_id(),
+            content=types.Content(role="model", parts=[types.Part(text=content)]),
+        )
+        await runner.session_service.append_event(session, evt)
+
     register_monitor_session_sink(
         session_id,
-        WebChatMonitorSink(websocket=websocket, db=db, session_id=session_id),
+        WebChatMonitorSink(
+            websocket=websocket,
+            db=db,
+            session_id=session_id,
+            _on_complete=_inject_monitor_event,
+        ),
     )
 
     streaming_task: asyncio.Task | None = None

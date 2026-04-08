@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
@@ -52,6 +53,7 @@ class WebChatMonitorSink:
     db: DatabaseService | None
     session_id: str
     use_background: bool = True
+    _on_complete: Callable[[str], Awaitable[None]] | None = None
     _send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     _turn_idle: asyncio.Event = field(default_factory=asyncio.Event)
 
@@ -101,6 +103,12 @@ class WebChatMonitorSink:
             except Exception:
                 logger.debug("WebSocket send failed for monitor_complete", exc_info=True)
 
+            if self._on_complete:
+                try:
+                    await self._on_complete(content)
+                except Exception:
+                    logger.debug("_on_complete callback failed", exc_info=True)
+
 
 @dataclass
 class TuiChatMonitorSink:
@@ -112,6 +120,7 @@ class TuiChatMonitorSink:
     app: object
     add_message: object
     use_background: bool = True
+    _on_complete: Callable[[str], Awaitable[None]] | None = None
 
     async def deliver_monitor_result(self, monitor_id: str, content: str) -> None:
         if self.db:
@@ -139,6 +148,12 @@ class TuiChatMonitorSink:
             except Exception:
                 logger.debug("Notifier dispatch failed for monitor", exc_info=True)
         self.app.call_from_thread(self.add_message, content, "assistant")
+
+        if self._on_complete:
+            try:
+                await self._on_complete(content)
+            except Exception:
+                logger.debug("_on_complete callback failed (TUI)", exc_info=True)
 
 
 @dataclass

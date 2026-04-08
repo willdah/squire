@@ -32,9 +32,19 @@ async def run_docker_container_monitor(
     condition: str,
     interval_seconds: int,
     timeout_seconds: int,
+    initial_delay_seconds: float = 0,
     on_progress: ProgressCallback | None = None,
 ) -> MonitorLoopResult:
-    """Poll ``docker inspect`` until ``evaluate_container_condition`` reports met/failed or time runs out."""
+    """Poll ``docker inspect`` until ``evaluate_container_condition`` reports met/failed or time runs out.
+
+    Args:
+        initial_delay_seconds: Sleep this long before the first poll.
+            Useful after a state-changing action (e.g. ``docker restart``)
+            so Docker has time to reset health status.
+    """
+    if initial_delay_seconds > 0:
+        await asyncio.sleep(initial_delay_seconds)
+
     deadline = time.monotonic() + timeout_seconds
     last_detail = ""
     cond = condition.strip().lower()
