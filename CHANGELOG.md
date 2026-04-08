@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **squire.example.toml** — add `multi_agent`, `tools_risk_overrides`, and `[notifications.email]` sections
 - **Tested models** — add model recommendations section with tested Ollama models and cloud provider guidance
 
+### Fixed
+
+- **Agent instructions** — clarify that `docker_ps` (not `docker_compose ps`) is the correct tool for listing all containers on a host; add fallback hint in `docker_compose` error output when compose file is missing
+
 ### Changed
 
 - **UI color palette** — migrated web and TUI from amber/gold to purple primary (#8931c4) + orange accent (#ff7621) palette with matching semantic colors (danger, success, warning, info)
@@ -35,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Web chat:** `wait_for_state` no longer breaks tool schema discovery — removed deferred annotations so `ToolContext` resolves under `safe_tool` wrappers (ADK `get_type_hints` previously evaluated hints in `_safe`’s globals and raised `NameError`)
 - **Tests:** `NotificationsConfig` and `WatchConfig` default tests no longer pick up `~/.config/squire/squire.toml` from the developer machine
 - **Docker:** create `/root/.ssh/known_hosts` in the image so SSH to remote hosts works with strict host key checking (#66)
 - **Web:** Watch nav item missing from sidebar on initial page load due to hydration mismatch (#35)

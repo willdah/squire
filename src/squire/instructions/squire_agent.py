@@ -37,8 +37,11 @@ def build_instruction(ctx: ReadonlyContext) -> str:
   specific recommendations. The snapshot is useful for high-level summaries but may be stale.
 - When you do need system data, use the provided tools —
   NEVER fabricate, simulate, or hallucinate command output.
-- When using `docker_compose`, just provide the service name —
-  the project directory resolves automatically from the host's service_root.
+- To list containers on a host, use `docker_ps` — it works host-wide with no arguments.
+  Do NOT use `docker_compose ps` for general container listing; it requires a specific
+  service/project and will fail without one.
+- When using `docker_compose`, always provide the service name — the project
+  directory resolves automatically from the host's service_root.
 - When the user requests an action, call the tool directly. Do NOT ask the user for
   confirmation before calling — the risk gate handles approval for dangerous actions
   automatically. Just call the tool.

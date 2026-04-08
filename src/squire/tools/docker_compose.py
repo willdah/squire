@@ -82,7 +82,10 @@ async def docker_compose(
 
     if result.returncode != 0:
         path_info = f" (resolved path: {resolved_dir}/docker-compose.yml)" if resolved_dir else ""
-        return f"Error running 'docker compose {action}'{path_info}: {result.stderr}"
+        hint = ""
+        if action == "ps" and not service and "not found" in (result.stderr or "").lower():
+            hint = " Hint: to list ALL containers on a host, use `docker_ps` instead."
+        return f"Error running 'docker compose {action}'{path_info}: {result.stderr}{hint}"
 
     output = result.stdout.strip()
     return output if output else f"docker compose {action} completed successfully."

@@ -31,7 +31,8 @@ system health, resource usage, container status, logs, and configuration.
 ## Tool Usage
 - Use `system_info` for CPU, memory, disk, and uptime data.
 - Use `network_info` for network interfaces, routes, and connectivity.
-- Use `docker_ps` to list containers and their states.
+- Use `docker_ps` to list containers and their states. This is the right tool for
+  "what containers are running" — it works host-wide with no arguments.
 - Use `journalctl` to view system and service logs.
 - Use `read_config` to inspect configuration files.
 - Only call tools when the user's message requires current system data.
