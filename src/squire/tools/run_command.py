@@ -1,7 +1,5 @@
 """run_command tool — guarded shell execution with command allow/block lists."""
 
-import shlex
-
 from ..config import GuardrailsConfig
 from ._registry import get_registry
 
@@ -24,6 +22,9 @@ async def run_command(command: str, timeout: float = 30.0, host: str = "local") 
     and blocklist before execution. Blocked commands are denied entirely.
     Commands not on the allowlist require approval via the risk profile.
 
+    Supports shell syntax including pipes (|), semicolons (;), and
+    chained commands (&&, ||).
+
     Args:
         command: The shell command to execute (e.g., "ping -c 4 8.8.8.8").
         timeout: Maximum seconds to wait for the command to complete (default 30).
@@ -31,23 +32,19 @@ async def run_command(command: str, timeout: float = 30.0, host: str = "local") 
 
     Returns the command output (stdout + stderr) as text.
     """
-    try:
-        parts = shlex.split(command)
-    except ValueError as e:
-        return f"Invalid command syntax: {e}"
-
-    if not parts:
+    stripped = command.strip()
+    if not stripped:
         return "Empty command."
 
-    base_cmd = parts[0]
+    base_cmd = stripped.split()[0].rstrip(";|&")
+    if not base_cmd:
+        return "Empty command."
 
     guardrails = _get_guardrails_config()
 
-    # Check blocklist first
     if base_cmd in guardrails.commands_block:
         return f"DENIED: '{base_cmd}' is on the command blocklist. Tell the user this command is not allowed."
 
-    # Check allowlist
     if guardrails.commands_allow and base_cmd not in guardrails.commands_allow:
         return (
             f"DENIED: '{base_cmd}' is not on the command allowlist. Tell the user this command is not allowed.\n"
@@ -55,7 +52,7 @@ async def run_command(command: str, timeout: float = 30.0, host: str = "local") 
         )
 
     backend = get_registry().get(host)
-    result = await backend.run(parts, timeout=min(timeout, 120.0))
+    result = await backend.run(["bash", "-c", stripped], timeout=min(timeout, 120.0))
 
     output_parts = []
     if result.stdout:
