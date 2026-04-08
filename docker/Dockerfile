@@ -34,6 +34,9 @@ ENV SQUIRE_SKILLS_PATH=/data/skills
 ENV SQUIRE_KEYS_DIR=/data/keys
 ENV SQUIRE_RISK_TOLERANCE=cautious
 
+# Strict host key checking requires known_hosts to exist; mount over /root/.ssh for persistence (#66)
+RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh && touch /root/.ssh/known_hosts
+
 VOLUME ["/data"]
 EXPOSE 8420
 
