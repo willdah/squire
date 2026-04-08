@@ -1,6 +1,7 @@
 """Container sub-agent — container lifecycle management.
 
-Tools: docker_logs, docker_compose
+Tools: docker_logs, docker_compose, docker_container, docker_image, docker_cleanup,
+docker_volume, docker_network
 """
 
 from google.adk.agents.llm_agent import Agent

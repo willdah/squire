@@ -13,7 +13,9 @@ from ...tools.docker_compose import docker_compose
 from ...tools.docker_container import docker_container
 from ...tools.docker_image import docker_image
 from ...tools.docker_logs import docker_logs
+from ...tools.docker_network import docker_network
 from ...tools.docker_ps import docker_ps
+from ...tools.docker_volume import docker_volume
 from ...tools.groups import ADMIN_TOOL_NAMES, CONTAINER_TOOL_NAMES, MONITOR_TOOL_NAMES
 from ...tools.journalctl import journalctl
 from ...tools.network_info import network_info
@@ -36,6 +38,8 @@ _TOOL_ENTRIES: list[tuple[str, object]] = [
     ("docker_container", docker_container),
     ("docker_image", docker_image),
     ("docker_cleanup", docker_cleanup),
+    ("docker_volume", docker_volume),
+    ("docker_network", docker_network),
     ("read_config", read_config),
     ("journalctl", journalctl),
     ("systemctl", systemctl),
