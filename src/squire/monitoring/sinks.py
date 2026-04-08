@@ -40,16 +40,39 @@ def get_monitor_session_sink(session_id: str) -> MonitorSessionSink | None:
 
 @dataclass
 class WebChatMonitorSink:
-    """Inject assistant text over the chat WebSocket (Option B)."""
+    """Inject assistant text over the chat WebSocket (Option B).
+
+    Delivery is gated by ``_turn_idle`` — an event that is cleared while an
+    LLM streaming turn is in progress and set once ``message_complete`` has
+    been sent.  This prevents monitor results from appearing *before* the
+    agent's conversational response in the chat timeline.
+    """
 
     websocket: WebSocket
     db: DatabaseService | None
     session_id: str
     use_background: bool = True
     _send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    _turn_idle: asyncio.Event = field(default_factory=asyncio.Event)
+
+    def __post_init__(self) -> None:
+        self._turn_idle.set()
+
+    def mark_streaming(self) -> None:
+        """Call when an LLM streaming turn starts."""
+        self._turn_idle.clear()
+
+    def mark_idle(self) -> None:
+        """Call when the LLM turn finishes (``message_complete`` sent)."""
+        self._turn_idle.set()
 
     async def deliver_monitor_result(self, monitor_id: str, content: str) -> None:
         from starlette.websockets import WebSocketState
+
+        try:
+            await asyncio.wait_for(self._turn_idle.wait(), timeout=300)
+        except TimeoutError:
+            logger.warning("Timed out waiting for LLM turn to finish; delivering monitor result anyway")
 
         async with self._send_lock:
             if self.db:

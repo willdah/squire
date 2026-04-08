@@ -18,7 +18,12 @@ from ...agents import create_squire_agent
 from ...callbacks.risk_gate import ADK_INTERNAL_TOOLS, build_pattern_analyzer, create_risk_gate
 from ...config import GuardrailsConfig
 from ...monitoring.registry import cancel_session_monitor_tasks
-from ...monitoring.sinks import WebChatMonitorSink, register_monitor_session_sink, unregister_monitor_session_sink
+from ...monitoring.sinks import (
+    WebChatMonitorSink,
+    get_monitor_session_sink,
+    register_monitor_session_sink,
+    unregister_monitor_session_sink,
+)
 from ...tools import TOOL_RISK_LEVELS
 from ..dependencies import get_app_config, get_db, get_llm_config, get_registry
 from ..schemas import ChatSessionResponse
@@ -360,11 +365,16 @@ async def _stream_response(
     max_turns = 15 if skill_active else 1
     current_text = user_text
 
+    sink = get_monitor_session_sink(session.id)
+
     try:
         all_response_text = ""
         prev_response = ""
 
         for turn in range(max_turns):
+            if isinstance(sink, WebChatMonitorSink):
+                sink.mark_streaming()
+
             turn_response, tools_used = await _run_single_turn(
                 websocket=websocket,
                 runner=runner,
@@ -383,9 +393,13 @@ async def _stream_response(
             # If this is not a skill session or we've exhausted turns, stop.
             if not skill_active or turn >= max_turns - 1:
                 await websocket.send_json({"type": "message_complete", "content": turn_response})
+                if isinstance(sink, WebChatMonitorSink):
+                    sink.mark_idle()
                 break
 
             await websocket.send_json({"type": "message_complete", "content": turn_response})
+            if isinstance(sink, WebChatMonitorSink):
+                sink.mark_idle()
 
             all_response_text += "\n" + turn_response
 
@@ -415,6 +429,9 @@ async def _stream_response(
             await websocket.send_json({"type": "error", "message": str(e)})
         except Exception:
             pass
+    finally:
+        if isinstance(sink, WebChatMonitorSink):
+            sink.mark_idle()
 
 
 async def _run_single_turn(
