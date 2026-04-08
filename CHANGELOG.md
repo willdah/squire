@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Tools:** Added `docker_volume` and `docker_network` tools to the container agent for listing and inspecting Docker volumes and networks (read-only visibility)
 - **Docker:** Multi-stage Dockerfile that builds the Next.js frontend and serves the web UI by default; includes `HEALTHCHECK` directive
 - **Docker:** `docker-compose.yml` quickstart with volume, port, and LLM provider configuration
 - **API:** `GET /api/health` liveness endpoint returning `{"status": "ok"}`
