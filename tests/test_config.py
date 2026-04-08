@@ -1,5 +1,7 @@
 """Tests for configuration classes."""
 
+import pytest
+
 import squire.config.loader as loader_mod
 from squire.config import AppConfig, DatabaseConfig, GuardrailsConfig, HostConfig, LLMConfig, NotificationsConfig
 from squire.config.loader import (
@@ -72,6 +74,10 @@ class TestGuardrailsConfig:
 
 
 class TestNotificationsConfig:
+    @pytest.fixture(autouse=True)
+    def _clear_toml_cache(self, monkeypatch):
+        monkeypatch.setattr(loader_mod, "_cached", {})
+
     def test_disabled_by_default(self):
         config = NotificationsConfig()
         assert config.enabled is False
