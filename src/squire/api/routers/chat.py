@@ -17,6 +17,8 @@ from google.genai import types
 from ...agents import create_squire_agent
 from ...callbacks.risk_gate import ADK_INTERNAL_TOOLS, build_pattern_analyzer, create_risk_gate
 from ...config import GuardrailsConfig
+from ...monitoring.registry import cancel_session_monitor_tasks
+from ...monitoring.sinks import WebChatMonitorSink, register_monitor_session_sink, unregister_monitor_session_sink
 from ...tools import TOOL_RISK_LEVELS
 from ..dependencies import get_app_config, get_db, get_llm_config, get_registry
 from ..schemas import ChatSessionResponse
@@ -265,6 +267,11 @@ async def chat_websocket(
                 )
                 await runner.session_service.append_event(session, event)
 
+    register_monitor_session_sink(
+        session_id,
+        WebChatMonitorSink(websocket=websocket, db=db, session_id=session_id),
+    )
+
     streaming_task: asyncio.Task | None = None
 
     try:
@@ -327,6 +334,8 @@ async def chat_websocket(
     except Exception:
         logger.exception("WebSocket error for session %s", session_id)
     finally:
+        cancel_session_monitor_tasks(session_id)
+        unregister_monitor_session_sink(session_id)
         if streaming_task and not streaming_task.done():
             streaming_task.cancel()
 

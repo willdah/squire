@@ -13,6 +13,7 @@ from textual.containers import VerticalScroll
 from textual.widgets import Input, Static
 
 from ..database.service import DatabaseService
+from ..monitoring.sinks import TuiChatMonitorSink, register_monitor_session_sink, unregister_monitor_session_sink
 from ..notifications.webhook import WebhookDispatcher
 
 
@@ -123,12 +124,24 @@ class ChatPane(Static):
     async def _send_message(self, user_text: str) -> None:
         """Send the user message to the ADK runner and stream the response."""
         self._processing = True
+        session_id: str | None = None
         try:
             if not self._runner or not self._session:
                 self.app.call_from_thread(self._add_message, "Agent not connected. Check your configuration.", "system")
                 return
 
             session_id = self._session.id
+
+            register_monitor_session_sink(
+                session_id,
+                TuiChatMonitorSink(
+                    db=self._db,
+                    notifier=self._notifier,
+                    session_id=session_id,
+                    app=self.app,
+                    add_message=self._add_message,
+                ),
+            )
 
             # Persist user message
             await self._persist_message(session_id, "user", user_text)
@@ -217,6 +230,8 @@ class ChatPane(Static):
                 tb = traceback.format_exc()
                 await self._log_event(sid, "error", str(e), details=tb)
         finally:
+            if session_id:
+                unregister_monitor_session_sink(session_id)
             self._processing = False
 
     async def _persist_message(self, session_id: str, role: str, content: str) -> None:

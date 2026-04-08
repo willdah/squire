@@ -12,7 +12,8 @@ class TestBuildToolCatalog:
         assert "system_info" in names
         assert "docker_container" in names
         assert "run_command" in names
-        assert len(tools) == 12  # all 12 registered tools
+        assert "wait_for_state" in names
+        assert len(tools) == 13  # all registered tools
 
     def test_single_action_tool_has_risk_level(self):
         guardrails = GuardrailsConfig()

@@ -18,7 +18,7 @@ class TestSingleAgentMode:
         agent = create_squire_agent(app_config=config)
         assert agent.name == "Squire"
         assert len(agent.sub_agents) == 0
-        assert len(agent.tools) == 12
+        assert len(agent.tools) == 13
 
     def test_explicit_callback(self):
         config = AppConfig(multi_agent=False)
@@ -77,7 +77,7 @@ class TestMultiAgentMode:
             risk_gate_factory=_make_factory(),
         )
         tool_counts = {sa.name: len(sa.tools) for sa in agent.sub_agents}
-        assert tool_counts == {"Monitor": 5, "Container": 5, "Admin": 2, "Notifier": 5}
+        assert tool_counts == {"Monitor": 5, "Container": 6, "Admin": 2, "Notifier": 5}
 
     def test_requires_risk_gate_factory(self):
         config = AppConfig(multi_agent=True)

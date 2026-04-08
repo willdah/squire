@@ -34,6 +34,12 @@ from .config import (
 from .database.service import DatabaseService
 from .hosts.store import HostStore
 from .main import _collect_all_snapshots
+from .monitoring.registry import cancel_session_monitor_tasks
+from .monitoring.sinks import (
+    WatchNotifierMonitorSink,
+    register_monitor_session_sink,
+    unregister_monitor_session_sink,
+)
 from .notifications.alert_evaluator import evaluate_alerts
 from .notifications.email import EmailNotifier
 from .notifications.router import NotificationRouter
@@ -206,6 +212,10 @@ async def start_watch() -> None:
         state=session_state,
     )
     await db.create_session(session.id)
+    register_monitor_session_sink(
+        session.id,
+        WatchNotifierMonitorSink(db=db, notifier=notifier, session_id=session.id),
+    )
 
     # Signal handling for graceful shutdown
     shutdown = asyncio.Event()
@@ -355,6 +365,10 @@ async def start_watch() -> None:
                 except (TimeoutError, Exception):
                     summary = "(session summary unavailable)"
 
+                old_session_id = session.id
+                cancel_session_monitor_tasks(old_session_id)
+                unregister_monitor_session_sink(old_session_id)
+
                 session = await runner.session_service.create_session(
                     app_name=app_config.app_name,
                     user_id=app_config.user_id,
@@ -362,6 +376,10 @@ async def start_watch() -> None:
                 )
                 await db.create_session(session.id)
                 await db.set_watch_state("session_id", session.id)
+                register_monitor_session_sink(
+                    session.id,
+                    WatchNotifierMonitorSink(db=db, notifier=notifier, session_id=session.id),
+                )
 
                 if summary:
                     event = Event(
@@ -380,6 +398,8 @@ async def start_watch() -> None:
             await _interruptible_sleep(db, shutdown, watch_config.interval_minutes * 60, watch_config=watch_config)
 
     finally:
+        cancel_session_monitor_tasks(session.id)
+        unregister_monitor_session_sink(session.id)
         await db.set_watch_state("status", "stopped")
         await db.set_watch_state("stopped_at", datetime.now(UTC).isoformat())
         await _dispatch(notifier, "watch.stop", "Squire watch mode stopped.")

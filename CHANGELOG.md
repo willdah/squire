@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Agent:** `wait_for_state` tool — framework-level Docker container polling (`healthy` / `running` / `exited`) without LLM calls per tick; web chat delivers results via `monitor_complete` WebSocket messages; TUI and watch mode register session sinks for background completion (#67)
 - **Watch:** "Clear History" button on Cycle History tab with confirmation dialog; calls `DELETE /api/watch/cycles` to truncate cycle data (#36)
 - **Watch:** "Clear Stream" button on Live Stream tab to clear in-memory event buffer (#36)
 - **Watch:** Accumulating "Load More" pagination on Cycle History — cycles append instead of replacing; "Back to Latest" button resets to page 1 (#22)

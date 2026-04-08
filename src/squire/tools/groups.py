@@ -18,6 +18,7 @@ from .read_config import read_config
 from .run_command import run_command
 from .system_info import system_info
 from .systemctl import systemctl
+from .wait_for_state import wait_for_state
 
 # Monitor agent — read-only system observation
 MONITOR_TOOLS = [
@@ -39,6 +40,7 @@ CONTAINER_TOOLS = [
     safe_tool(docker_container),
     safe_tool(docker_image),
     safe_tool(docker_cleanup),
+    safe_tool(wait_for_state),
 ]
 CONTAINER_TOOL_NAMES = {t.__name__ for t in CONTAINER_TOOLS}
 CONTAINER_RISK_LEVELS = {

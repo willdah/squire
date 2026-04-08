@@ -178,6 +178,19 @@ function ChatPageInner() {
           }
           break;
 
+        case "monitor_complete":
+          setAgentState(null);
+          setActiveToolName(undefined);
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: nextId(),
+              role: "assistant",
+              content: wsMsg.content,
+            },
+          ]);
+          break;
+
         case "message_complete":
           setAgentState(null);
           setActiveToolName(undefined);

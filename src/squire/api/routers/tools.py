@@ -21,6 +21,7 @@ from ...tools.read_config import read_config
 from ...tools.run_command import run_command
 from ...tools.system_info import system_info
 from ...tools.systemctl import systemctl
+from ...tools.wait_for_state import wait_for_state
 from ..dependencies import get_guardrails
 from ..schemas import ToolAction, ToolInfo, ToolParameter
 
@@ -40,6 +41,7 @@ _TOOL_ENTRIES: list[tuple[str, object]] = [
     ("journalctl", journalctl),
     ("systemctl", systemctl),
     ("run_command", run_command),
+    ("wait_for_state", wait_for_state),
 ]
 
 
@@ -59,6 +61,8 @@ def _extract_parameters(func: object) -> list[ToolParameter]:
     sig = inspect.signature(func)
     params = []
     for name, param in sig.parameters.items():
+        if name == "tool_context":
+            continue
         hint = param.annotation
         if hint is inspect.Parameter.empty:
             type_name = "str"

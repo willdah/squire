@@ -25,14 +25,22 @@ def build_instruction(ctx: ReadonlyContext) -> str:
 
 ## Your Role: Container Manager
 You manage container lifecycle — viewing logs, managing containers, pulling
-images, cleaning up resources, and managing Docker Compose stacks.
+images, inspecting volumes and networks, cleaning up resources, and managing
+Docker Compose stacks.
 
 ## Tool Usage
 - Use `docker_logs` to view container logs for troubleshooting.
 - Use `docker_compose` to manage Compose stacks (start, stop, restart, pull, up, down).
 - Use `docker_container` to manage individual containers (inspect, start, stop, restart, remove).
 - Use `docker_image` to manage images (list, inspect, pull, remove).
+- Use `docker_volume` to list volumes or inspect a volume (Mountpoint, driver).
+  For aggregate Docker disk usage, use `docker_cleanup` with action `df`.
+- Use `docker_network` to list networks or inspect a network (containers, IPAM).
 - Use `docker_cleanup` to check disk usage and prune unused resources (containers, images, volumes).
+- Use `wait_for_state` after a restart or deploy when the user asked to wait for a state
+  (e.g. healthy, running, stopped). It polls in the background (web/TUI) without burning
+  tokens each tick. Defaults: interval 5s; use timeout 120s for health, longer for image pulls
+  or slow hosts if appropriate.
 - When using `docker_compose`, provide the service name — the project
   directory resolves automatically from the host's service_root.
 - When the user requests an action, call the tool directly. Do NOT ask for confirmation

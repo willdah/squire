@@ -10,7 +10,7 @@ Tool conventions:
   can relay them to the user. Only use exceptions for truly unexpected
   failures that should surface as system errors.
 - Single-action tools set a module-level ``RISK_LEVEL`` int (1–5).
-  Multi-action tools set ``RISK_LEVELS: dict[str, int]`` with
+- Multi-action tools set ``RISK_LEVELS: dict[str, int]`` with
   ``"tool:action"`` keys.  Both are used by the risk gate callback
   to decide whether user approval is needed.
 """
@@ -46,6 +46,8 @@ from .system_info import RISK_LEVEL as _si_risk
 from .system_info import system_info
 from .systemctl import RISK_LEVELS as _sctl_risks
 from .systemctl import systemctl
+from .wait_for_state import RISK_LEVEL as _wfs_risk
+from .wait_for_state import wait_for_state
 
 ALL_TOOLS = [
     safe_tool(system_info),
@@ -60,6 +62,7 @@ ALL_TOOLS = [
     safe_tool(journalctl),
     safe_tool(systemctl),
     safe_tool(run_command),
+    safe_tool(wait_for_state),
 ]
 
 TOOL_RISK_LEVELS: dict[str, int] = {
@@ -75,4 +78,5 @@ TOOL_RISK_LEVELS: dict[str, int] = {
     "journalctl": _jctl_risk,
     **_sctl_risks,
     "run_command": _runcmd_risk,
+    "wait_for_state": _wfs_risk,
 }

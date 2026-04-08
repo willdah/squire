@@ -56,6 +56,9 @@ class MockRegistry:
     def get(self, host: str = "local"):
         return self._backend
 
+    def resolve_host_for_service(self, service: str) -> str | None:
+        return None
+
     @property
     def host_names(self) -> list[str]:
         return ["local"]

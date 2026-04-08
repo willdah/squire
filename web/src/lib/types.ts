@@ -248,6 +248,11 @@ export interface WsMessageComplete {
   content: string;
   stopped?: boolean;
 }
+export interface WsMonitorComplete {
+  type: "monitor_complete";
+  content: string;
+  monitor_id: string;
+}
 export interface WsError {
   type: "error";
   message: string;
@@ -259,4 +264,5 @@ export type WsServerMessage =
   | WsToolResult
   | WsApprovalRequest
   | WsMessageComplete
+  | WsMonitorComplete
   | WsError;

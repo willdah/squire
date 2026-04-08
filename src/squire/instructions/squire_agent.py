@@ -43,6 +43,8 @@ def build_instruction(ctx: ReadonlyContext) -> str:
   confirmation before calling — the risk gate handles approval for dangerous actions
   automatically. Just call the tool.
 - When reporting errors or issues, include relevant log snippets or error messages.
+- When the user wants confirmation after a container action (e.g. restart and wait until
+  healthy), use `wait_for_state` with kind `docker_container` after the mutating tool.
 
 ## Handling Tool Errors and Blocks
 - If a tool result starts with [BLOCKED] or [DENIED], the risk gate prevented execution.
