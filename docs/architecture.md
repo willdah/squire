@@ -1,6 +1,6 @@
 # Architecture Overview
 
-Squire is an AI-powered homelab monitoring and management agent. A Google ADK agent (single or multi-agent) receives requests from any of three interfaces — Web UI, TUI, or CLI — and acts on local and remote hosts through a typed backend abstraction layer. Every tool call passes through a risk evaluation pipeline before execution, so dangerous operations require explicit approval or are blocked outright in headless mode.
+Squire is an AI-powered homelab monitoring and management agent. A Google ADK agent (single or multi-agent) receives requests from the Web UI or CLI and acts on local and remote hosts through a typed backend abstraction layer. Every tool call passes through a risk evaluation pipeline before execution, so dangerous operations require explicit approval or are blocked outright in headless mode.
 
 ## System Overview
 
@@ -10,7 +10,6 @@ graph TD
 
     subgraph Interfaces
         WebUI[Web UI<br/>Next.js + FastAPI]
-        TUI[TUI<br/>Textual]
         CLI[CLI<br/>Typer]
     end
 
@@ -31,11 +30,9 @@ graph TD
     end
 
     User --> WebUI
-    User --> TUI
     User --> CLI
 
     WebUI --> RootAgent
-    TUI --> RootAgent
     CLI --> RootAgent
 
     RootAgent --> RiskGate
@@ -90,7 +87,7 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant I as Interface<br/>(Web/TUI/CLI)
+    participant I as Interface<br/>(Web/CLI)
     participant A as Agent (ADK)
     participant RG as Risk Gate
     participant T as Tool Function
@@ -209,7 +206,6 @@ Watch mode is started with `make watch` or `uv run squire watch`. The web UI's W
 | Risk Evaluation | agent-risk-engine | Pattern-based risk analysis, rule gating, tool blocking |
 | Web API | FastAPI + Uvicorn | REST endpoints, WebSocket streaming |
 | Web Frontend | Next.js + React + shadcn/ui | Browser-based chat, watch monitoring, configuration |
-| Terminal UI | Textual | Rich TUI with panels, modals, real-time status |
 | CLI | Typer | Command-line interface for scripting and quick tasks |
 | Database | aiosqlite (SQLite) | Session persistence, events, alert rules, watch state |
 | Remote Access | asyncssh | SSH-based multi-machine management |
@@ -270,7 +266,6 @@ src/squire/              Main application
   system/                Backend registry, LocalBackend, SSHBackend
   tools/                 System interaction tools (async, return str)
     notifications/       Notification and alert rule tools (Notifier sub-agent)
-  tui/                   Textual TUI components and app
 
 web/                     Next.js frontend
   src/app/               Pages: chat, watch, skills, sessions, hosts, notifications, config, activity

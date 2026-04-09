@@ -60,10 +60,6 @@ web-lint: ## Lint frontend code
 # Run
 # ---------------------------------------------------------------------------
 
-.PHONY: chat
-chat: ## Start the TUI chat interface
-	uv run squire chat
-
 .PHONY: web
 web: ## Start the web interface (FastAPI + static frontend)
 	uv run squire web --reload

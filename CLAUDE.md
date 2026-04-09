@@ -2,7 +2,7 @@
 
 ## Project overview
 
-Squire is an AI-powered homelab monitoring and management agent. It uses Google ADK for multi-agent orchestration with four specialized sub-agents (Monitor, Container, Admin, Notifier) behind a single "Squire" persona. It provides three interfaces: a TUI (Textual), a web UI (Next.js + FastAPI), and a CLI.
+Squire is an AI-powered homelab monitoring and management agent. It uses Google ADK for multi-agent orchestration with four specialized sub-agents (Monitor, Container, Admin, Notifier) behind a single "Squire" persona. It provides a web UI (Next.js + FastAPI) and a CLI (Typer).
 
 ## Tech stack
 
@@ -10,7 +10,6 @@ Squire is an AI-powered homelab monitoring and management agent. It uses Google 
 - Google ADK — agent orchestration
 - FastAPI + Uvicorn — web API
 - Typer — CLI
-- Textual — TUI
 - LiteLLM — LLM provider abstraction
 - Pydantic / Pydantic Settings — config and validation
 - aiosqlite — SQLite database
@@ -47,11 +46,10 @@ src/squire/              Main application
   schemas/               Pydantic models
   system/                Backend registry (local/SSH execution)
   tools/                 System interaction tools (async, return str)
-  tui/                   Textual TUI components
   agent.py               Root agent builder
   approval.py            Approval provider protocols
   cli.py                 Typer CLI entry point
-  main.py                Orchestration & snapshot collection
+  main.py                Snapshot helpers & session listing (shared by API, watch, CLI)
   watch.py               Autonomous watch loop
 
 web/                     Next.js frontend
@@ -85,7 +83,6 @@ make ci            # Lint + format check + test (mirrors CI)
 make web-dev       # Next.js dev server
 make web-build     # Next.js production build
 
-make chat          # TUI chat interface
 make web           # Web interface (FastAPI, --reload)
 make watch         # Autonomous watch mode
 

@@ -404,7 +404,7 @@ In `docs/usage.md`, replace everything from `## Docker Deployment` (line 475) to
 ```markdown
 ## Docker Deployment
 
-The Docker image runs the **web interface** by default — the TUI is not supported in containers. The image includes a pre-built frontend, so no separate Node.js process is needed.
+The Docker image runs the **web interface** by default. The image includes a pre-built frontend, so no separate Node.js process is needed.
 
 ### Quick Start (docker-compose)
 

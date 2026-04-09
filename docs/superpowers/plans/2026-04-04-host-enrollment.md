@@ -1075,7 +1075,7 @@ Add this import:
 from .hosts.store import HostStore
 ```
 
-In `start_chat()`, replace lines 142-144:
+In the former `start_chat()` path (removed with the TUI; same pattern applies to web chat and watch startup), replace lines 142-144:
 ```python
     host_dicts = get_list_section("hosts")
     hosts = [HostConfig(**h) for h in host_dicts]

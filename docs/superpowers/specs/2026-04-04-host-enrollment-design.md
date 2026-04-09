@@ -36,7 +36,7 @@ This feature replaces TOML-based host configuration with a managed enrollment fl
 - **`src/squire/api/schemas.py`** -- New request/response models.
 - **`src/squire/api/app.py`** -- Wire `HostStore` into lifespan startup.
 - **`src/squire/api/dependencies.py`** -- Add `host_store` singleton.
-- **`src/squire/main.py`** -- Wire `HostStore` for TUI/CLI startup.
+- **`src/squire/main.py`** — snapshot helpers shared by API, watch, and CLI (host loading happens in each entry path).
 - **`web/src/app/hosts/page.tsx`** -- Add enrollment form, verify button, status badges.
 - **`web/src/lib/types.ts`** -- New TypeScript types for enrollment.
 
@@ -331,7 +331,7 @@ await deps.host_store.load()  # loads DB hosts into registry
 tools_set_registry(deps.registry)
 ```
 
-### `main.py` (TUI/CLI)
+### `main.py` (snapshots / CLI helpers)
 
 Same pattern: create empty registry, create HostStore, call `load()`.
 

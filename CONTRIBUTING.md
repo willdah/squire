@@ -36,10 +36,9 @@ src/squire/              Main application
   notifications/         Webhook dispatcher & alert evaluator
   system/                Backend registry (local/SSH execution)
   tools/                 System interaction tools (async, return str)
-  tui/                   Textual TUI components
   agent.py               Root agent builder
   cli.py                 Typer CLI entry point
-  main.py                Orchestration & snapshot collection
+  main.py                Snapshot helpers & session listing (shared by API, watch, CLI)
   watch.py               Autonomous watch loop
 
 web/                     Next.js frontend

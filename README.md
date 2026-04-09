@@ -8,7 +8,7 @@
   [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 </div>
 
-Squire is an AI-powered agent that monitors, manages, and guards your homelab. It connects to your machines over SSH, watches system health on a schedule, takes corrective action within configurable risk limits, and talks to you through a web UI, terminal TUI, or CLI.
+Squire is an AI-powered agent that monitors, manages, and guards your homelab. It connects to your machines over SSH, watches system health on a schedule, takes corrective action within configurable risk limits, and talks to you through a web UI or CLI.
 
 ---
 
@@ -23,7 +23,7 @@ Squire is an AI-powered agent that monitors, manages, and guards your homelab. I
 ## Features
 
 - **Multi-agent architecture** — specialized sub-agents (Monitor, Container, Admin, Notifier) collaborate via [Google ADK](https://google.github.io/adk-docs/) while presenting a single unified persona
-- **Three interfaces** — web UI, terminal TUI, and CLI, all backed by the same agent and services
+- **Web UI + CLI** — browser interface for chat, watch, and configuration; command-line tools for automation and management
 - **Autonomous watch mode** — headless monitoring loop that checks your systems, evaluates alert rules, and takes corrective action within risk limits
 - **Alert rules** — define conditions like `cpu_percent > 90` and get notified when thresholds are crossed
 - **Skills** — file-based instruction sets ([Open Agent Skills spec](https://openagentskills.dev)) for guided, repeatable behavior — run manually or on a watch schedule
@@ -44,13 +44,7 @@ cd squire
 cp squire.example.toml squire.toml  # edit to taste
 ```
 
-Start an interactive chat in the terminal:
-
-```bash
-uv run squire chat
-```
-
-Or launch the web interface:
+Launch the web interface:
 
 ```bash
 uv run squire web              # opens at http://localhost:8420
@@ -63,8 +57,6 @@ See the [Usage Guide](docs/usage.md#docker-deployment) for Docker deployment.
 
 **Web UI** — `squire web` opens a browser-based interface with chat, activity timeline, session management, skill editor, watch mode controls with live streaming, host registry, notification history, and configuration viewer. See [Usage Guide — Web UI](docs/usage.md#web-ui).
 
-**TUI** — `squire chat` launches a terminal interface with a chat pane, system status panel, activity log, and approval modals for high-risk tool calls. See [Usage Guide — TUI](docs/usage.md#tui).
-
 **CLI** — All management commands are available via `squire <command>` without a running UI. See the [CLI Reference](docs/cli.md) for the full command list.
 
 
@@ -72,7 +64,7 @@ See the [Usage Guide](docs/usage.md#docker-deployment) for Docker deployment.
 
 | Document | Description |
 |---|---|
-| [Usage Guide](docs/usage.md) | Interfaces, configuration, remote hosts, watch mode, alerts, skills, notifications, Docker |
+| [Usage Guide](docs/usage.md) | Web UI, CLI, configuration, remote hosts, watch mode, alerts, skills, notifications, Docker |
 | [Architecture](docs/architecture.md) | System design, agent architecture, risk pipeline, tech stack, database schema |
 | [CLI Reference](docs/cli.md) | All commands and options |
 | [Configuration Reference](docs/configuration.md) | Full config reference with all fields, env vars, and examples |
@@ -98,7 +90,6 @@ make test             # pytest
 make web-dev          # Next.js dev server (hot reload)
 make web-build        # Next.js production build
 
-make chat             # start TUI
 make web              # start web interface (with --reload)
 make watch            # start watch mode
 ```
