@@ -5,7 +5,7 @@
 
 ## Problem
 
-The Dockerfile defaults to `squire chat` (TUI mode), which requires an interactive terminal and doesn't suit containerized deployment. The web frontend is not built into the image, and data paths are not consolidated for volume mounting.
+At the time of this spec, the Dockerfile defaulted to `squire chat` (since removed). The web frontend was not built into the image, and data paths were not consolidated for volume mounting.
 
 ## Design
 
@@ -94,7 +94,7 @@ Update the "Docker Deployment" section of `docs/usage.md` to cover:
 - **Watch mode:** override command to `watch`
 - **CLI commands:** via `docker exec` or one-off `docker run`
 - **Health check:** built-in, visible via `docker ps` HEALTH column
-- **No TUI:** the container does not support `squire chat`
+- **Web only in containers:** interactive chat is via the bundled web UI
 
 ### CHANGELOG
 
@@ -102,7 +102,7 @@ Add entry for Docker web app support, health check endpoint, and configurable ke
 
 ## Out of scope
 
-- TUI support in Docker
+- Terminal chat in Docker (superseded by web UI in image)
 - Separate frontend/backend containers
 - Deep health checks (database connectivity, LLM reachability)
 

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **Terminal UI (TUI)** — removed the Textual-based interface, the `squire chat` command, and the `textual` dependency. Interactive chat and tool approval are available via the web UI (`squire web`) only.
+
 ### Added
 
 - **Tools:** Added `docker_volume` and `docker_network` tools to the container agent for listing and inspecting Docker volumes and networks (read-only visibility)
@@ -21,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - **Architecture overview** — new `docs/architecture.md` with Mermaid diagrams covering system overview, agent modes, request flow, risk pipeline, watch loop, tech stack, database schema, and backend registry
-- **Usage guide** — new `docs/usage.md` comprehensive guide covering all three interfaces, configuration, remote hosts, multi-agent mode, watch mode, alert rules, skills, notifications, and Docker deployment
+- **Usage guide** — new `docs/usage.md` comprehensive guide covering the web UI and CLI, configuration, remote hosts, multi-agent mode, watch mode, alert rules, skills, notifications, and Docker deployment
 - **CONTRIBUTING.md** — expand from 54 lines to ~200 lines; add prerequisites, project structure, detailed code conventions, step-by-step tool-authoring guide with accurate registration instructions, testing section with fixture usage, and PR workflow
 - **README.md** — restructured as a concise "front door" landing page (~110 lines); detailed content moved to `docs/usage.md`; added documentation hub table linking all docs
 - **Configuration reference** — document email notifications (`[notifications.email]`), per-tool risk overrides (`tools_risk_overrides`), host fields (`key_file`, `service_root`), and fix misleading claim about `[[hosts]]` in TOML
@@ -34,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **UI color palette** — migrated web and TUI from amber/gold to purple primary (#8931c4) + orange accent (#ff7621) palette with matching semantic colors (danger, success, warning, info)
+- **UI color palette** — migrated the web UI from amber/gold to purple primary (#8931c4) + orange accent (#ff7621) palette with matching semantic colors (danger, success, warning, info)
 
 ### Fixed
 

@@ -8,7 +8,7 @@ Docs live in `/Users/will/Projects/squire/docs/`. The project follows a "front d
 
 **Current docs files:**
 - `docs/architecture.md` — NEW (2026-04-05). System overview, agent modes, request/risk/watch flows, tech stack, DB schema, backend registry. Contains Mermaid diagrams.
-- `docs/usage.md` — comprehensive usage guide: interfaces (web/TUI/CLI), configuration, remote hosts, multi-agent mode, watch mode, alert rules, skills, notifications, Docker. Created 2026-04-05.
+- `docs/usage.md` — comprehensive usage guide: web UI and CLI, configuration, remote hosts, multi-agent mode, watch mode, alert rules, skills, notifications, Docker. Created 2026-04-05.
 - `docs/cli.md` — full CLI reference: every command and flag documented. Accurate as of 2026-04-05.
 - `docs/configuration.md` — full configuration reference: all sections, env vars, guardrails, watch mode, notifications. Accurate as of 2026-04-05.
 - `docs/todos.md` — internal todos, not user-facing.

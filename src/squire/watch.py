@@ -1,6 +1,6 @@
 """Autonomous watch mode — headless monitoring loop.
 
-Runs Squire without a TUI, periodically injecting a check-in prompt and
+Runs Squire headlessly, periodically injecting a check-in prompt and
 letting the agent reason about system state. Tools above the risk threshold
 are denied outright; notifications are dispatched for actions and blocks.
 """

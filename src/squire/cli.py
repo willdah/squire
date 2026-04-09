@@ -14,19 +14,6 @@ app = typer.Typer(
 )
 
 
-@app.command()
-def chat(
-    resume: Annotated[
-        str | None,
-        typer.Option("--resume", "-r", help="Resume a previous session by ID"),
-    ] = None,
-) -> None:
-    """Start an interactive chat session with Squire."""
-    from .main import run_chat
-
-    run_chat(resume_session_id=resume)
-
-
 sessions_app = typer.Typer(name="sessions", help="Manage chat sessions.")
 app.add_typer(sessions_app)
 

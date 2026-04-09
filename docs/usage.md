@@ -1,6 +1,6 @@
 # Squire Usage Guide
 
-Squire is an AI-powered homelab monitoring and management agent. This guide covers all three interfaces, configuration, remote hosts, watch mode, alert rules, skills, notifications, and Docker deployment.
+Squire is an AI-powered homelab monitoring and management agent. This guide covers the web UI and CLI, configuration, remote hosts, watch mode, alert rules, skills, notifications, and Docker deployment.
 
 For individual command flags, see the [CLI Reference](cli.md). For full configuration options, see the [Configuration Reference](configuration.md).
 
@@ -8,7 +8,7 @@ For individual command flags, see the [CLI Reference](cli.md). For full configur
 
 ## Interfaces
 
-Squire ships three ways to interact with it.
+Squire ships two ways to interact with it.
 
 ### Web UI
 
@@ -41,39 +41,11 @@ The web UI has eight pages:
 | **Notifications** | Notification category overview and recent history |
 | **Config** | Current effective configuration viewer |
 
-### TUI
-
-Start with:
-
-```bash
-make chat
-# or
-uv run squire chat
-```
-
-The terminal interface provides a chat pane, system status panel, activity log, and approval modals for high-risk tool calls. Resume a previous session:
-
-```bash
-uv run squire chat --resume <session-id>
-```
-
-**Keyboard shortcuts:**
-
-| Key | Action |
-|---|---|
-| `Ctrl+Q` | Quit |
-| `Ctrl+L` | Clear chat |
-| `Ctrl+G` | Toggle activity log |
-| `Ctrl+S` | Toggle status panel |
-| `Ctrl+X` | Clear all sessions |
-
 ### CLI
 
 All management operations work without a running UI:
 
 ```bash
-squire chat                    # interactive TUI
-squire chat --resume <id>      # resume a session
 squire web                     # web interface
 squire watch                   # autonomous monitoring
 squire alerts list             # manage alert rules
@@ -473,7 +445,7 @@ Use `"*"` to subscribe to all events. See [Configuration Reference](configuratio
 
 ## Docker Deployment
 
-The Docker image runs the **web interface** by default — the TUI is not supported in containers. The image includes a pre-built frontend, so no separate Node.js process is needed.
+The Docker image runs the **web interface** by default. The image includes a pre-built frontend, so no separate Node.js process is needed.
 
 ### Quick Start (docker-compose)
 

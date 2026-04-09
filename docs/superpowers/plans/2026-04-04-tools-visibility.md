@@ -29,8 +29,7 @@
 | `src/squire/api/app.py:164-174` | Register tools router |
 | `src/squire/api/routers/chat.py:165-169` | Pass `risk_overrides` to `create_risk_gate` |
 | `src/squire/api/routers/chat.py:183-186` | Pass `risk_overrides` to `create_risk_gate` (single-agent path) |
-| `src/squire/main.py:158-162` | Pass `risk_overrides` to `create_risk_gate` (TUI multi-agent factory) |
-| `src/squire/main.py:171-173` | Pass `risk_overrides` to `create_risk_gate` (TUI single-agent path) |
+| *(obsolete)* | Previously `main.py` wired `risk_overrides` into `create_risk_gate` for the removed terminal chat path; web chat lives in `api/routers/chat.py`. |
 | `src/squire/watch.py:163-168` | Pass `risk_overrides` to `create_risk_gate` (watch mode factory) |
 | `src/squire/watch.py:180` | Pass `risk_overrides` to `create_risk_gate` (watch single-agent path) |
 | `web/src/lib/types.ts` | Add `ToolParameter`, `ToolAction`, `ToolInfo` types |

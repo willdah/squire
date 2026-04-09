@@ -15,7 +15,7 @@ from .loader import TomlSectionSource, get_section
 class WatchConfig(BaseSettings):
     """Operational configuration for autonomous watch mode (``squire watch``).
 
-    Watch mode runs headless — no TUI, no interactive approval. Risk policy
+    Watch mode runs headless — no interactive UI or approval. Risk policy
     (tolerance, tool allow/deny) is configured under ``[guardrails.watch]``.
     """
 
