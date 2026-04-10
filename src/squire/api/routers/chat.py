@@ -26,10 +26,26 @@ router = APIRouter()
 
 _SKILL_COMPLETE_RE = re.compile(r"\[SKILL\s+COMPLETE\]", re.IGNORECASE)
 
+_RAW_TOOL_CALL_RE = re.compile(
+    r'\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}'
+)
+
 
 def _is_skill_complete(text: str) -> bool:
     """Check whether [SKILL COMPLETE] marker is present in text."""
     return bool(_SKILL_COMPLETE_RE.search(text))
+
+
+def _strip_raw_tool_calls(text: str) -> str:
+    """Remove tool-call JSON blobs the model sometimes emits as plain text.
+
+    Some models output ``{"name": "...", "parameters": {...}}`` as text
+    instead of using structured function calling.  Strip these so they
+    don't appear in chat or get persisted to the database.
+    """
+    cleaned = _RAW_TOOL_CALL_RE.sub("", text)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    return cleaned
 
 
 class WebApprovalBridge:
@@ -496,4 +512,5 @@ async def _run_single_turn(
                         response_parts.append(delta)
                         await websocket.send_json({"type": "token", "content": delta})
 
-    return final_text or "".join(response_parts), tools_called
+    raw = final_text or "".join(response_parts)
+    return _strip_raw_tool_calls(raw), tools_called

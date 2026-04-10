@@ -61,6 +61,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
     const [menuRows, setMenuRows] = useState<MenuRow[]>([]);
     const [selectedIndex, setSelectedIndex] = useState(0);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
     const { candidates: mentionCandidates, expansionByToken } = useChatAutocompleteData();
 
     useImperativeHandle(ref, () => ({
@@ -72,6 +73,13 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
         textareaRef.current?.focus();
       }
     }, [disabled]);
+
+    useEffect(() => {
+      const container = menuRef.current;
+      if (!container || !menuOpen) return;
+      const item = container.children[selectedIndex] as HTMLElement | undefined;
+      item?.scrollIntoView({ block: "nearest" });
+    }, [selectedIndex, menuOpen]);
 
     const canSend = !disabled && !isGenerating;
 
@@ -195,6 +203,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       <div className="relative flex items-end gap-2 border-t border-border/60 bg-card/50 p-4">
         {menuOpen && menuRows.length > 0 ? (
           <div
+            ref={menuRef}
             id={listId}
             role="listbox"
             className="absolute bottom-full left-4 right-16 z-50 mb-1 max-h-52 overflow-y-auto rounded-lg border border-border/80 bg-popover text-popover-foreground shadow-md"
@@ -245,7 +254,11 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
           }}
           onClick={(e) => syncCursorAndMenu(e.currentTarget)}
           onSelect={(e) => syncCursorAndMenu(e.currentTarget)}
-          onKeyUp={(e) => syncCursorAndMenu(e.currentTarget)}
+          onKeyUp={(e) => {
+            const k = e.key;
+            if (k === "ArrowDown" || k === "ArrowUp" || k === "Enter" || k === "Escape") return;
+            syncCursorAndMenu(e.currentTarget);
+          }}
           onKeyDown={handleKeyDown}
           placeholder="Ask Squire something… Type / for commands or @ for hosts, containers, tools…"
           className="min-h-[44px] max-h-[200px] min-w-0 flex-1 resize-none bg-background"

@@ -10,8 +10,15 @@ import { useState, useCallback } from "react";
 
 const SKILL_MARKER_RE = /^\[SKILL\s+COMPLETE\]\s*$/gim;
 
+const RAW_TOOL_CALL_RE =
+  /\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}/g;
+
 function stripSkillMarkers(text: string): string {
   return text.replace(SKILL_MARKER_RE, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function stripRawToolCalls(text: string): string {
+  return text.replace(RAW_TOOL_CALL_RE, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function CodeBlock({ className, children }: { className?: string; children: React.ReactNode }) {
@@ -52,6 +59,13 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message }: MessageBubbleProps) {
   const { role, content, toolName, isStreaming } = message;
+
+  const cleanContent =
+    role === "assistant" ? stripRawToolCalls(stripSkillMarkers(content)) : content;
+
+  if (role === "assistant" && !cleanContent.trim() && !isStreaming) {
+    return null;
+  }
 
   if (role === "tool") {
     return (
@@ -132,7 +146,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 },
               }}
             >
-              {stripSkillMarkers(content)}
+              {cleanContent}
             </ReactMarkdown>
           </div>
         )}
