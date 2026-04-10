@@ -7,18 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-04-10
+
+### Added
+
+- **Web chat:** Slash commands (`/`) and `@` mentions with keyboard autocomplete; commands and mentions expand to natural language before send so history matches the model (#73)
+
+## [0.11.0] — 2026-04-09
+
 ### Removed
 
 - **Terminal UI (TUI)** — removed the Textual-based interface, the `squire chat` command, and the `textual` dependency. Interactive chat and tool approval are available via the web UI (`squire web`) only.
 
+## [0.10.0] — 2026-04-07
+
 ### Added
 
-- **Web chat:** Slash commands (`/`) and `@` mentions with keyboard autocomplete; commands and mentions expand to natural language before send so history matches the model (#52)
 - **Tools:** Added `docker_volume` and `docker_network` tools to the container agent for listing and inspecting Docker volumes and networks (read-only visibility)
+
+### Security
+
+- Pin runtime and dev dependencies in `pyproject.toml` to exact versions (aligned with `uv.lock`) so installs do not float to newer PyPI releases without an explicit lock update (#65)
+
+### Fixed
+
+- **Tests:** `NotificationsConfig` and `WatchConfig` default tests no longer pick up `~/.config/squire/squire.toml` from the developer machine
+- **Docker:** create `/root/.ssh/known_hosts` in the image so SSH to remote hosts works with strict host key checking (#66)
+
+## [0.9.0] — 2026-04-05
+
+### Added
+
 - **Docker:** Multi-stage Dockerfile that builds the Next.js frontend and serves the web UI by default; includes `HEALTHCHECK` directive
 - **Docker:** `docker-compose.yml` quickstart with volume, port, and LLM provider configuration
 - **API:** `GET /api/health` liveness endpoint returning `{"status": "ok"}`
 - **Config:** `SQUIRE_KEYS_DIR` environment variable to override the SSH keys storage directory (default `~/.config/squire/keys/`)
+
+## [0.8.0] — 2026-04-05
+
+### Added
+
 - **Watch:** "Clear History" button on Cycle History tab with confirmation dialog; calls `DELETE /api/watch/cycles` to truncate cycle data (#36)
 - **Watch:** "Clear Stream" button on Live Stream tab to clear in-memory event buffer (#36)
 - **Watch:** Accumulating "Load More" pagination on Cycle History — cycles append instead of replacing; "Back to Latest" button resets to page 1 (#22)
@@ -33,31 +61,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **squire.example.toml** — add `multi_agent`, `tools_risk_overrides`, and `[notifications.email]` sections
 - **Tested models** — add model recommendations section with tested Ollama models and cloud provider guidance
 
-### Security
-
-- Pin runtime and dev dependencies in `pyproject.toml` to exact versions (aligned with `uv.lock`) so installs do not float to newer PyPI releases without an explicit lock update (#65)
-
-### Changed
-
-- **UI color palette** — migrated the web UI from amber/gold to purple primary (#8931c4) + orange accent (#ff7621) palette with matching semantic colors (danger, success, warning, info)
-
-### Fixed
-
-- **Tests:** `NotificationsConfig` and `WatchConfig` default tests no longer pick up `~/.config/squire/squire.toml` from the developer machine
-- **Docker:** create `/root/.ssh/known_hosts` in the image so SSH to remote hosts works with strict host key checking (#66)
-- **Web:** Watch nav item missing from sidebar on initial page load due to hydration mismatch (#35)
-- Watch page now defaults to Live Stream tab instead of Cycle History (#37)
-- **docker_ps**: add missing `timeout=30.0` to `backend.run()` call to prevent indefinite hangs
-- **docker_logs**: remove vestigial `hasattr()` guard — use same direct-call pattern as other tools
-
 ### Changed
 
 - **Pattern-based risk analysis** — replaced `PassthroughAnalyzer` with `PatternAnalyzer` from `agent-risk-engine` in the risk evaluation pipeline. Tool call arguments are now inspected for dangerous patterns (e.g., `rm -rf`, `sudo`, SQL drops, sensitive file types) and risk is escalated accordingly. Added homelab-specific custom patterns for privileged containers, firewall modifications, service disablement, Docker data paths, SSH key operations, and crontab changes. (#41)
+- **UI color palette** — migrated the web UI from amber/gold to purple primary (#8931c4) + orange accent (#ff7621) palette with matching semantic colors (danger, success, warning, info)
 - **docker_compose**: convert flat `RISK_LEVEL=3` to per-action `RISK_LEVELS` dict (ps/config/logs=1, pull=2, restart/up=3, down=4)
 - **systemctl**: convert flat `RISK_LEVEL=3` to per-action `RISK_LEVELS` dict (status/is-active/is-enabled=1, start/restart=3, stop=4)
 - **Notification tools**: replace broad `except Exception` with specific catches (`sqlite3.IntegrityError`, `ValueError`, `OSError`)
 - **system_info**: add `logger.debug()` to silent except blocks for traceability
 - **Notification tool docstrings**: improve `delete_alert_rule` and `list_alert_rules` to match project standard
+
+### Fixed
+
+- **Web:** Watch nav item missing from sidebar on initial page load due to hydration mismatch (#35)
+- Watch page now defaults to Live Stream tab instead of Cycle History (#37)
+- **docker_ps**: add missing `timeout=30.0` to `backend.run()` call to prevent indefinite hangs
+- **docker_logs**: remove vestigial `hasattr()` guard — use same direct-call pattern as other tools
 
 ## [0.7.0] — 2026-04-05
 
