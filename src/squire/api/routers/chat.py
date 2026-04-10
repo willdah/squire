@@ -26,9 +26,7 @@ router = APIRouter()
 
 _SKILL_COMPLETE_RE = re.compile(r"\[SKILL\s+COMPLETE\]", re.IGNORECASE)
 
-_RAW_TOOL_CALL_RE = re.compile(
-    r'\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}'
-)
+_RAW_TOOL_CALL_RE = re.compile(r'\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}')
 
 
 def _is_skill_complete(text: str) -> bool:
