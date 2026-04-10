@@ -8,33 +8,6 @@ squire [COMMAND] [OPTIONS]
 
 ## Commands
 
-### `squire chat`
-
-Start an interactive chat session with the TUI.
-
-```bash
-squire chat                  # new session
-squire chat --resume <id>    # resume a previous session
-```
-
-| Option | Short | Description |
-|---|---|---|
-| `--resume` | `-r` | Session ID to resume |
-
-The TUI provides a chat pane, system status panel, activity log, and approval modals for high-risk tool calls.
-
-**Keyboard shortcuts:**
-
-| Key | Action |
-|---|---|
-| `Ctrl+Q` | Quit |
-| `Ctrl+L` | Clear chat |
-| `Ctrl+G` | Toggle activity log |
-| `Ctrl+S` | Toggle status panel |
-| `Ctrl+X` | Clear all sessions |
-
----
-
 ### `squire web`
 
 Start the web interface — a browser-based frontend backed by FastAPI.

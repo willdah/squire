@@ -31,7 +31,7 @@ from ..tools import set_db as tools_set_db
 from ..tools import set_notifier as tools_set_notifier
 from ..tools import set_registry as tools_set_registry
 from . import dependencies as deps
-from .routers import alerts, chat, config, events, hosts, notifications, sessions, skills, system, tools, watch
+from .routers import alerts, chat, config, events, health, hosts, notifications, sessions, skills, system, tools, watch
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -175,6 +175,7 @@ def create_app() -> FastAPI:
     app.include_router(config.router, prefix="/api/config", tags=["config"])
     app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
     app.include_router(watch.router, prefix="/api/watch", tags=["watch"])
+    app.include_router(health.router, prefix="/api/health", tags=["health"])
 
     if static_dir:
         logger.info("Serving frontend from %s", static_dir)

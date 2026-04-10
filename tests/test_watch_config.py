@@ -1,9 +1,16 @@
 """Tests for WatchConfig."""
 
+import pytest
+
+import squire.config.loader as loader_mod
 from squire.config.watch import WatchConfig
 
 
 class TestWatchConfigDefaults:
+    @pytest.fixture(autouse=True)
+    def _clear_toml_cache(self, monkeypatch):
+        monkeypatch.setattr(loader_mod, "_cached", {})
+
     def test_default_interval(self):
         c = WatchConfig()
         assert c.interval_minutes == 5

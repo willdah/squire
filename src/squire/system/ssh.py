@@ -43,7 +43,7 @@ class SSHBackend:
         """Return the cached connection, creating or reconnecting as needed.
 
         Connections are bound to the event loop they were created on.
-        If the current loop differs (e.g. Textual worker thread), the
+        If the current loop differs (e.g. another thread’s loop), the
         cached connection is discarded and a new one is created.
         """
         current_loop = asyncio.get_running_loop()

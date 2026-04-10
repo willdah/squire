@@ -7,9 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **Terminal UI (TUI)** — removed the Textual-based interface, the `squire chat` command, and the `textual` dependency. Interactive chat and tool approval are available via the web UI (`squire web`) only.
+
 ### Added
 
 - **Web chat:** Slash commands (`/`) and `@` mentions with keyboard autocomplete; commands and mentions expand to natural language before send so history matches the model (#52)
+- **Tools:** Added `docker_volume` and `docker_network` tools to the container agent for listing and inspecting Docker volumes and networks (read-only visibility)
+- **Docker:** Multi-stage Dockerfile that builds the Next.js frontend and serves the web UI by default; includes `HEALTHCHECK` directive
+- **Docker:** `docker-compose.yml` quickstart with volume, port, and LLM provider configuration
+- **API:** `GET /api/health` liveness endpoint returning `{"status": "ok"}`
+- **Config:** `SQUIRE_KEYS_DIR` environment variable to override the SSH keys storage directory (default `~/.config/squire/keys/`)
 - **Watch:** "Clear History" button on Cycle History tab with confirmation dialog; calls `DELETE /api/watch/cycles` to truncate cycle data (#36)
 - **Watch:** "Clear Stream" button on Live Stream tab to clear in-memory event buffer (#36)
 - **Watch:** Accumulating "Load More" pagination on Cycle History — cycles append instead of replacing; "Back to Latest" button resets to page 1 (#22)
@@ -17,19 +26,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - **Architecture overview** — new `docs/architecture.md` with Mermaid diagrams covering system overview, agent modes, request flow, risk pipeline, watch loop, tech stack, database schema, and backend registry
-- **Usage guide** — new `docs/usage.md` comprehensive guide covering all three interfaces, configuration, remote hosts, multi-agent mode, watch mode, alert rules, skills, notifications, and Docker deployment
+- **Usage guide** — new `docs/usage.md` comprehensive guide covering the web UI and CLI, configuration, remote hosts, multi-agent mode, watch mode, alert rules, skills, notifications, and Docker deployment
 - **CONTRIBUTING.md** — expand from 54 lines to ~200 lines; add prerequisites, project structure, detailed code conventions, step-by-step tool-authoring guide with accurate registration instructions, testing section with fixture usage, and PR workflow
 - **README.md** — restructured as a concise "front door" landing page (~110 lines); detailed content moved to `docs/usage.md`; added documentation hub table linking all docs
 - **Configuration reference** — document email notifications (`[notifications.email]`), per-tool risk overrides (`tools_risk_overrides`), host fields (`key_file`, `service_root`), and fix misleading claim about `[[hosts]]` in TOML
 - **squire.example.toml** — add `multi_agent`, `tools_risk_overrides`, and `[notifications.email]` sections
 - **Tested models** — add model recommendations section with tested Ollama models and cloud provider guidance
 
+### Security
+
+- Pin runtime and dev dependencies in `pyproject.toml` to exact versions (aligned with `uv.lock`) so installs do not float to newer PyPI releases without an explicit lock update (#65)
+
 ### Changed
 
-- **UI color palette** — migrated web and TUI from amber/gold to purple primary (#8931c4) + orange accent (#ff7621) palette with matching semantic colors (danger, success, warning, info)
+- **UI color palette** — migrated the web UI from amber/gold to purple primary (#8931c4) + orange accent (#ff7621) palette with matching semantic colors (danger, success, warning, info)
 
 ### Fixed
 
+- **Tests:** `NotificationsConfig` and `WatchConfig` default tests no longer pick up `~/.config/squire/squire.toml` from the developer machine
+- **Docker:** create `/root/.ssh/known_hosts` in the image so SSH to remote hosts works with strict host key checking (#66)
 - **Web:** Watch nav item missing from sidebar on initial page load due to hydration mismatch (#35)
 - Watch page now defaults to Live Stream tab instead of Cycle History (#37)
 - **docker_ps**: add missing `timeout=30.0` to `backend.run()` call to prevent indefinite hangs

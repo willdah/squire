@@ -1,11 +1,12 @@
 """Tests for SSH key management."""
 
 import stat
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from squire.system.keys import delete_key, generate_key, get_key_path, get_public_key
+from squire.system.keys import _keys_dir, delete_key, generate_key, get_key_path, get_public_key
 
 
 @pytest.fixture
@@ -75,3 +76,18 @@ class TestDeleteKey:
 
     def test_returns_false_for_missing(self, keys_dir):
         assert delete_key("nonexistent") is False
+
+
+class TestKeysDir:
+    def test_keys_dir_default(self, monkeypatch):
+        """Without env var, uses ~/.config/squire/keys/."""
+        monkeypatch.delenv("SQUIRE_KEYS_DIR", raising=False)
+        result = _keys_dir()
+        assert result == Path.home() / ".config" / "squire" / "keys"
+
+    def test_keys_dir_from_env(self, monkeypatch, tmp_path):
+        """SQUIRE_KEYS_DIR overrides the default."""
+        custom = tmp_path / "custom-keys"
+        monkeypatch.setenv("SQUIRE_KEYS_DIR", str(custom))
+        result = _keys_dir()
+        assert result == custom

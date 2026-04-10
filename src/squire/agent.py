@@ -6,7 +6,7 @@ This module is discovered by the ADK CLI agent loader when running:
 
 It creates the Squire agent with default configuration. The risk gate
 runs without an ApprovalProvider, so NEEDS_APPROVAL results are auto-denied.
-For interactive approval, use the TUI via `squire chat`.
+For interactive approval, use the web UI (`squire web`).
 """
 
 import asyncio

@@ -1,0 +1,3 @@
+- [project_docs_structure.md](project_docs_structure.md) — docs file inventory, coverage map, and cross-linking pattern as of 2026-04-05
+- [project_tool_registration.md](project_tool_registration.md) — safe_tool applied in __init__.py at registration, not as decorator in tool modules
+- [project_test_fixtures.md](project_test_fixtures.md) — MockBackend/MockRegistry/db fixture patterns; always use mock_registry to set global registry

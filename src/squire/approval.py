@@ -1,6 +1,6 @@
 """Approval provider protocol — frontend-agnostic interface for tool approval.
 
-Any frontend (TUI, web server, CLI) can implement ApprovalProvider to
+Any frontend (web server, CLI, etc.) can implement ApprovalProvider to
 handle tool approval requests from the risk gate callback.
 """
 
