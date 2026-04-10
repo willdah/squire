@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-04-10
+
 ### Added
 
 - **Web chat:** Slash commands (`/`) and `@` mentions with keyboard autocomplete; commands and mentions expand to natural language before send so history matches the model (#73)
