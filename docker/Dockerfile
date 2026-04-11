@@ -12,6 +12,19 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+ENV DEBIAN_FRONTEND=noninteractive
+
+# OS tools for common run_command diagnostics (slim base omits most of these; not the full default allowlist)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    dnsutils \
+    iproute2 \
+    iputils-ping \
+    lsof \
+    net-tools \
+    netcat-openbsd \
+    traceroute \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install uv for fast dependency management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 

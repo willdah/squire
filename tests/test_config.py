@@ -43,6 +43,7 @@ class TestGuardrailsConfig:
         assert config.risk_strict is False
         assert "ls" in config.commands_allow
         assert "ping" in config.commands_allow
+        assert "nc" in config.commands_allow
         assert "rm" in config.commands_block
         assert config.tools_allow == []
         assert config.tools_require_approval == []

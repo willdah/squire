@@ -44,9 +44,11 @@
 
 # run_command argument guards
 # commands_allow = [
-#     "ping", "traceroute", "dig", "nslookup",
-#     "df", "free", "uptime", "ip", "ss",
-#     "cat", "head", "tail",
+#     "ls", "stat", "file", "du", "find", "wc",
+#     "cat", "head", "tail", "grep",
+#     "hostname", "date", "whoami", "id", "uname", "uptime", "df", "free", "mount", "lsblk", "top", "ps", "which",
+#     "ping", "traceroute", "dig", "nslookup", "ip", "ss", "netstat", "nc",
+#     "docker", "systemctl", "journalctl", "lsof",
 # ]
 # commands_block = [
 #     "rm", "mkfs", "dd", "fdisk", "parted",

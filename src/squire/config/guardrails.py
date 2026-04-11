@@ -127,6 +127,7 @@ class GuardrailsConfig(BaseSettings):
             "ip",
             "ss",
             "netstat",
+            "nc",
             # Service management (read-only actions guarded by risk levels)
             "docker",
             "systemctl",
