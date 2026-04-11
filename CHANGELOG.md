@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] — 2026-04-11
+
 ### Added
 
 - **Docker:** OS packages for common `run_command` diagnostics that `python:*-slim` usually omits (`ping`, `traceroute`, `dig`/`nslookup`, `nc`, `ip`/`ss`, `netstat`, `lsof`, etc.); the image does not install the full default allowlist (for example `docker`, `systemctl`, and `journalctl` remain host- or deployment-specific)
