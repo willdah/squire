@@ -148,7 +148,7 @@ Controls which commands `run_command` can execute:
 
 ```toml
 [guardrails]
-commands_allow = ["ping", "traceroute", "df", "free", "uptime", "cat", "head", "tail"]
+commands_allow = ["ping", "nc", "dig", "ip", "df", "cat", "docker"]
 commands_block = ["rm", "mkfs", "dd", "shutdown", "reboot"]
 ```
 
@@ -159,11 +159,15 @@ commands_block = ["rm", "mkfs", "dd", "shutdown", "reboot"]
 | `commands_block` | *(see below)* | `SQUIRE_GUARDRAILS_COMMANDS_BLOCK` | Commands that are always blocked (checked first) |
 
 
-**Default command allowlist:** `ping`, `traceroute`, `dig`, `nslookup`, `df`, `free`, `uptime`, `ip`, `ss`, `cat`, `head`, `tail`
+**Default command allowlist:** `ls`, `stat`, `file`, `du`, `find`, `wc`, `cat`, `head`, `tail`, `grep`, `hostname`, `date`, `whoami`, `id`, `uname`, `uptime`, `df`, `free`, `mount`, `lsblk`, `top`, `ps`, `which`, `ping`, `traceroute`, `dig`, `nslookup`, `ip`, `ss`, `netstat`, `nc`, `docker`, `systemctl`, `journalctl`, `lsof`
+
+`nc` is allowed for common homelab port checks (for example `nc -zv host 22`). It can also listen or relay traffic; remove it from `commands_allow` if you want a stricter policy.
 
 **Default command blocklist:** `rm`, `mkfs`, `dd`, `fdisk`, `parted`, `shutdown`, `reboot`, `init`, `bash`, `sh`, `zsh`, `fish`, `csh`, `tcsh`, `dash`, `python`, `python3`, `perl`, `ruby`, `node`, `lua`
 
 The blocklist is checked first -- a command on both lists is blocked.
+
+**Host / container PATH:** `run_command` runs binaries from the process environment. Minimal images (for example `python:*-slim`) may omit `ping`, `dig`, `nc`, and similar tools even when they are allowlisted. The published Squire Docker image installs packages for the default allowlist; on bare metal or custom images, install the equivalent OS packages or adjust `commands_allow` to match what is installed.
 
 ### Config Path Guards
 
