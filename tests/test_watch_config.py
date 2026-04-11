@@ -25,7 +25,11 @@ class TestWatchConfigDefaults:
 
     def test_default_cycles_per_session(self):
         c = WatchConfig()
-        assert c.cycles_per_session == 50
+        assert c.cycles_per_session == 12
+
+    def test_default_max_context_events(self):
+        c = WatchConfig()
+        assert c.max_context_events == 40
 
     def test_override_interval(self):
         c = WatchConfig(interval_minutes=10)
