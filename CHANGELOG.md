@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-04-11
+
 ### Fixed
 
 - **Web config:** `PATCH /api/config/notifications` now rebuilds `NotificationRouter` (webhook + email) instead of replacing it with a webhook-only dispatcher, so email delivery keeps working after saving notification settings from the UI
