@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Web config:** `PATCH /api/config/notifications` now rebuilds `NotificationRouter` (webhook + email) instead of replacing it with a webhook-only dispatcher, so email delivery keeps working after saving notification settings from the UI
+- **Watch live config:** `PUT /api/watch/config` now applies all documented watch fields via the `update_config` queue, including numeric risk threshold (updates the running evaluator and session state)
+- **Watch API:** `GET /api/watch/config` returns a numeric `risk_tolerance` consistent with effective guardrails/app policy (fixes response validation when watch tolerance was set)
+
+### Added
+
+- **Web config:** `GET/PATCH /api/config/skills` for the skills directory; skills section on the Configuration page; notifications channels editor embedded as a Configuration tab
+- **Web config:** Extended PATCH schemas and forms for app name/user id, LLM `api_base`, remaining watch and guardrails fields; watch form pushes changes to a running watch process when status is `running`
+- **Web config:** Database tab explains that DB path, snapshot interval, and LLM provider secrets require env/TOML plus process restart
+
 ## [0.13.0] — 2026-04-11
 
 ### Fixed

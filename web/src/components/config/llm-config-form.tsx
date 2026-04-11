@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Lock, Loader2, RotateCcw, Save } from "lucide-react";
 import { apiPatch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -36,25 +36,45 @@ function EnvLock({ field, prefix }: { field: string; prefix: string }) {
   );
 }
 
+const REDACTED = "\u2022\u2022\u2022\u2022\u2022\u2022";
+
+function apiBaseFromValues(v: unknown): string {
+  if (v == null) return "";
+  const s = String(v);
+  return s === REDACTED ? "" : s;
+}
+
 export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMConfigFormProps) {
   const [model, setModel] = useState(String(values.model ?? ""));
   const [temperature, setTemperature] = useState(Number(values.temperature ?? 0.2));
   const [maxTokens, setMaxTokens] = useState(Number(values.max_tokens ?? 4096));
+  const [apiBase, setApiBase] = useState(() => apiBaseFromValues(values.api_base));
   const [persist, setPersist] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    setModel(String(values.model ?? ""));
+    setTemperature(Number(values.temperature ?? 0.2));
+    setMaxTokens(Number(values.max_tokens ?? 4096));
+    setApiBase(apiBaseFromValues(values.api_base));
+  }, [values]);
+
   const isLocked = (field: string) => envOverrides.includes(field);
+
+  const origApiBase = apiBaseFromValues(values.api_base);
 
   const isDirty =
     model !== String(values.model ?? "") ||
     temperature !== Number(values.temperature ?? 0.2) ||
-    maxTokens !== Number(values.max_tokens ?? 4096);
+    maxTokens !== Number(values.max_tokens ?? 4096) ||
+    apiBase !== origApiBase;
 
   const revert = () => {
     setModel(String(values.model ?? ""));
     setTemperature(Number(values.temperature ?? 0.2));
     setMaxTokens(Number(values.max_tokens ?? 4096));
+    setApiBase(origApiBase);
     setError(null);
   };
 
@@ -66,6 +86,7 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
       if (model !== String(values.model ?? "")) changed.model = model;
       if (temperature !== Number(values.temperature ?? 0.2)) changed.temperature = temperature;
       if (maxTokens !== Number(values.max_tokens ?? 4096)) changed.max_tokens = maxTokens;
+      if (apiBase !== origApiBase) changed.api_base = apiBase.trim() === "" ? null : apiBase.trim();
 
       const url = persist ? "/api/config/llm?persist=true" : "/api/config/llm";
       await apiPatch(url, changed);
@@ -126,16 +147,23 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
           />
         </div>
 
-        {values.api_base != null && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-1.5">
-              <Label>API Base</Label>
-              <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-            <Input value={String(values.api_base)} disabled className="font-mono text-xs" />
-            <p className="text-xs text-muted-foreground">Sensitive — change via env var or squire.toml</p>
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5">
+            <Label>API Base URL</Label>
+            {isLocked("api_base") && <EnvLock field="api_base" prefix="SQUIRE_LLM_" />}
           </div>
-        )}
+          <Input
+            value={apiBase}
+            onChange={(e) => setApiBase(e.target.value)}
+            disabled={isLocked("api_base")}
+            placeholder="e.g. http://localhost:11434 (Ollama)"
+            className="font-mono text-xs"
+          />
+          <p className="text-xs text-muted-foreground">
+            Optional LiteLLM API base. Provider API keys are usually set via environment variables (see LiteLLM docs).
+            Redacted values in the API response are omitted here; enter a new URL to replace the stored one.
+          </p>
+        </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 

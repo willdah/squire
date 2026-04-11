@@ -17,11 +17,16 @@ def _empty_toml(monkeypatch):
 @pytest.fixture
 def _setup_deps(monkeypatch):
     """Populate deps singletons with default configs."""
+    from squire.config.skills import SkillsConfig
+    from squire.skills import SkillService
+
     monkeypatch.setattr(deps, "app_config", AppConfig())
     monkeypatch.setattr(deps, "llm_config", LLMConfig())
     monkeypatch.setattr(deps, "watch_config", WatchConfig())
     monkeypatch.setattr(deps, "guardrails", GuardrailsConfig())
     monkeypatch.setattr(deps, "notif_config", NotificationsConfig())
+    monkeypatch.setattr(deps, "skills_config", SkillsConfig())
+    monkeypatch.setattr(deps, "skills_service", SkillService(deps.skills_config.path))
     monkeypatch.setattr(deps, "db_config", None)
     monkeypatch.setattr(deps, "host_store", None)
     monkeypatch.setattr(deps, "notifier", None)
@@ -48,6 +53,7 @@ class TestGetConfig:
         result = await get_config(app_config=deps.app_config, llm_config=deps.llm_config)
         assert result.app.values["app_name"] == "Squire"
         assert "model" in result.llm.values
+        assert "path" in result.skills.values
 
     async def test_returns_toml_path(self, tmp_path, monkeypatch):
         from squire.api.routers.config import get_config
@@ -130,6 +136,15 @@ class TestPatchConfig:
             await patch_config("database", {"path": "/tmp/db"}, persist=False)
         assert exc_info.value.status_code == 404
 
+    async def test_patch_skills_updates_service(self, monkeypatch, tmp_path):
+        from squire.api.routers.config import patch_config
+
+        new_dir = tmp_path / "skills2"
+        new_dir.mkdir()
+        await patch_config("skills", {"path": str(new_dir)}, persist=False)
+        assert deps.skills_config.path == new_dir
+        assert deps.skills_service._dir == new_dir
+
     async def test_empty_body_400(self):
         from fastapi import HTTPException
 
@@ -189,6 +204,41 @@ class TestNotificationsWebhookMerge:
             persist=False,
         )
         assert deps.notif_config.webhooks[0].headers["Authorization"] == "Bearer secret"
+
+    async def test_merge_preserves_redacted_email_password(self, monkeypatch):
+        from squire.api.routers.config import patch_config
+        from squire.config.notifications import EmailConfig
+
+        existing = NotificationsConfig(
+            enabled=True,
+            email=EmailConfig(
+                enabled=True,
+                smtp_host="smtp.example.com",
+                smtp_password="secret-pass",
+                from_address="a@b.c",
+                to_addresses=["u@x.y"],
+            ),
+        )
+        monkeypatch.setattr(deps, "notif_config", existing)
+        monkeypatch.setattr(deps, "notifier", None)
+
+        await patch_config(
+            "notifications",
+            {
+                "email": {
+                    "enabled": True,
+                    "smtp_host": "smtp.example.com",
+                    "smtp_password": "••••••",
+                    "from_address": "a@b.c",
+                    "to_addresses": ["u@x.y"],
+                    "tls": True,
+                }
+            },
+            persist=False,
+        )
+        assert deps.notif_config.email is not None
+        assert deps.notif_config.email.smtp_password == "secret-pass"
+        assert deps.notif_config.email.use_tls is True
 
 
 # --- Persist to TOML ---

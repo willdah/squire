@@ -6,10 +6,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { ConfigDetailResponse } from "@/lib/types";
+import { ChannelsTab } from "@/components/notifications/channels-tab";
 import { AppConfigForm } from "./app-config-form";
 import { LLMConfigForm } from "./llm-config-form";
 import { WatchConfigForm } from "./watch-config-form";
 import { GuardrailsConfigForm } from "./guardrails-config-form";
+import { SkillsConfigForm } from "./skills-config-form";
 
 interface ConfigEditorProps {
   config: ConfigDetailResponse;
@@ -95,8 +97,10 @@ export function ConfigEditor({ config, onSaved }: ConfigEditorProps) {
         <TabsTrigger value="app">App</TabsTrigger>
         <TabsTrigger value="llm">LLM</TabsTrigger>
         <TabsTrigger value="database">Database</TabsTrigger>
+        <TabsTrigger value="notifications">Notifications</TabsTrigger>
         <TabsTrigger value="guardrails">Guardrails</TabsTrigger>
         <TabsTrigger value="watch">Watch</TabsTrigger>
+        <TabsTrigger value="skills">Skills</TabsTrigger>
         <TabsTrigger value="hosts">Hosts</TabsTrigger>
       </TabsList>
 
@@ -119,7 +123,23 @@ export function ConfigEditor({ config, onSaved }: ConfigEditorProps) {
       </TabsContent>
 
       <TabsContent value="database">
-        <ReadOnlySection title="Database" data={config.database.values} />
+        <div className="space-y-4">
+          <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">Database settings are read-only here</p>
+            <p className="mt-1 text-xs leading-relaxed">
+              The SQLite path (<code className="font-mono">SQUIRE_DB_PATH</code> /{" "}
+              <code className="font-mono">[db].path</code>) and snapshot interval are fixed when the web process
+              starts. Changing them requires updating <code className="font-mono">squire.toml</code> or environment
+              variables and restarting Squire. Provider API keys for LLMs are configured through LiteLLM environment
+              variables, not through this UI.
+            </p>
+          </div>
+          <ReadOnlySection title="Database" data={config.database.values} />
+        </div>
+      </TabsContent>
+
+      <TabsContent value="notifications">
+        <ChannelsTab />
       </TabsContent>
 
       <TabsContent value="guardrails">
@@ -135,6 +155,15 @@ export function ConfigEditor({ config, onSaved }: ConfigEditorProps) {
         <WatchConfigForm
           values={config.watch.values}
           envOverrides={config.watch.env_overrides}
+          tomlPath={config.toml_path}
+          onSaved={onSaved}
+        />
+      </TabsContent>
+
+      <TabsContent value="skills">
+        <SkillsConfigForm
+          values={config.skills.values}
+          envOverrides={config.skills.env_overrides}
           tomlPath={config.toml_path}
           onSaved={onSaved}
         />

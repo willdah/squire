@@ -5,6 +5,7 @@ injection. Tools also receive these via the global tool registry.
 """
 
 from squire.config import AppConfig, DatabaseConfig, GuardrailsConfig, LLMConfig, NotificationsConfig, WatchConfig
+from squire.config.skills import SkillsConfig
 from squire.database.service import DatabaseService
 from squire.hosts.store import HostStore
 from squire.notifications.router import NotificationRouter
@@ -24,6 +25,7 @@ db_config: DatabaseConfig | None = None
 notif_config: NotificationsConfig | None = None
 watch_config: WatchConfig | None = None
 guardrails: GuardrailsConfig | None = None
+skills_config: SkillsConfig | None = None
 host_store: HostStore | None = None
 
 

@@ -220,11 +220,14 @@ class ConfigDetailResponse(BaseModel):
     notifications: ConfigSectionMeta
     guardrails: ConfigSectionMeta
     watch: ConfigSectionMeta
+    skills: ConfigSectionMeta
     hosts: list[dict]
     toml_path: str | None = None
 
 
 class AppConfigUpdate(BaseModel):
+    app_name: str | None = None
+    user_id: str | None = None
     risk_tolerance: str | None = None
     risk_strict: bool | None = None
     history_limit: int | None = None
@@ -234,16 +237,20 @@ class AppConfigUpdate(BaseModel):
 
 class LLMConfigUpdate(BaseModel):
     model: str | None = None
+    api_base: str | None = None
     temperature: float | None = None
     max_tokens: int | None = None
 
 
 class WatchConfigPatch(BaseModel):
     interval_minutes: int | None = None
+    max_tool_calls_per_cycle: int | None = None
     cycle_timeout_seconds: int | None = None
     checkin_prompt: str | None = None
     notify_on_action: bool | None = None
     notify_on_blocked: bool | None = None
+    cycles_per_session: int | None = None
+    max_context_events: int | None = None
 
 
 class GuardrailsConfigUpdate(BaseModel):
@@ -258,11 +265,19 @@ class GuardrailsConfigUpdate(BaseModel):
     watch_tolerance: str | None = None
     watch_tools_allow: list[str] | None = None
     watch_tools_deny: list[str] | None = None
+    commands_allow: list[str] | None = None
+    commands_block: list[str] | None = None
+    config_paths: list[str] | None = None
 
 
 class NotificationsConfigUpdate(BaseModel):
     enabled: bool | None = None
     webhooks: list[dict] | None = None
+    email: dict | None = None
+
+
+class SkillsConfigUpdate(BaseModel):
+    path: str | None = None
 
 
 # --- Watch ---
@@ -283,17 +298,25 @@ class WatchStatusResponse(BaseModel):
 
 class WatchConfigUpdate(BaseModel):
     interval_minutes: int | None = None
-    risk_tolerance: int | None = None
+    max_tool_calls_per_cycle: int | None = None
+    cycle_timeout_seconds: int | None = None
     checkin_prompt: str | None = None
+    notify_on_action: bool | None = None
+    notify_on_blocked: bool | None = None
+    cycles_per_session: int | None = None
+    max_context_events: int | None = None
+    risk_tolerance: int | None = None
 
 
 class WatchConfigResponse(BaseModel):
     interval_minutes: int
+    max_tool_calls_per_cycle: int
     cycle_timeout_seconds: int
     checkin_prompt: str
     notify_on_action: bool
     notify_on_blocked: bool
     cycles_per_session: int
+    max_context_events: int
     risk_tolerance: int | None
 
 

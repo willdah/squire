@@ -46,11 +46,29 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+# Keys allowed on WatchConfig from a live ``update_config`` command (JSON payload).
+_WATCH_LIVE_KEYS = frozenset(
+    {
+        "interval_minutes",
+        "max_tool_calls_per_cycle",
+        "cycle_timeout_seconds",
+        "checkin_prompt",
+        "notify_on_action",
+        "notify_on_blocked",
+        "cycles_per_session",
+        "max_context_events",
+    }
+)
+
 
 async def _poll_commands(
     db: DatabaseService,
     shutdown: asyncio.Event,
     watch_config: WatchConfig | None,
+    *,
+    session_ref: list | None = None,
+    session_state_template: dict | None = None,
+    risk_evaluator: RiskEvaluator | None = None,
 ) -> None:
     """Process any pending watch commands from the database."""
     commands = await db.get_pending_watch_commands()
@@ -63,9 +81,20 @@ async def _poll_commands(
                 await db.update_watch_command_status(cmd_id, "completed")
             elif command == "update_config" and watch_config is not None:
                 payload = json.loads(cmd["payload"] or "{}")
-                for key in ("interval_minutes", "checkin_prompt"):
+                for key in _WATCH_LIVE_KEYS:
                     if key in payload:
                         setattr(watch_config, key, payload[key])
+                if "interval_minutes" in payload:
+                    await db.set_watch_state("interval_minutes", str(payload["interval_minutes"]))
+                if "risk_tolerance" in payload and risk_evaluator is not None:
+                    threshold = int(payload["risk_tolerance"])
+                    risk_evaluator.rule_gate.threshold = threshold
+                    if session_state_template is not None:
+                        session_state_template["risk_tolerance"] = threshold
+                    sess = session_ref[0] if session_ref and session_ref[0] is not None else None
+                    if sess is not None:
+                        sess.state["risk_tolerance"] = threshold
+                    await db.set_watch_state("risk_tolerance", str(threshold))
                 await db.update_watch_command_status(cmd_id, "completed")
                 logger.info("Applied config update: %s", payload)
             elif command == "start":
@@ -82,6 +111,10 @@ async def _interruptible_sleep(
     interval_seconds: float,
     poll_seconds: float = 5.0,
     watch_config: WatchConfig | None = None,
+    *,
+    session_ref: list | None = None,
+    session_state_template: dict | None = None,
+    risk_evaluator: RiskEvaluator | None = None,
 ) -> None:
     """Sleep in short increments, polling for commands between sleeps."""
     elapsed = 0.0
@@ -92,7 +125,14 @@ async def _interruptible_sleep(
             pass
         elapsed += poll_seconds
         if not shutdown.is_set():
-            await _poll_commands(db, shutdown, watch_config)
+            await _poll_commands(
+                db,
+                shutdown,
+                watch_config,
+                session_ref=session_ref,
+                session_state_template=session_state_template,
+                risk_evaluator=risk_evaluator,
+            )
 
 
 def _configure_logging() -> None:
@@ -206,6 +246,7 @@ async def start_watch() -> None:
         state=session_state,
     )
     await db.create_session(session.id)
+    session_ref = [session]
 
     # Signal handling for graceful shutdown
     shutdown = asyncio.Event()
@@ -245,7 +286,14 @@ async def start_watch() -> None:
 
     # Cleanup stale data and process any pending start commands
     await db.cleanup_watch_data()
-    await _poll_commands(db, shutdown, watch_config)
+    await _poll_commands(
+        db,
+        shutdown,
+        watch_config,
+        session_ref=session_ref,
+        session_state_template=session_state,
+        risk_evaluator=risk_evaluator,
+    )
 
     cycle_count = 0
     last_cycle_error: str | None = None
@@ -259,7 +307,14 @@ async def start_watch() -> None:
             await db.set_watch_state("last_cycle_at", cycle_start)
 
             # Poll for commands (e.g. stop or config update) before running cycle
-            await _poll_commands(db, shutdown, watch_config)
+            await _poll_commands(
+                db,
+                shutdown,
+                watch_config,
+                session_ref=session_ref,
+                session_state_template=session_state,
+                risk_evaluator=risk_evaluator,
+            )
             if shutdown.is_set():
                 break
 
@@ -398,9 +453,18 @@ async def start_watch() -> None:
 
                 await emitter.emit_session_rotated(cycle_count, old_session_id, session.id)
                 cycle_count = 0
+                session_ref[0] = session
 
             # Sleep until next cycle (interruptible by shutdown signal or commands)
-            await _interruptible_sleep(db, shutdown, watch_config.interval_minutes * 60, watch_config=watch_config)
+            await _interruptible_sleep(
+                db,
+                shutdown,
+                watch_config.interval_minutes * 60,
+                watch_config=watch_config,
+                session_ref=session_ref,
+                session_state_template=session_state,
+                risk_evaluator=risk_evaluator,
+            )
 
     finally:
         await db.set_watch_state("status", "stopped")
