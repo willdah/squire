@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Lock, Loader2, RotateCcw, Save, X } from "lucide-react";
 import { apiPatch } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface GuardrailsConfigFormProps {
@@ -130,9 +131,45 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
   const [watchTolerance, setWatchTolerance] = useState(toStr(values.watch_tolerance));
   const [watchToolsAllow, setWatchToolsAllow] = useState(toArr(values.watch_tools_allow));
   const [watchToolsDeny, setWatchToolsDeny] = useState(toArr(values.watch_tools_deny));
+  const [commandsAllow, setCommandsAllow] = useState(toArr(values.commands_allow));
+  const [commandsBlock, setCommandsBlock] = useState(toArr(values.commands_block));
+  const [configPaths, setConfigPaths] = useState(toArr(values.config_paths));
+  const riskOrigJson = JSON.stringify(
+    values.tools_risk_overrides && typeof values.tools_risk_overrides === "object"
+      ? (values.tools_risk_overrides as Record<string, unknown>)
+      : {},
+    null,
+    2
+  );
+  const [toolsRiskJson, setToolsRiskJson] = useState(riskOrigJson);
   const [persist, setPersist] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setToolsAllow(toArr(values.tools_allow));
+    setToolsRequireApproval(toArr(values.tools_require_approval));
+    setToolsDeny(toArr(values.tools_deny));
+    setMonitorTolerance(toStr(values.monitor_tolerance));
+    setContainerTolerance(toStr(values.container_tolerance));
+    setAdminTolerance(toStr(values.admin_tolerance));
+    setNotifierTolerance(toStr(values.notifier_tolerance));
+    setWatchTolerance(toStr(values.watch_tolerance));
+    setWatchToolsAllow(toArr(values.watch_tools_allow));
+    setWatchToolsDeny(toArr(values.watch_tools_deny));
+    setCommandsAllow(toArr(values.commands_allow));
+    setCommandsBlock(toArr(values.commands_block));
+    setConfigPaths(toArr(values.config_paths));
+    setToolsRiskJson(
+      JSON.stringify(
+        values.tools_risk_overrides && typeof values.tools_risk_overrides === "object"
+          ? (values.tools_risk_overrides as Record<string, unknown>)
+          : {},
+        null,
+        2
+      )
+    );
+  }, [values]);
 
   const isLocked = (field: string) => envOverrides.includes(field);
 
@@ -146,7 +183,11 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
     notifierTolerance !== toStr(values.notifier_tolerance) ||
     watchTolerance !== toStr(values.watch_tolerance) ||
     !arraysEqual(values.watch_tools_allow, watchToolsAllow) ||
-    !arraysEqual(values.watch_tools_deny, watchToolsDeny);
+    !arraysEqual(values.watch_tools_deny, watchToolsDeny) ||
+    !arraysEqual(values.commands_allow, commandsAllow) ||
+    !arraysEqual(values.commands_block, commandsBlock) ||
+    !arraysEqual(values.config_paths, configPaths) ||
+    toolsRiskJson.trim() !== riskOrigJson.trim();
 
   const revert = () => {
     setToolsAllow(toArr(values.tools_allow));
@@ -159,6 +200,10 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
     setWatchTolerance(toStr(values.watch_tolerance));
     setWatchToolsAllow(toArr(values.watch_tools_allow));
     setWatchToolsDeny(toArr(values.watch_tools_deny));
+    setCommandsAllow(toArr(values.commands_allow));
+    setCommandsBlock(toArr(values.commands_block));
+    setConfigPaths(toArr(values.config_paths));
+    setToolsRiskJson(riskOrigJson);
     setError(null);
   };
 
@@ -166,6 +211,21 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
     setSaving(true);
     setError(null);
     try {
+      let parsedOverrides: Record<string, number> | undefined;
+      if (toolsRiskJson.trim() !== riskOrigJson.trim()) {
+        try {
+          const p = JSON.parse(toolsRiskJson) as unknown;
+          if (p === null || typeof p !== "object" || Array.isArray(p)) {
+            throw new Error("Must be a JSON object");
+          }
+          parsedOverrides = p as Record<string, number>;
+        } catch {
+          setError("Tool risk overrides must be valid JSON object (tool name → number).");
+          setSaving(false);
+          return;
+        }
+      }
+
       const changed: Record<string, unknown> = {};
       if (!arraysEqual(values.tools_allow, toolsAllow)) changed.tools_allow = toolsAllow;
       if (!arraysEqual(values.tools_require_approval, toolsRequireApproval))
@@ -183,6 +243,10 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
       }
       if (!arraysEqual(values.watch_tools_allow, watchToolsAllow)) changed.watch_tools_allow = watchToolsAllow;
       if (!arraysEqual(values.watch_tools_deny, watchToolsDeny)) changed.watch_tools_deny = watchToolsDeny;
+      if (!arraysEqual(values.commands_allow, commandsAllow)) changed.commands_allow = commandsAllow;
+      if (!arraysEqual(values.commands_block, commandsBlock)) changed.commands_block = commandsBlock;
+      if (!arraysEqual(values.config_paths, configPaths)) changed.config_paths = configPaths;
+      if (parsedOverrides !== undefined) changed.tools_risk_overrides = parsedOverrides;
 
       const url = persist ? "/api/config/guardrails?persist=true" : "/api/config/guardrails";
       await apiPatch(url, changed);
@@ -303,6 +367,65 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
             <Label className="text-xs">Watch Tools Deny</Label>
             <TagInput value={watchToolsDeny} onChange={setWatchToolsDeny} disabled={isLocked("watch_tools_deny")} />
           </div>
+        </div>
+
+        <div className="border-t pt-4 space-y-3">
+          <Label className="text-sm font-medium">run_command and read_config</Label>
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5">
+              <Label className="text-xs">Commands Allow</Label>
+              {isLocked("commands_allow") && <EnvLock field="commands_allow" prefix="SQUIRE_GUARDRAILS_" />}
+            </div>
+            <TagInput
+              value={commandsAllow}
+              onChange={setCommandsAllow}
+              disabled={isLocked("commands_allow")}
+              placeholder="Command basename, press Enter"
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5">
+              <Label className="text-xs">Commands Block</Label>
+              {isLocked("commands_block") && <EnvLock field="commands_block" prefix="SQUIRE_GUARDRAILS_" />}
+            </div>
+            <TagInput
+              value={commandsBlock}
+              onChange={setCommandsBlock}
+              disabled={isLocked("commands_block")}
+              placeholder="Command basename, press Enter"
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5">
+              <Label className="text-xs">read_config allowed paths</Label>
+              {isLocked("config_paths") && <EnvLock field="config_paths" prefix="SQUIRE_GUARDRAILS_" />}
+            </div>
+            <TagInput
+              value={configPaths}
+              onChange={setConfigPaths}
+              disabled={isLocked("config_paths")}
+              placeholder="Directory path, press Enter"
+            />
+          </div>
+        </div>
+
+        <div className="border-t pt-4 space-y-2">
+          <div className="flex items-center gap-1.5">
+            <Label className="text-sm font-medium">Tool risk overrides</Label>
+            {isLocked("tools_risk_overrides") && (
+              <EnvLock field="tools_risk_overrides" prefix="SQUIRE_GUARDRAILS_" />
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            JSON object mapping tool names (or tool:action) to risk level integers 1–5.
+          </p>
+          <Textarea
+            value={toolsRiskJson}
+            onChange={(e) => setToolsRiskJson(e.target.value)}
+            disabled={isLocked("tools_risk_overrides")}
+            rows={6}
+            className="font-mono text-xs"
+          />
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}

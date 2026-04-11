@@ -174,7 +174,11 @@ export function ChannelsTab() {
       if (enabled !== origEnabled) changed.enabled = enabled;
 
       if (JSON.stringify(webhooks) !== JSON.stringify(origWebhooks)) {
-        changed.webhooks = webhooks.map(({ isNew: _, ...wh }) => wh);
+        changed.webhooks = webhooks.map((wh) => {
+          const { isNew, ...rest } = wh;
+          void isNew;
+          return rest;
+        });
       }
 
       if (JSON.stringify(email) !== JSON.stringify(origEmail)) {

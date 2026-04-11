@@ -52,6 +52,8 @@ function EnvLock({ field, prefix }: { field: string; prefix: string }) {
 }
 
 export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppConfigFormProps) {
+  const [appName, setAppName] = useState(String(values.app_name ?? "Squire"));
+  const [userId, setUserId] = useState(String(values.user_id ?? "squire-user"));
   const [riskTolerance, setRiskTolerance] = useState(String(values.risk_tolerance ?? "cautious"));
   const [riskStrict, setRiskStrict] = useState(Boolean(values.risk_strict));
   const [historyLimit, setHistoryLimit] = useState(Number(values.history_limit ?? 50));
@@ -64,6 +66,8 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
   const isLocked = (field: string) => envOverrides.includes(field);
 
   const isDirty =
+    appName !== String(values.app_name ?? "Squire") ||
+    userId !== String(values.user_id ?? "squire-user") ||
     riskTolerance !== String(values.risk_tolerance ?? "cautious") ||
     riskStrict !== Boolean(values.risk_strict) ||
     historyLimit !== Number(values.history_limit ?? 50) ||
@@ -71,6 +75,8 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
     multiAgent !== Boolean(values.multi_agent);
 
   const revert = () => {
+    setAppName(String(values.app_name ?? "Squire"));
+    setUserId(String(values.user_id ?? "squire-user"));
     setRiskTolerance(String(values.risk_tolerance ?? "cautious"));
     setRiskStrict(Boolean(values.risk_strict));
     setHistoryLimit(Number(values.history_limit ?? 50));
@@ -84,6 +90,8 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
     setError(null);
     try {
       const changed: Record<string, unknown> = {};
+      if (appName !== String(values.app_name ?? "Squire")) changed.app_name = appName;
+      if (userId !== String(values.user_id ?? "squire-user")) changed.user_id = userId;
       if (riskTolerance !== String(values.risk_tolerance ?? "cautious")) changed.risk_tolerance = riskTolerance;
       if (riskStrict !== Boolean(values.risk_strict)) changed.risk_strict = riskStrict;
       if (historyLimit !== Number(values.history_limit ?? 50)) changed.history_limit = historyLimit;
@@ -106,6 +114,32 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
         <CardTitle className="text-base">App</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5">
+            <Label>App name</Label>
+            {isLocked("app_name") && <EnvLock field="app_name" prefix="SQUIRE_" />}
+          </div>
+          <Input
+            value={appName}
+            onChange={(e) => setAppName(e.target.value)}
+            disabled={isLocked("app_name")}
+            className="text-sm"
+          />
+          <p className="text-xs text-muted-foreground">Passed to the ADK runner as the application name.</p>
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5">
+            <Label>User ID</Label>
+            {isLocked("user_id") && <EnvLock field="user_id" prefix="SQUIRE_" />}
+          </div>
+          <Input
+            value={userId}
+            onChange={(e) => setUserId(e.target.value)}
+            disabled={isLocked("user_id")}
+            className="text-sm font-mono"
+          />
+          <p className="text-xs text-muted-foreground">ADK session scope for this Squire instance.</p>
+        </div>
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
             <Label>Risk Tolerance</Label>

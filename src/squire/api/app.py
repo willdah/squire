@@ -24,7 +24,7 @@ from ..config import (
 from ..database.service import DatabaseService
 from ..hosts.store import HostStore
 from ..main import _collect_all_snapshots
-from ..notifications.webhook import WebhookDispatcher
+from ..notifications.factory import build_notification_router
 from ..skills import SkillService
 from ..system.registry import BackendRegistry
 from ..tools import set_db as tools_set_db
@@ -75,20 +75,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     deps.notif_config = NotificationsConfig()
     deps.watch_config = WatchConfig()
     deps.guardrails = GuardrailsConfig()
-    skills_config = SkillsConfig()
+    deps.skills_config = SkillsConfig()
 
     # Create service singletons
     deps.registry = BackendRegistry()
     deps.db = DatabaseService(deps.db_config.path)
-    from ..notifications.email import EmailNotifier
-    from ..notifications.router import NotificationRouter
-
-    webhook_dispatcher = WebhookDispatcher(deps.notif_config)
-    email_notifier = None
-    if deps.notif_config.email and deps.notif_config.email.enabled:
-        email_notifier = EmailNotifier(deps.notif_config.email)
-    deps.notifier = NotificationRouter(webhook=webhook_dispatcher, email=email_notifier)
-    deps.skills_service = SkillService(skills_config.path)
+    deps.notifier = build_notification_router(deps.notif_config)
+    deps.skills_service = SkillService(deps.skills_config.path)
 
     # Load managed hosts from DB into the registry
     deps.host_store = HostStore(deps.db, deps.registry)

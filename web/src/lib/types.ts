@@ -151,19 +151,27 @@ export interface WatchCycle {
 // Watch config from API
 export interface WatchConfigResponse {
   interval_minutes: number;
+  max_tool_calls_per_cycle: number;
   cycle_timeout_seconds: number;
   checkin_prompt: string;
   notify_on_action: boolean;
   notify_on_blocked: boolean;
   cycles_per_session: number;
+  max_context_events: number;
   risk_tolerance: number | null;
 }
 
 // Watch config update payload
 export interface WatchConfigUpdate {
   interval_minutes?: number;
-  risk_tolerance?: number;
+  max_tool_calls_per_cycle?: number;
+  cycle_timeout_seconds?: number;
   checkin_prompt?: string;
+  notify_on_action?: boolean;
+  notify_on_blocked?: boolean;
+  cycles_per_session?: number;
+  max_context_events?: number;
+  risk_tolerance?: number;
 }
 
 // --- Tools ---
@@ -215,6 +223,7 @@ export interface ConfigDetailResponse {
   notifications: ConfigSectionMeta;
   guardrails: ConfigSectionMeta;
   watch: ConfigSectionMeta;
+  skills: ConfigSectionMeta;
   hosts: Record<string, unknown>[];
   toml_path: string | null;
 }
