@@ -4,7 +4,9 @@
 
 Watch mode is Squire's autonomous monitoring loop — it runs headless, collecting system snapshots and sending check-in prompts to the agent on a configurable interval. Today it's started via CLI (`squire watch`), outputs to stdout logs, and persists state to SQLite. The web UI has a minimal read-only status endpoint but no meaningful integration.
 
-Users need to manage and observe watch mode through the web UI: start/stop the process, see live agent activity as cycles run, review historical cycles, adjust configuration on the fly, and optionally approve risky tool calls when actively supervising.
+Users need to manage and observe watch mode through the web UI: start/stop the process, see live agent activity as cycles run,
+review historical cycles, adjust configuration on the fly, and monitor autonomy outcomes (incident detection, RCA, remediation,
+verification, escalation).
 
 ## Architecture
 
@@ -84,17 +86,13 @@ The web API's `POST /api/watch/start` endpoint:
 3. Spawns `squire watch` as a detached subprocess
 4. Returns immediately — frontend polls status until it transitions to "running"
 
-### Approval Bridge
+### Strict-Autonomy Gate
 
-A new `DatabaseApprovalProvider` implements the existing approval provider protocol:
-1. Writes an `approval_request` event to `watch_events`
-2. Writes a row to `watch_approvals` with `status='pending'`
-3. Polls `watch_approvals` for status change (200ms interval, 60s timeout)
-4. Returns approved/denied, or auto-denies on timeout
+Watch mode runs with strict headless risk policy (`strict=True`, `headless=True`) and never waits for interactive approvals.
+Supervisor connections in the web UI provide observability only. High-risk actions are denied, deduplicated, and surfaced as
+autonomy telemetry and notifications.
 
-The watch process checks `watch_state` for `supervisor_connected` at cycle start. If a supervisor is connected, the risk gate uses `DatabaseApprovalProvider` instead of the default strict (auto-deny) behavior. If no supervisor is connected, existing headless behavior is unchanged.
-
-File: `src/squire/callbacks/risk_gate.py`
+File: `src/squire/watch.py`, `src/squire/callbacks/risk_gate.py`
 
 ## Backend API
 
@@ -205,7 +203,8 @@ Files: `web/src/app/watch/page.tsx`, `web/src/components/watch/*.tsx`
 2. **Live streaming**: With watch running, open `/watch` and verify tokens, tool calls, and cycle boundaries stream in real-time (~200ms latency).
 3. **Cycle history**: After several cycles, switch to History tab and verify cycles are listed with correct stats. Expand a cycle and verify full event stream is shown.
 4. **Configuration**: Open config drawer, change interval to 1 minute, apply. Verify next cycle runs after ~1 minute instead of default 5.
-5. **Approval flow**: Set risk tolerance low enough that a tool triggers approval. With the watch page open, verify the approval card appears. Approve it and verify the tool executes. Test denial. Test timeout (close the page and verify auto-deny).
+5. **Strict-autonomy blocking**: Set risk tolerance low enough that a tool is blocked. Verify watch continues with fallback/escalation
+   and emits `watch.blocked` / `watch.escalation` telemetry without waiting for approval.
 6. **Headless fallback**: Stop the web server, run `squire watch` from CLI. Verify it still works independently — events are written to DB, strict risk gate auto-denies, no errors about missing web server.
 7. **Reconnection**: Disconnect and reconnect the WebSocket mid-cycle. Verify the stream catches up (initial burst of current cycle events).
 8. **Concurrent viewers**: Open `/watch` in two browser tabs. Verify both see the stream. Submit an approval from one tab, verify the other shows it as resolved.

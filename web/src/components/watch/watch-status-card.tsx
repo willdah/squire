@@ -20,6 +20,15 @@ export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusC
   const cycle = status?.cycle ? parseInt(status.cycle) : 0;
   const interval = status?.interval_minutes ? parseInt(status.interval_minutes) : 5;
   const riskTolerance = status?.risk_tolerance || "—";
+  let lastOutcomeText = "";
+  if (status?.last_outcome) {
+    try {
+      const parsed = JSON.parse(status.last_outcome) as { resolved?: boolean; escalated?: boolean; incident_count?: number };
+      lastOutcomeText = `Last outcome: ${parsed.incident_count ?? 0} incidents, ${parsed.resolved ? "resolved" : parsed.escalated ? "escalated" : "monitoring"}`;
+    } catch {
+      lastOutcomeText = "";
+    }
+  }
 
   const pollUntilStatus = async (target: string, maxAttempts = 15) => {
     for (let i = 0; i < maxAttempts; i++) {
@@ -67,6 +76,7 @@ export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusC
             <>
               <p>Cycle {cycle} · Every {interval} min · Risk tolerance: {riskTolerance}</p>
               {status?.pid && <p className="text-xs">PID {status.pid}</p>}
+              {lastOutcomeText && <p className="text-xs">{lastOutcomeText}</p>}
             </>
           ) : (
             <>

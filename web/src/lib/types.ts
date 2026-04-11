@@ -126,6 +126,12 @@ export interface WatchStatus {
   session_id?: string | null;
   last_response?: string | null;
   pid?: string | null;
+  total_actions?: string | null;
+  total_blocked?: string | null;
+  total_errors?: string | null;
+  total_resolved?: string | null;
+  total_escalated?: string | null;
+  last_outcome?: string | null;
 }
 
 // Watch event from watch_events table
@@ -145,6 +151,11 @@ export interface WatchCycle {
   status: string;
   duration_seconds: number | null;
   tool_count: number;
+  blocked_count?: number;
+  incident_count?: number;
+  resolved?: boolean;
+  escalated?: boolean;
+  incident_key?: string | null;
   event_count: number;
 }
 
@@ -158,6 +169,9 @@ export interface WatchConfigResponse {
   notify_on_blocked: boolean;
   cycles_per_session: number;
   max_context_events: number;
+  max_identical_actions_per_cycle: number;
+  blocked_action_cooldown_cycles: number;
+  max_remote_actions_per_cycle: number;
   risk_tolerance: number | null;
 }
 
@@ -171,6 +185,9 @@ export interface WatchConfigUpdate {
   notify_on_blocked?: boolean;
   cycles_per_session?: number;
   max_context_events?: number;
+  max_identical_actions_per_cycle?: number;
+  blocked_action_cooldown_cycles?: number;
+  max_remote_actions_per_cycle?: number;
   risk_tolerance?: number;
 }
 

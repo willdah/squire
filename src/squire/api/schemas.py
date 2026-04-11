@@ -249,6 +249,9 @@ class WatchConfigPatch(BaseModel):
     notify_on_blocked: bool | None = None
     cycles_per_session: int | None = None
     max_context_events: int | None = None
+    max_identical_actions_per_cycle: int | None = None
+    blocked_action_cooldown_cycles: int | None = None
+    max_remote_actions_per_cycle: int | None = None
 
 
 class GuardrailsConfigUpdate(BaseModel):
@@ -294,6 +297,12 @@ class WatchStatusResponse(BaseModel):
     session_id: str | None = None
     last_response: str | None = None
     pid: str | None = None
+    total_actions: str | None = None
+    total_blocked: str | None = None
+    total_errors: str | None = None
+    total_resolved: str | None = None
+    total_escalated: str | None = None
+    last_outcome: str | None = None
 
 
 class WatchConfigUpdate(BaseModel):
@@ -305,6 +314,9 @@ class WatchConfigUpdate(BaseModel):
     notify_on_blocked: bool | None = None
     cycles_per_session: int | None = None
     max_context_events: int | None = None
+    max_identical_actions_per_cycle: int | None = None
+    blocked_action_cooldown_cycles: int | None = None
+    max_remote_actions_per_cycle: int | None = None
     risk_tolerance: int | None = None
 
 
@@ -317,6 +329,9 @@ class WatchConfigResponse(BaseModel):
     notify_on_blocked: bool
     cycles_per_session: int
     max_context_events: int
+    max_identical_actions_per_cycle: int
+    blocked_action_cooldown_cycles: int
+    max_remote_actions_per_cycle: int
     risk_tolerance: int | None
 
 

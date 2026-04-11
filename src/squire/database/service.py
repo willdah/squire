@@ -556,6 +556,11 @@ class DatabaseService:
                     "status": end_content.get("status", "unknown"),
                     "duration_seconds": end_content.get("duration_seconds"),
                     "tool_count": end_content.get("tool_count", 0),
+                    "blocked_count": end_content.get("blocked_count", 0),
+                    "incident_count": ((end_content.get("outcome") or {}).get("incident_count", 0)),
+                    "resolved": ((end_content.get("outcome") or {}).get("resolved", False)),
+                    "escalated": ((end_content.get("outcome") or {}).get("escalated", False)),
+                    "incident_key": ((end_content.get("outcome") or {}).get("incident_fingerprint")),
                     "event_count": row_dict["event_count"],
                 }
             )

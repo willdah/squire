@@ -36,13 +36,22 @@ async def test_emit_tool_call(db):
 @pytest.mark.asyncio
 async def test_emit_cycle_end_includes_stats(db):
     emitter = WatchEventEmitter(db)
-    await emitter.emit_cycle_end(cycle=1, status="ok", duration_seconds=5.2, tool_count=3)
+    await emitter.emit_cycle_end(
+        cycle=1,
+        status="ok",
+        duration_seconds=5.2,
+        tool_count=3,
+        blocked_count=1,
+        outcome={"incident_count": 2},
+    )
 
     events = await db.get_watch_events_since(0)
     content = json.loads(events[0]["content"])
     assert content["status"] == "ok"
     assert content["duration_seconds"] == 5.2
     assert content["tool_count"] == 3
+    assert content["blocked_count"] == 1
+    assert content["outcome"]["incident_count"] == 2
 
 
 @pytest.mark.asyncio
@@ -71,3 +80,14 @@ async def test_emit_approval_request(db):
     content = json.loads(events[0]["content"])
     assert content["request_id"] == "req-1"
     assert content["risk_level"] == 4
+
+
+@pytest.mark.asyncio
+async def test_emit_phase_and_incident(db):
+    emitter = WatchEventEmitter(db)
+    await emitter.emit_phase(1, "detect", "Detected incident", details="details")
+    await emitter.emit_incident(1, "key1", "high", "Disk pressure", "95%", "local")
+
+    events = await db.get_watch_events_since(0)
+    assert events[0]["type"] == "phase"
+    assert events[1]["type"] == "incident"

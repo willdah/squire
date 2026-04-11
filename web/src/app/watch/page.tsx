@@ -17,7 +17,7 @@ export default function WatchPage() {
   const { data: status, mutate } = useSWR(
     "/api/watch/status",
     () => apiGet<WatchStatus>("/api/watch/status"),
-    { refreshInterval: 3000 }
+    { refreshInterval: (latestData?: WatchStatus) => (latestData?.status === "running" ? 2000 : 5000) }
   );
 
   const isRunning = status?.status === "running";

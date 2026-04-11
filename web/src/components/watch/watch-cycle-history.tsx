@@ -47,6 +47,18 @@ function CycleDetail({ cycle }: { cycle: number }) {
             );
           case "token":
             return <span key={event.id}>{event.content}</span>;
+          case "incident":
+            return (
+              <div key={event.id} className="text-orange-500">
+                ⚠ {(content.severity as string)?.toUpperCase()} {(content.title as string)} ({content.host as string})
+              </div>
+            );
+          case "phase":
+            return (
+              <div key={event.id} className="text-blue-500">
+                ◇ {(content.phase as string)}: {(content.summary as string)}
+              </div>
+            );
           case "cycle_start":
           case "cycle_end":
             return null;
@@ -175,7 +187,11 @@ export function WatchCycleHistory() {
                   {cycle.started_at ? new Date(cycle.started_at).toLocaleTimeString() : "—"}
                 </span>
                 <span className="text-muted-foreground text-xs">{cycle.tool_count} tools</span>
+                <span className="text-muted-foreground text-xs">{cycle.blocked_count || 0} blocked</span>
+                <span className="text-muted-foreground text-xs">{cycle.incident_count || 0} incidents</span>
                 <Badge variant={statusColor} className="text-xs">{cycle.status}</Badge>
+                {cycle.resolved && <Badge variant="secondary" className="text-xs">resolved</Badge>}
+                {cycle.escalated && <Badge variant="destructive" className="text-xs">escalated</Badge>}
                 {cycle.duration_seconds && (
                   <span className="text-muted-foreground text-xs ml-auto">{cycle.duration_seconds.toFixed(1)}s</span>
                 )}

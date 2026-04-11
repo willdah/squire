@@ -228,7 +228,8 @@ tools_deny = []                    # additional tools to deny in watch
 | `tools_deny`  | `SQUIRE_GUARDRAILS_WATCH_TOOLS_DENY`  | Additional tools to deny in watch       |
 
 
-Watch mode is always strict (deny, never prompt) since there's no interactive approval provider.
+Watch mode is always strict (deny, never prompt) and optimized for autonomous operation. The web dashboard can supervise
+live events and outcomes, but does not gate high-risk actions with interactive approval prompts.
 
 ---
 
@@ -488,7 +489,11 @@ Risk policy for watch mode is configured under `[guardrails.watch]`, not here.
 | `interval_minutes`         | `5`          | `SQUIRE_WATCH_INTERVAL_MINUTES`         | Minutes between watch cycles  |
 | `max_tool_calls_per_cycle` | `15`         | `SQUIRE_WATCH_MAX_TOOL_CALLS_PER_CYCLE` | Tool call budget per cycle    |
 | `cycle_timeout_seconds`    | `300`        | `SQUIRE_WATCH_CYCLE_TIMEOUT_SECONDS`    | Max wall-clock time per cycle |
-| `cycles_per_session`       | `50`         | `SQUIRE_WATCH_CYCLES_PER_SESSION`       | Rotate session after N cycles |
+| `cycles_per_session`       | `12`         | `SQUIRE_WATCH_CYCLES_PER_SESSION`       | Rotate session after N cycles |
+| `max_context_events`       | `40`         | `SQUIRE_WATCH_MAX_CONTEXT_EVENTS`       | Keep only recent ADK events in context |
+| `max_identical_actions_per_cycle` | `2`  | `SQUIRE_WATCH_MAX_IDENTICAL_ACTIONS_PER_CYCLE` | Anti-flapping action cap |
+| `blocked_action_cooldown_cycles` | `3`   | `SQUIRE_WATCH_BLOCKED_ACTION_COOLDOWN_CYCLES` | Cooldown for repeated actions |
+| `max_remote_actions_per_cycle` | `4`     | `SQUIRE_WATCH_MAX_REMOTE_ACTIONS_PER_CYCLE` | Safety cap for remote actions |
 | `checkin_prompt`           | *(built-in)* | `SQUIRE_WATCH_CHECKIN_PROMPT`           | Prompt injected each cycle    |
 | `notify_on_action`         | `true`       | `SQUIRE_WATCH_NOTIFY_ON_ACTION`         | Notify on corrective actions  |
 | `notify_on_blocked`        | `true`       | `SQUIRE_WATCH_NOTIFY_ON_BLOCKED`        | Notify on blocked tool calls  |
@@ -499,7 +504,11 @@ Risk policy for watch mode is configured under `[guardrails.watch]`, not here.
 interval_minutes = 5
 max_tool_calls_per_cycle = 15
 cycle_timeout_seconds = 300
-cycles_per_session = 50
+cycles_per_session = 12
+max_context_events = 40
+max_identical_actions_per_cycle = 2
+blocked_action_cooldown_cycles = 3
+max_remote_actions_per_cycle = 4
 ```
 
 ---
@@ -587,6 +596,11 @@ events = ["watch.alert", "watch.action"]
 | `watch.blocked`   | Watch  | Tool call denied by risk policy       |
 | `watch.alert`     | Watch  | Alert rule triggered                  |
 | `watch.error`     | Watch  | Exception during a watch cycle        |
+| `watch.incident_detected` | Watch | New incident fingerprint detected |
+| `watch.remediation` | Watch | Autonomous remediation action summary |
+| `watch.verification` | Watch | Verification outcome for remediation |
+| `watch.escalation` | Watch | Escalation required for unresolved issue |
+| `watch.digest` | Watch | Periodic operational summary |
 | `user`            | Agent  | Ad-hoc notification sent by the agent |
 
 

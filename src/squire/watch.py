@@ -11,6 +11,7 @@ import logging
 import os
 import signal
 import sys
+from collections import defaultdict
 from datetime import UTC, datetime
 
 from agent_risk_engine import RiskEvaluator, RuleGate
@@ -40,7 +41,16 @@ from .notifications.router import NotificationRouter
 from .notifications.webhook import WebhookDispatcher
 from .system.registry import BackendRegistry
 from .tools import TOOL_RISK_LEVELS, set_db, set_notifier, set_registry
+from .watch_autonomy import (
+    action_signature,
+    build_cycle_contract_prompt,
+    build_cycle_outcome,
+    detect_incidents,
+    dominant_incident_key,
+    parse_contract_sections,
+)
 from .watch_emitter import WatchEventEmitter
+from .watch_playbooks import select_playbooks
 
 load_dotenv()
 
@@ -57,6 +67,9 @@ _WATCH_LIVE_KEYS = frozenset(
         "notify_on_blocked",
         "cycles_per_session",
         "max_context_events",
+        "max_identical_actions_per_cycle",
+        "blocked_action_cooldown_cycles",
+        "max_remote_actions_per_cycle",
     }
 )
 
@@ -289,6 +302,12 @@ async def start_watch() -> None:
             "session_id": session.id,
             "interval_minutes": str(watch_config.interval_minutes),
             "risk_tolerance": str(watch_tolerance),
+            "total_actions": "0",
+            "total_blocked": "0",
+            "total_errors": "0",
+            "total_resolved": "0",
+            "total_escalated": "0",
+            "last_outcome": "{}",
         },
     )
 
@@ -314,6 +333,7 @@ async def start_watch() -> None:
 
     cycle_count = 0
     last_cycle_error: str | None = None
+    action_cooldowns: dict[str, int] = defaultdict(int)
 
     try:
         while not shutdown.is_set():
@@ -336,11 +356,22 @@ async def start_watch() -> None:
                 break
 
             # Collect fresh snapshots
+            incidents = []
             try:
                 snapshot = await _collect_all_snapshots(registry)
                 if "local" in snapshot:
                     await db.save_snapshot(snapshot["local"])
                 session.state["latest_snapshot"] = snapshot
+                incidents = detect_incidents(snapshot)
+                for incident in incidents:
+                    await emitter.emit_incident(
+                        cycle_count,
+                        key=incident.key,
+                        severity=incident.severity,
+                        title=incident.title,
+                        detail=incident.detail,
+                        host=incident.host,
+                    )
 
                 # Evaluate alert rules against fresh snapshot
                 try:
@@ -360,6 +391,21 @@ async def start_watch() -> None:
                     "Adjust your approach if needed (e.g. skip unavailable tools).\n\n"
                     f"{prompt}"
                 )
+
+            # Decay action cooldowns and expose active blocks to the risk gate.
+            blocked_signatures = []
+            for signature in list(action_cooldowns):
+                action_cooldowns[signature] -= 1
+                if action_cooldowns[signature] <= 0:
+                    del action_cooldowns[signature]
+                else:
+                    blocked_signatures.append(signature)
+            session.state["watch_blocked_action_signatures"] = blocked_signatures
+            session.state["watch_max_identical_actions_per_cycle"] = watch_config.max_identical_actions_per_cycle
+            session.state["watch_max_remote_actions_per_cycle"] = watch_config.max_remote_actions_per_cycle
+
+            playbooks = select_playbooks(incidents)
+            prompt = build_cycle_contract_prompt(prompt, incidents, playbooks, blocked_signatures)
 
             # Append watch-triggered skills
             try:
@@ -388,7 +434,19 @@ async def start_watch() -> None:
             cycle_tool_count = 0
             response_text = ""
             try:
-                response_text, cycle_tool_count = await asyncio.wait_for(
+                await emitter.emit_phase(
+                    cycle_count,
+                    "detect",
+                    f"Detected {len(incidents)} incident(s)",
+                    details="; ".join(f"{i.title}@{i.host}" for i in incidents[:8]),
+                )
+                (
+                    response_text,
+                    cycle_tool_count,
+                    blocked_count,
+                    cycle_signatures,
+                    remote_tool_count,
+                ) = await asyncio.wait_for(
                     _run_cycle(
                         runner,
                         session,
@@ -398,6 +456,8 @@ async def start_watch() -> None:
                         emitter=emitter,
                         cycle=cycle_count,
                         max_tool_calls=watch_config.max_tool_calls_per_cycle,
+                        max_identical_actions=watch_config.max_identical_actions_per_cycle,
+                        max_remote_actions=watch_config.max_remote_actions_per_cycle,
                     ),
                     timeout=watch_config.cycle_timeout_seconds,
                 )
@@ -406,20 +466,94 @@ async def start_watch() -> None:
                     await db.save_message(session_id=session.id, role="assistant", content=response_text)
                     await db.set_watch_state("last_response", response_text[:500])
                     logger.info("Cycle %d:\n%s", cycle_count, response_text)
+
+                response_sections = parse_contract_sections(response_text)
+                if response_sections.get("rca hypotheses"):
+                    await emitter.emit_phase(
+                        cycle_count,
+                        "rca",
+                        "RCA hypotheses generated",
+                        details=response_sections["rca hypotheses"][:600],
+                    )
+                if response_sections.get("action plan and actions taken"):
+                    await emitter.emit_phase(
+                        cycle_count,
+                        "remediate",
+                        "Remediation actions planned/executed",
+                        details=response_sections["action plan and actions taken"][:600],
+                    )
+                outcome = build_cycle_outcome(
+                    incidents,
+                    response_sections,
+                    tool_count=cycle_tool_count,
+                    blocked_count=blocked_count,
+                    cycle_status="ok",
+                )
+                outcome["remote_tool_count"] = remote_tool_count
+                issue_key = dominant_incident_key(incidents)
+                if issue_key:
+                    outcome["incident_fingerprint"] = issue_key
+                await emitter.emit_phase(
+                    cycle_count,
+                    "verify",
+                    "Verification completed",
+                    details=outcome["verification"],
+                )
+                if outcome.get("escalated"):
+                    await emitter.emit_phase(
+                        cycle_count,
+                        "escalate",
+                        "Escalation required",
+                        details=outcome.get("escalation", ""),
+                    )
+
+                for signature in cycle_signatures:
+                    action_cooldowns[signature] = max(
+                        action_cooldowns.get(signature, 0),
+                        watch_config.blocked_action_cooldown_cycles,
+                    )
             except TimeoutError:
                 last_cycle_error = f"Cycle timed out after {watch_config.cycle_timeout_seconds}s"
                 logger.warning("Cycle %d timed out after %ds", cycle_count, watch_config.cycle_timeout_seconds)
                 await db.set_watch_state("last_response", f"[timeout after {watch_config.cycle_timeout_seconds}s]")
                 await _dispatch(notifier, "watch.error", f"Watch cycle {cycle_count} timed out.")
+                blocked_count = 0
+                cycle_tool_count = 0
+                outcome = build_cycle_outcome(
+                    incidents,
+                    {},
+                    tool_count=0,
+                    blocked_count=0,
+                    cycle_status="error",
+                )
             except Exception as e:
                 last_cycle_error = f"{type(e).__name__}: {e}"
                 logger.error("Cycle %d failed: %s", cycle_count, e, exc_info=True)
                 await db.set_watch_state("last_response", f"[error: {e}]")
                 await _dispatch(notifier, "watch.error", f"Watch cycle {cycle_count} failed.")
+                blocked_count = 0
+                cycle_tool_count = 0
+                outcome = build_cycle_outcome(
+                    incidents,
+                    {},
+                    tool_count=0,
+                    blocked_count=0,
+                    cycle_status="error",
+                )
 
             cycle_duration = (datetime.now(UTC) - cycle_start_time).total_seconds()
             cycle_status = "ok" if last_cycle_error is None else "error"
-            await emitter.emit_cycle_end(cycle_count, cycle_status, cycle_duration, tool_count=cycle_tool_count)
+            outcome["cycle_status"] = cycle_status
+            await emitter.emit_cycle_end(
+                cycle_count,
+                cycle_status,
+                cycle_duration,
+                tool_count=cycle_tool_count,
+                blocked_count=blocked_count,
+                outcome=outcome,
+            )
+            await _persist_watch_metrics(db, outcome)
+            await _dispatch_outcome_notifications(db, notifier, cycle_count, outcome)
 
             if watch_config.notify_on_action and cycle_tool_count > 0 and last_cycle_error is None:
                 await _dispatch(
@@ -472,6 +606,9 @@ async def start_watch() -> None:
                 cycle_count = 0
                 session_ref[0] = session
 
+            if cycle_count % 10 == 0:
+                await db.cleanup_watch_data()
+
             # Sleep until next cycle (interruptible by shutdown signal or commands)
             await _interruptible_sleep(
                 db,
@@ -502,15 +639,21 @@ async def _run_cycle(
     emitter: WatchEventEmitter | None = None,
     cycle: int = 0,
     max_tool_calls: int = 0,
-) -> tuple[str, int]:
+    max_identical_actions: int = 0,
+    max_remote_actions: int = 0,
+) -> tuple[str, int, int, list[str], int]:
     """Inject a prompt and collect the agent's response.
 
     Returns:
-        A tuple of (response_text, tool_call_count).
+        A tuple of (response_text, tool_call_count, blocked_count, cooldown_signatures, remote_tool_count).
     """
     message = types.Content(parts=[types.Part(text=prompt)])
     response_parts: list[str] = []
     tool_count = 0
+    blocked_count = 0
+    remote_tool_count = 0
+    signature_counts: dict[str, int] = defaultdict(int)
+    cooldown_signatures: list[str] = []
 
     async for event in runner.run_async(
         user_id=app_config.user_id,
@@ -524,21 +667,40 @@ async def _run_cycle(
                 continue
             if part.function_call:
                 tool_count += 1
+                call_args = dict(part.function_call.args or {})
+                signature = action_signature(part.function_call.name, call_args)
+                signature_counts[signature] += 1
+                if signature_counts[signature] > 1:
+                    cooldown_signatures.append(signature)
+                if call_args.get("host", "local") != "local":
+                    remote_tool_count += 1
                 if emitter:
-                    await emitter.emit_tool_call(cycle, part.function_call.name, dict(part.function_call.args or {}))
+                    await emitter.emit_tool_call(cycle, part.function_call.name, call_args)
+                if max_identical_actions and signature_counts[signature] > max_identical_actions:
+                    blocked_count += 1
+                    response_parts.append(
+                        f"\n[Cycle stopped: repeated action signature exceeded limit ({max_identical_actions})]"
+                    )
+                    return "".join(response_parts), tool_count, blocked_count, cooldown_signatures, remote_tool_count
+                if max_remote_actions and remote_tool_count > max_remote_actions:
+                    blocked_count += 1
+                    response_parts.append(f"\n[Cycle stopped: reached {max_remote_actions} remote action limit]")
+                    return "".join(response_parts), tool_count, blocked_count, cooldown_signatures, remote_tool_count
                 if max_tool_calls and tool_count >= max_tool_calls:
                     logger.warning("Cycle %d hit tool call limit (%d)", cycle, max_tool_calls)
                     response_parts.append(f"\n[Cycle stopped: reached {max_tool_calls} tool call limit]")
-                    return "".join(response_parts), tool_count
+                    return "".join(response_parts), tool_count, blocked_count, cooldown_signatures, remote_tool_count
             elif part.function_response and emitter:
                 output = str(part.function_response.response) if part.function_response.response else ""
+                if "[BLOCKED]" in output or "[DENIED]" in output:
+                    blocked_count += 1
                 await emitter.emit_tool_result(cycle, part.function_response.name or "", output)
             elif part.text and not part.function_call and not part.function_response:
                 response_parts.append(part.text)
                 if emitter:
                     await emitter.emit_token(cycle, part.text)
 
-    return "".join(response_parts), tool_count
+    return "".join(response_parts), tool_count, blocked_count, cooldown_signatures, remote_tool_count
 
 
 def _prune_session_history(runner: InMemoryRunner, session, max_events: int) -> int:
@@ -576,6 +738,61 @@ async def _dispatch(notifier: NotificationRouter, category: str, summary: str) -
         await notifier.dispatch(category=category, summary=summary)
     except Exception:
         logger.debug("Failed to dispatch %s notification", category, exc_info=True)
+
+
+async def _persist_watch_metrics(db: DatabaseService, outcome: dict) -> None:
+    total_actions = int(await db.get_watch_state("total_actions") or "0")
+    total_blocked = int(await db.get_watch_state("total_blocked") or "0")
+    total_errors = int(await db.get_watch_state("total_errors") or "0")
+    total_resolved = int(await db.get_watch_state("total_resolved") or "0")
+    total_escalated = int(await db.get_watch_state("total_escalated") or "0")
+    totals = {
+        "total_actions": total_actions + int(outcome.get("tool_count", 0)),
+        "total_blocked": total_blocked + int(outcome.get("blocked_count", 0)),
+        "total_errors": total_errors + (1 if outcome.get("cycle_status") != "ok" else 0),
+        "total_resolved": total_resolved + (1 if outcome.get("resolved") else 0),
+        "total_escalated": total_escalated + (1 if outcome.get("escalated") else 0),
+    }
+    for key, value in totals.items():
+        await db.set_watch_state(key, str(value))
+    await db.set_watch_state("last_outcome", json.dumps(outcome))
+
+
+async def _dispatch_outcome_notifications(
+    db: DatabaseService,
+    notifier: NotificationRouter,
+    cycle: int,
+    outcome: dict,
+) -> None:
+    incident_count = int(outcome.get("incident_count", 0))
+    if incident_count > 0:
+        incident_fingerprint = str(outcome.get("incident_fingerprint", "n/a"))
+        previous = await db.get_watch_state("last_notified_incident")
+        if previous != incident_fingerprint:
+            await _dispatch(
+                notifier,
+                "watch.incident_detected",
+                f"Cycle {cycle}: detected {incident_count} incident(s) ({incident_fingerprint}).",
+            )
+            await db.set_watch_state("last_notified_incident", incident_fingerprint)
+    if int(outcome.get("tool_count", 0)) > 0:
+        await _dispatch(
+            notifier,
+            "watch.remediation",
+            f"Cycle {cycle}: executed {outcome.get('tool_count', 0)} remediation action(s).",
+        )
+    if outcome.get("resolved"):
+        await _dispatch(notifier, "watch.verification", f"Cycle {cycle}: remediation verified as resolved.")
+    if outcome.get("escalated"):
+        await _dispatch(notifier, "watch.escalation", f"Cycle {cycle}: escalation required for unresolved issue.")
+    if cycle % 6 == 0:
+        summary = (
+            f"Cycle {cycle} digest: actions={await db.get_watch_state('total_actions') or '0'}, "
+            f"blocked={await db.get_watch_state('total_blocked') or '0'}, "
+            f"resolved={await db.get_watch_state('total_resolved') or '0'}, "
+            f"escalated={await db.get_watch_state('total_escalated') or '0'}."
+        )
+        await _dispatch(notifier, "watch.digest", summary)
 
 
 async def get_watch_status() -> dict[str, str] | None:

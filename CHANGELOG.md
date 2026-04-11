@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Watch autonomy:** Added structured watch lifecycle contract (detect → RCA → remediate → verify → escalate), incident/playbook injection, phase and incident event types, cycle outcomes in telemetry, anti-flapping controls (`max_identical_actions_per_cycle`, cooldown windows, remote action cap), and periodic digest notifications
+- **Watch analytics:** Persisted cumulative watch metrics in `watch_state` (`total_actions`, `total_blocked`, `total_resolved`, `total_escalated`, `last_outcome`) and exposed richer cycle summaries (`blocked_count`, incident stats, resolved/escalated flags)
+- **Tests:** Added `test_watch_autonomy.py` and expanded watch emitter/config coverage for new autonomy and safety behavior
+
+### Changed
+
+- **Watch UI:** Live stream and cycle history now display incident/phase telemetry, blocked counts, and resolved/escalated outcomes; watch config drawer now supports new autonomy safety controls
+- **Docs/config:** Updated watch-mode docs and example config to reflect strict-autonomy behavior, corrected `cycles_per_session` default to `12`, and documented new watch config fields and notification categories
+
 ## [0.14.1] — 2026-04-11
 
 ### Added
