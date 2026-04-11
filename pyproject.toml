@@ -38,7 +38,7 @@ dependencies = [
     "agent-risk-engine==0.2.0",
     "tomlkit==0.14.0",
     "fastapi==0.135.1",
-    "uvicorn[standard]==0.41.0",
+    "uvicorn[standard]==0.44.0",
 ]
 
 [project.scripts]
