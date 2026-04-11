@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from ..config import GuardrailsConfig
     from ..database.service import DatabaseService
     from ..notifications.webhook import WebhookDispatcher
     from ..system.registry import BackendRegistry
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
 _registry: BackendRegistry | None = None
 _db: DatabaseService | None = None
 _notifier: WebhookDispatcher | None = None
+_guardrails: GuardrailsConfig | None = None
 
 
 def set_registry(registry: BackendRegistry | None) -> None:
@@ -68,3 +70,22 @@ def get_notifier():
     Returns None if not set — callers should handle gracefully.
     """
     return _notifier
+
+
+def set_guardrails(guardrails: GuardrailsConfig | None) -> None:
+    """Set the global guardrails config (called at startup and after PATCH)."""
+    global _guardrails
+    _guardrails = guardrails
+
+
+def get_guardrails():
+    """Return the live guardrails config.
+
+    Falls back to a freshly loaded instance if none has been set
+    (e.g. during tests or standalone CLI usage).
+    """
+    if _guardrails is None:
+        from ..config import GuardrailsConfig
+
+        return GuardrailsConfig()
+    return _guardrails

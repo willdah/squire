@@ -12,7 +12,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfigHint, ConfigIntro } from "./config-help";
 
 interface SkillsConfigFormProps {
   values: Record<string, unknown>;
@@ -71,13 +72,17 @@ export function SkillsConfigForm({ values, envOverrides, tomlPath, onSaved }: Sk
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Skills</CardTitle>
+        <CardDescription>
+          Filesystem root for Open Agent Skills—optional instructions the model can load for chat and watch.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-xs text-muted-foreground">
-          Directory for Open Agent Skills (each skill in a <code className="font-mono">NAME/SKILL.md</code>{" "}
-          folder). Changes apply immediately to the API; the autonomous watch process reloads skills from disk each
-          cycle.
-        </p>
+        <ConfigIntro title="Layout and effect">
+          <p>
+            Each skill lives in <code>NAME/SKILL.md</code> under this directory. Changing the path updates the API’s
+            skill service immediately; autonomous watch re-reads skills from disk each cycle.
+          </p>
+        </ConfigIntro>
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
             <Label>Skills directory</Label>
@@ -89,10 +94,14 @@ export function SkillsConfigForm({ values, envOverrides, tomlPath, onSaved }: Sk
             disabled={isLocked("path")}
             className="font-mono text-xs"
           />
+          <ConfigHint>
+            Use an absolute path if possible. Ensure the process user can read this directory; invalid paths show up as
+            empty skill lists or errors in logs.
+          </ConfigHint>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex items-center justify-between pt-2 border-t">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center">
             <input
               type="checkbox"
               checked={persist}
@@ -100,7 +109,9 @@ export function SkillsConfigForm({ values, envOverrides, tomlPath, onSaved }: Sk
               disabled={!tomlPath}
               className="rounded"
             />
-            Save to disk{tomlPath ? "" : " (no squire.toml found)"}
+            <span>
+              Save to disk{tomlPath ? "" : " (no squire.toml found)"} — writes <code>[skills].path</code>.
+            </span>
           </label>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={revert} disabled={!isDirty}>

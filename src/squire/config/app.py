@@ -1,8 +1,8 @@
 from enum import StrEnum
 from importlib.metadata import version as _pkg_version
-from typing import Annotated, Any
+from typing import Any
 
-from pydantic import BeforeValidator, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 from .loader import TomlSectionSource, get_top_level
@@ -70,14 +70,6 @@ class AppConfig(BaseSettings):
     user_id: str = Field(
         default="squire-user",
         description="User ID for ADK session management",
-    )
-    risk_tolerance: Annotated[RiskTolerance, BeforeValidator(_coerce_risk_tolerance)] = Field(
-        default=RiskTolerance.CAUTIOUS,
-        description="Risk tolerance (1-5 or alias: read-only, cautious, standard, full-trust)",
-    )
-    risk_strict: bool = Field(
-        default=False,
-        description="When true, tools above tolerance are denied outright instead of prompting for approval",
     )
     history_limit: int = Field(
         default=50,

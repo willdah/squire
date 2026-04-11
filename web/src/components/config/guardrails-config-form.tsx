@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
@@ -21,7 +22,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfigHint, ConfigIntro } from "./config-help";
 
 interface GuardrailsConfigFormProps {
   values: Record<string, unknown>;
@@ -30,12 +32,16 @@ interface GuardrailsConfigFormProps {
   onSaved: () => void;
 }
 
-const TOLERANCE_OPTIONS = [
-  { value: "", label: "Default (inherit)" },
+const RISK_OPTIONS = [
   { value: "read-only", label: "Read Only" },
   { value: "cautious", label: "Cautious" },
   { value: "standard", label: "Standard" },
   { value: "full-trust", label: "Full Trust" },
+];
+
+const TOLERANCE_OPTIONS = [
+  { value: "", label: "Default (inherit)" },
+  ...RISK_OPTIONS,
 ];
 
 function EnvLock({ field, prefix }: { field: string; prefix: string }) {
@@ -121,6 +127,8 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
   const toArr = (v: unknown): string[] => (Array.isArray(v) ? (v as string[]) : []);
   const toStr = (v: unknown): string => (v != null ? String(v) : "");
 
+  const [riskTolerance, setRiskTolerance] = useState(toStr(values.risk_tolerance) || "cautious");
+  const [riskStrict, setRiskStrict] = useState(Boolean(values.risk_strict));
   const [toolsAllow, setToolsAllow] = useState(toArr(values.tools_allow));
   const [toolsRequireApproval, setToolsRequireApproval] = useState(toArr(values.tools_require_approval));
   const [toolsDeny, setToolsDeny] = useState(toArr(values.tools_deny));
@@ -147,6 +155,8 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setRiskTolerance(toStr(values.risk_tolerance) || "cautious");
+    setRiskStrict(Boolean(values.risk_strict));
     setToolsAllow(toArr(values.tools_allow));
     setToolsRequireApproval(toArr(values.tools_require_approval));
     setToolsDeny(toArr(values.tools_deny));
@@ -174,6 +184,8 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
   const isLocked = (field: string) => envOverrides.includes(field);
 
   const isDirty =
+    riskTolerance !== (toStr(values.risk_tolerance) || "cautious") ||
+    riskStrict !== Boolean(values.risk_strict) ||
     !arraysEqual(values.tools_allow, toolsAllow) ||
     !arraysEqual(values.tools_require_approval, toolsRequireApproval) ||
     !arraysEqual(values.tools_deny, toolsDeny) ||
@@ -190,6 +202,8 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
     toolsRiskJson.trim() !== riskOrigJson.trim();
 
   const revert = () => {
+    setRiskTolerance(toStr(values.risk_tolerance) || "cautious");
+    setRiskStrict(Boolean(values.risk_strict));
     setToolsAllow(toArr(values.tools_allow));
     setToolsRequireApproval(toArr(values.tools_require_approval));
     setToolsDeny(toArr(values.tools_deny));
@@ -227,6 +241,8 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
       }
 
       const changed: Record<string, unknown> = {};
+      if (riskTolerance !== (toStr(values.risk_tolerance) || "cautious")) changed.risk_tolerance = riskTolerance;
+      if (riskStrict !== Boolean(values.risk_strict)) changed.risk_strict = riskStrict;
       if (!arraysEqual(values.tools_allow, toolsAllow)) changed.tools_allow = toolsAllow;
       if (!arraysEqual(values.tools_require_approval, toolsRequireApproval))
         changed.tools_require_approval = toolsRequireApproval;
@@ -262,9 +278,65 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Guardrails</CardTitle>
+        <CardDescription>
+          Global risk policy, tool lists, per-agent overrides, watch-specific policy, and command/path restrictions.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <ConfigIntro title="How this interacts with chat and watch">
+          <p>
+            All settings here—including risk tolerance, tool lists, and command allowlists—take effect immediately for
+            new chat sessions and tool calls as soon as you save. The separate <strong>watch</strong> process loads
+            guardrails at startup; restart watch for changes to take effect there.
+          </p>
+        </ConfigIntro>
+
         <div className="space-y-2">
+          <div className="flex items-center gap-1.5">
+            <Label>Risk Tolerance</Label>
+            {isLocked("risk_tolerance") && <EnvLock field="risk_tolerance" prefix="SQUIRE_GUARDRAILS_" />}
+          </div>
+          <Select
+            value={riskTolerance}
+            onValueChange={(v) => v && setRiskTolerance(v)}
+            disabled={isLocked("risk_tolerance")}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RISK_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <ConfigHint>
+            Global ceiling for how risky a tool may be before it needs approval. Higher tiers allow more destructive
+            actions without prompting.
+          </ConfigHint>
+        </div>
+
+        <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5">
+              <Label>Risk Strict</Label>
+              {isLocked("risk_strict") && <EnvLock field="risk_strict" prefix="SQUIRE_GUARDRAILS_" />}
+            </div>
+            <Switch
+              checked={riskStrict}
+              onCheckedChange={setRiskStrict}
+              disabled={isLocked("risk_strict")}
+            />
+          </div>
+          <ConfigHint>
+            When on, tools above your tolerance are <strong>denied outright</strong> instead of asking for approval—safer
+            for unattended or fast-moving sessions. When off, borderline tools prompt in the chat UI.
+          </ConfigHint>
+        </div>
+
+        <div className="border-t pt-4 space-y-2">
           <div className="flex items-center gap-1.5">
             <Label>Tools Allow</Label>
             {isLocked("tools_allow") && <EnvLock field="tools_allow" prefix="SQUIRE_GUARDRAILS_" />}
@@ -275,6 +347,9 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
             disabled={isLocked("tools_allow")}
             placeholder="Tool name, press Enter"
           />
+          <ConfigHint>
+            Tool names that bypass the normal risk gate and may run without approval (use sparingly).
+          </ConfigHint>
         </div>
 
         <div className="space-y-2">
@@ -290,6 +365,7 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
             disabled={isLocked("tools_require_approval")}
             placeholder="Tool name, press Enter"
           />
+          <ConfigHint>Always prompt for approval before these tools run, even if global tolerance would allow them.</ConfigHint>
         </div>
 
         <div className="space-y-2">
@@ -303,10 +379,16 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
             disabled={isLocked("tools_deny")}
             placeholder="Tool name, press Enter"
           />
+          <ConfigHint>Hard-blocked tools: never executed, regardless of tolerance or approval UI.</ConfigHint>
         </div>
 
         <div className="border-t pt-4 space-y-3">
           <Label className="text-sm font-medium">Per-Agent Tolerance</Label>
+          <ConfigHint className="mb-1">
+            Optional per-role tolerance. When set, overrides the global Risk Tolerance above for that sub-agent. Empty
+            inherits the global value. Only applies when multi-agent mode is enabled; takes effect on the next chat
+            session.
+          </ConfigHint>
           {(
             [
               ["monitor_tolerance", "Monitor", monitorTolerance, setMonitorTolerance],
@@ -340,6 +422,10 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
 
         <div className="border-t pt-4 space-y-3">
           <Label className="text-sm font-medium">Watch Mode Overrides</Label>
+          <ConfigHint className="mb-1">
+            Policy for headless <code>squire watch</code>. Requires a watch restart to apply in the watch process; web
+            chat is unaffected.
+          </ConfigHint>
           <div className="flex items-center gap-3">
             <Label className="w-24 text-xs">Tolerance</Label>
             <Select
@@ -371,6 +457,10 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
 
         <div className="border-t pt-4 space-y-3">
           <Label className="text-sm font-medium">run_command and read_config</Label>
+          <ConfigHint className="mb-1">
+            Allowlists and blocklists for shell command basenames (not full paths). <code>read_config</code> may only read
+            under directories you list here.
+          </ConfigHint>
           <div className="space-y-2">
             <div className="flex items-center gap-1.5">
               <Label className="text-xs">Commands Allow</Label>
@@ -416,9 +506,10 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
               <EnvLock field="tools_risk_overrides" prefix="SQUIRE_GUARDRAILS_" />
             )}
           </div>
-          <p className="text-xs text-muted-foreground">
-            JSON object mapping tool names (or tool:action) to risk level integers 1–5.
-          </p>
+          <ConfigHint>
+            JSON object mapping tool names or <code>tool:action</code> keys to risk integers 1–5. Raises or lowers
+            baseline risk for specific tools; combine with allow/deny lists above.
+          </ConfigHint>
           <Textarea
             value={toolsRiskJson}
             onChange={(e) => setToolsRiskJson(e.target.value)}
@@ -431,7 +522,7 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="flex items-center justify-between pt-2 border-t">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center">
             <input
               type="checkbox"
               checked={persist}
@@ -439,7 +530,10 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
               disabled={!tomlPath}
               className="rounded"
             />
-            Save to disk{tomlPath ? "" : " (no squire.toml found)"}
+            <span>
+              Save to disk{tomlPath ? "" : " (no squire.toml found)"} — writes the{" "}
+              <code className="font-mono text-[11px]">[guardrails]</code> section.
+            </span>
           </label>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={revert} disabled={!isDirty}>

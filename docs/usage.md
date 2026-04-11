@@ -20,7 +20,7 @@ make web
 uv run squire web
 ```
 
-Opens at **http://localhost:8420**. The web server runs FastAPI with a built-in Next.js frontend — no separate process needed.
+Opens at **[http://localhost:8420](http://localhost:8420)**. The web server runs FastAPI with a built-in Next.js frontend — no separate process needed.
 
 Custom port:
 
@@ -30,16 +30,18 @@ uv run squire web --port 9000
 
 The web UI has eight pages:
 
-| Page | What it does |
-|---|---|
-| **Chat** | WebSocket-streamed conversation with tool call indicators and approval dialogs |
-| **Activity** | Timeline of tool calls, watch mode actions, and denied requests |
-| **Sessions** | Browse, resume, and delete past conversations |
-| **Skills** | Create, edit, toggle, execute, and delete skills with a form-based editor |
-| **Watch** | Start/stop watch mode, live-stream cycle activity, interactive tool approval with countdown timers, and runtime config changes |
-| **Hosts** | Host registry with reachable/unreachable status, services, and tags |
-| **Notifications** | Notification category overview and recent history |
-| **Config** | Current effective configuration viewer |
+
+| Page              | What it does                                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Chat**          | WebSocket-streamed conversation with tool call indicators and approval dialogs                                                 |
+| **Activity**      | Timeline of tool calls, watch mode actions, and denied requests                                                                |
+| **Sessions**      | Browse, resume, and delete past conversations                                                                                  |
+| **Skills**        | Create, edit, toggle, execute, and delete skills with a form-based editor                                                      |
+| **Watch**         | Start/stop watch mode, live-stream cycle activity, interactive tool approval with countdown timers, and runtime config changes |
+| **Hosts**         | Host registry with reachable/unreachable status, services, and tags                                                            |
+| **Notifications** | Notification category overview and recent history                                                                              |
+| **Config**        | Current effective configuration viewer                                                                                         |
+
 
 ### CLI
 
@@ -64,11 +66,11 @@ See the [CLI Reference](cli.md) for full option details on every command.
 
 Settings are resolved in order (highest priority first):
 
-1. **Environment variables** — prefixed with `SQUIRE_*`
+1. **Environment variables** — prefixed with `SQUIRE_`*
 2. **TOML config file** — first found from:
-   - `./squire.toml` (project directory)
-   - `~/.config/squire/squire.toml` (user config)
-   - `/etc/squire/squire.toml` (system-wide)
+  - `./squire.toml` (project directory)
+  - `~/.config/squire/squire.toml` (user config)
+  - `/etc/squire/squire.toml` (system-wide)
 3. **Built-in defaults**
 
 Copy the annotated example config to get started:
@@ -77,7 +79,7 @@ Copy the annotated example config to get started:
 cp squire.example.toml squire.toml
 ```
 
-The example file ([`squire.example.toml`](../squire.example.toml)) documents every option with its default.
+The example file (`[squire.example.toml](../squire.example.toml)`) documents every option with its default.
 
 ### LLM Setup
 
@@ -114,12 +116,14 @@ Risk tolerance is the main dial for controlling what Squire can do automatically
 
 Every tool has a built-in risk level (1–5). The tolerance setting determines the cutoff:
 
-| Tolerance | Level | Auto-allows | Needs approval |
-|---|---|---|---|
-| `read-only` | 1 | System info, network info, container listing | Everything else |
-| `cautious` | 2 | + log viewing, config reads | Compose, systemctl, commands |
-| `standard` | 3 | + compose, systemctl | Arbitrary command execution |
-| `full-trust` | 5 | Everything | Nothing |
+
+| Tolerance    | Level | Auto-allows                                  | Needs approval               |
+| ------------ | ----- | -------------------------------------------- | ---------------------------- |
+| `read-only`  | 1     | System info, network info, container listing | Everything else              |
+| `cautious`   | 2     | + log viewing, config reads                  | Compose, systemctl, commands |
+| `standard`   | 3     | + compose, systemctl                         | Arbitrary command execution  |
+| `full-trust` | 5     | Everything                                   | Nothing                      |
+
 
 ```toml
 risk_tolerance = "cautious"    # default
@@ -183,12 +187,14 @@ By default Squire runs as a single agent. Enable sub-agent decomposition to rout
 multi_agent = true
 ```
 
-| Sub-agent | Role | Default risk tolerance | Tools |
-|---|---|---|---|
-| Monitor | Read-only system observation | `read-only` | `system_info`, `network_info`, `docker_ps`, `journalctl`, `read_config` |
-| Container | Docker lifecycle management | `cautious` | `docker_logs`, `docker_compose`, `docker_container`, `docker_image`, `docker_cleanup` |
-| Admin | Systemd and command execution | `standard` | `systemctl`, `run_command` |
-| Notifier | Alerts and notifications | `read-only` | `send_notification`, `list_alert_rules`, `create_alert_rule`, `delete_alert_rule` |
+
+| Sub-agent | Role                          | Default risk tolerance | Tools                                                                                 |
+| --------- | ----------------------------- | ---------------------- | ------------------------------------------------------------------------------------- |
+| Monitor   | Read-only system observation  | `read-only`            | `system_info`, `network_info`, `docker_ps`, `journalctl`, `read_config`               |
+| Container | Docker lifecycle management   | `cautious`             | `docker_logs`, `docker_compose`, `docker_container`, `docker_image`, `docker_cleanup` |
+| Admin     | Systemd and command execution | `standard`             | `systemctl`, `run_command`                                                            |
+| Notifier  | Alerts and notifications      | `read-only`            | `send_notification`, `list_alert_rules`, `create_alert_rule`, `delete_alert_rule`     |
+
 
 The LLM routes requests to the appropriate specialist. You always interact with Squire — the sub-agent structure is an implementation detail.
 
@@ -226,18 +232,18 @@ You can also start and supervise watch mode from the web UI (Watch page) with li
 
 1. Configure at least one LLM provider (see [LLM Setup](#llm-setup) above)
 2. Set a conservative watch risk tolerance:
-   ```toml
+  ```toml
    [guardrails.watch]
    tolerance = "read-only"
-   ```
+  ```
 3. Optionally add alert rules:
-   ```bash
+  ```bash
    squire alerts add --name "disk-full" --condition "disk_percent > 90" --severity warning
-   ```
+  ```
 4. Start watch mode:
-   ```bash
+  ```bash
    squire watch
-   ```
+  ```
 5. Monitor from the web UI: `squire web` → Watch page
 
 ### Watch Mode Configuration
@@ -290,6 +296,7 @@ Conditions follow the format `<field> <op> <value>`:
 - **value** — number or string literal
 
 Examples:
+
 ```
 cpu_percent > 90
 memory_used_mb >= 14000
@@ -301,17 +308,19 @@ The condition evaluator is safe — no `eval()`, just a structured parser.
 
 ### Snapshot Fields
 
-| Field | Type | Description |
-|---|---|---|
-| `cpu_percent` | float | CPU usage percentage |
-| `memory_used_mb` | float | Memory usage in MB |
+
+| Field            | Type  | Description             |
+| ---------------- | ----- | ----------------------- |
+| `cpu_percent`    | float | CPU usage percentage    |
+| `memory_used_mb` | float | Memory usage in MB      |
 | `memory_percent` | float | Memory usage percentage |
-| `disk_percent` | float | Disk usage percentage |
-| `disk_used_gb` | float | Disk usage in GB |
-| `load_1m` | float | 1-minute load average |
-| `load_5m` | float | 5-minute load average |
-| `load_15m` | float | 15-minute load average |
-| `uptime_hours` | float | System uptime in hours |
+| `disk_percent`   | float | Disk usage percentage   |
+| `disk_used_gb`   | float | Disk usage in GB        |
+| `load_1m`        | float | 1-minute load average   |
+| `load_5m`        | float | 5-minute load average   |
+| `load_15m`       | float | 15-minute load average  |
+| `uptime_hours`   | float | System uptime in hours  |
+
 
 Dot-path notation works for nested fields (e.g., `containers.nginx.state`).
 
@@ -352,10 +361,12 @@ Verify the containers come back healthy after restart.
 
 ### Triggers
 
-| Trigger | When it runs |
-|---|---|
-| `manual` | On demand — from the web UI, CLI, or API |
-| `watch` | Appended to the check-in prompt each watch mode cycle |
+
+| Trigger  | When it runs                                          |
+| -------- | ----------------------------------------------------- |
+| `manual` | On demand — from the web UI, CLI, or API              |
+| `watch`  | Appended to the check-in prompt each watch mode cycle |
+
 
 Here is a watch-triggered example:
 
@@ -430,14 +441,16 @@ events = ["watch.alert", "watch.error"]
 
 ### Event Categories
 
-| Event | Description |
-|---|---|
-| `watch.start` | Watch mode started |
-| `watch.stop` | Watch mode stopped |
-| `watch.action` | Agent took a corrective action |
+
+| Event           | Description                     |
+| --------------- | ------------------------------- |
+| `watch.start`   | Watch mode started              |
+| `watch.stop`    | Watch mode stopped              |
+| `watch.action`  | Agent took a corrective action  |
 | `watch.blocked` | Tool call denied by risk policy |
-| `watch.alert` | Alert rule triggered |
-| `watch.error` | Exception during a cycle |
+| `watch.alert`   | Alert rule triggered            |
+| `watch.error`   | Exception during a cycle        |
+
 
 Use `"*"` to subscribe to all events. See [Configuration Reference](configuration.md#notifications----notifications) for full options including custom headers.
 
@@ -455,7 +468,7 @@ The recommended way to run Squire in Docker:
 docker compose up -d
 ```
 
-The web UI is available at **http://localhost:8420**.
+The web UI is available at **[http://localhost:8420](http://localhost:8420)**.
 
 The default `docker-compose.yml` assumes Ollama is running on the Docker host. Edit the `environment` section to configure your LLM provider — see the comments in the file for examples with Anthropic, OpenAI, and Gemini.
 
@@ -475,19 +488,23 @@ docker run -d -p 8420:8420 -v squire-data:/data \
 
 ### Ports
 
-| Port | Service |
-|---|---|
+
+| Port     | Service                                     |
+| -------- | ------------------------------------------- |
 | **8420** | Web UI + REST API + WebSocket (single port) |
+
 
 ### Data Volume
 
 All persistent data lives under `/data` inside the container. Mount a named volume or host directory to preserve state across restarts:
 
-| Path | Contents |
-|---|---|
+
+| Path              | Contents                                                     |
+| ----------------- | ------------------------------------------------------------ |
 | `/data/squire.db` | SQLite database (sessions, events, alert rules, watch state) |
-| `/data/skills/` | Skill definitions (Open Agent Skills format) |
-| `/data/keys/` | SSH key pairs for managed remote hosts |
+| `/data/skills/`   | Skill definitions (Open Agent Skills format)                 |
+| `/data/keys/`     | SSH key pairs for managed remote hosts                       |
+
 
 ```bash
 # Use a named volume (recommended)

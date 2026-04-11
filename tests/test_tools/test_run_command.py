@@ -1,19 +1,22 @@
 """Tests for run_command tool with mocked backend."""
 
-import sys
-
 import pytest
 
 from squire.config import GuardrailsConfig
 from squire.system.backend import CommandResult
-from squire.tools import run_command
+from squire.tools import run_command, set_guardrails
 
-_mod = sys.modules["squire.tools.run_command"]
+
+@pytest.fixture(autouse=True)
+def _default_guardrails():
+    """Ensure run_command sees a fresh default GuardrailsConfig."""
+    set_guardrails(GuardrailsConfig())
+    yield
+    set_guardrails(None)
 
 
 @pytest.mark.asyncio
-async def test_allowed_command(mock_backend, mock_registry, monkeypatch):
-    monkeypatch.setattr(_mod, "_guardrails_config", GuardrailsConfig())
+async def test_allowed_command(mock_backend, mock_registry):
     mock_backend.set_response("ping", CommandResult(returncode=0, stdout="PING ok\n", stderr=""))
 
     result = await run_command("ping -c 1 localhost")
@@ -21,17 +24,15 @@ async def test_allowed_command(mock_backend, mock_registry, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_denied_command(monkeypatch):
-    config = GuardrailsConfig(commands_block=["rm"], commands_allow=[])
-    monkeypatch.setattr(_mod, "_guardrails_config", config)
+async def test_denied_command():
+    set_guardrails(GuardrailsConfig(commands_block=["rm"], commands_allow=[]))
     result = await run_command("rm -rf /")
     assert "DENIED" in result
 
 
 @pytest.mark.asyncio
-async def test_unlisted_command(monkeypatch):
-    config = GuardrailsConfig(commands_allow=["ping"], commands_block=[])
-    monkeypatch.setattr(_mod, "_guardrails_config", config)
+async def test_unlisted_command():
+    set_guardrails(GuardrailsConfig(commands_allow=["ping"], commands_block=[]))
     result = await run_command("curl http://example.com")
     assert "DENIED" in result
 
@@ -49,9 +50,8 @@ async def test_invalid_syntax():
 
 
 @pytest.mark.asyncio
-async def test_run_command_with_host_param(mock_backend, mock_registry, monkeypatch):
+async def test_run_command_with_host_param(mock_backend, mock_registry):
     """The host parameter should be accepted."""
-    monkeypatch.setattr(_mod, "_guardrails_config", GuardrailsConfig())
     mock_backend.set_response("ping", CommandResult(returncode=0, stdout="PING ok\n", stderr=""))
 
     result = await run_command("ping -c 1 localhost", host="local")

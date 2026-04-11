@@ -18,15 +18,8 @@ class TestAppConfig:
         monkeypatch.setattr(loader_mod, "_cached", {})
         config = AppConfig()
         assert config.app_name == "Squire"
-        assert config.risk_tolerance == "cautious"
         assert config.history_limit == 50
         assert config.max_tool_rounds == 10
-
-    def test_env_override(self, monkeypatch):
-        monkeypatch.setattr(loader_mod, "_cached", {})
-        monkeypatch.setenv("SQUIRE_RISK_TOLERANCE", "full-trust")
-        config = AppConfig()
-        assert config.risk_tolerance == "full-trust"
 
 
 class TestLLMConfig:
@@ -46,11 +39,20 @@ class TestGuardrailsConfig:
     def test_defaults(self, monkeypatch):
         monkeypatch.setattr(loader_mod, "_cached", {})
         config = GuardrailsConfig()
+        assert config.risk_tolerance == "cautious"
+        assert config.risk_strict is False
+        assert "ls" in config.commands_allow
         assert "ping" in config.commands_allow
         assert "rm" in config.commands_block
         assert config.tools_allow == []
         assert config.tools_require_approval == []
         assert config.tools_deny == []
+
+    def test_risk_tolerance_env_override(self, monkeypatch):
+        monkeypatch.setattr(loader_mod, "_cached", {})
+        monkeypatch.setenv("SQUIRE_GUARDRAILS_RISK_TOLERANCE", "full-trust")
+        config = GuardrailsConfig()
+        assert config.risk_tolerance == "full-trust"
 
     def test_config_paths_empty_by_default(self, monkeypatch):
         monkeypatch.setattr(loader_mod, "_cached", {})
@@ -116,10 +118,10 @@ class TestTomlLoading:
         monkeypatch.setattr(loader_mod, "_cached", data)
 
     def test_app_config_from_toml(self, monkeypatch):
-        self._patch_toml(monkeypatch, {"risk_tolerance": "full-trust", "history_limit": 100})
+        self._patch_toml(monkeypatch, {"history_limit": 100, "max_tool_rounds": 5})
         config = AppConfig()
-        assert config.risk_tolerance == "full-trust"
         assert config.history_limit == 100
+        assert config.max_tool_rounds == 5
 
     def test_llm_config_from_toml(self, monkeypatch):
         self._patch_toml(monkeypatch, {"llm": {"model": "anthropic/claude-sonnet-4-20250514", "temperature": 0.5}})
@@ -181,11 +183,17 @@ class TestTomlLoading:
         config = NotificationsConfig()
         assert config.enabled is True
 
-    def test_env_overrides_toml(self, monkeypatch):
+    def test_guardrails_risk_tolerance_from_toml(self, monkeypatch):
+        """risk_tolerance now lives in [guardrails]."""
+        self._patch_toml(monkeypatch, {"guardrails": {"risk_tolerance": "full-trust"}})
+        config = GuardrailsConfig()
+        assert config.risk_tolerance == "full-trust"
+
+    def test_env_overrides_guardrails_risk_tolerance(self, monkeypatch):
         """Env vars should take precedence over TOML values."""
-        self._patch_toml(monkeypatch, {"risk_tolerance": "full-trust"})
-        monkeypatch.setenv("SQUIRE_RISK_TOLERANCE", "read-only")
-        config = AppConfig()
+        self._patch_toml(monkeypatch, {"guardrails": {"risk_tolerance": "full-trust"}})
+        monkeypatch.setenv("SQUIRE_GUARDRAILS_RISK_TOLERANCE", "read-only")
+        config = GuardrailsConfig()
         assert config.risk_tolerance == "read-only"
 
     def test_unknown_toml_keys_ignored(self, monkeypatch):
@@ -242,11 +250,11 @@ class TestHostConfig:
 
 class TestLoaderUtilities:
     def test_get_env_overrides_detects_set_vars(self, monkeypatch):
-        monkeypatch.setenv("SQUIRE_RISK_TOLERANCE", "full-trust")
         monkeypatch.setenv("SQUIRE_HISTORY_LIMIT", "100")
-        result = get_env_overrides("SQUIRE_", ["risk_tolerance", "history_limit", "multi_agent"])
-        assert "risk_tolerance" in result
+        monkeypatch.setenv("SQUIRE_MAX_TOOL_ROUNDS", "5")
+        result = get_env_overrides("SQUIRE_", ["history_limit", "max_tool_rounds", "multi_agent"])
         assert "history_limit" in result
+        assert "max_tool_rounds" in result
         assert "multi_agent" not in result
 
     def test_get_env_overrides_empty_when_none_set(self):

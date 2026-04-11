@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -28,6 +29,7 @@ from ..notifications.factory import build_notification_router
 from ..skills import SkillService
 from ..system.registry import BackendRegistry
 from ..tools import set_db as tools_set_db
+from ..tools import set_guardrails as tools_set_guardrails
 from ..tools import set_notifier as tools_set_notifier
 from ..tools import set_registry as tools_set_registry
 from . import dependencies as deps
@@ -91,6 +93,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     tools_set_registry(deps.registry)
     tools_set_db(deps.db)
     tools_set_notifier(deps.notifier)
+    tools_set_guardrails(deps.guardrails)
 
     # Collect initial snapshots
     try:
@@ -122,16 +125,38 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 def _find_static_dir() -> Path | None:
-    """Locate the Next.js static export directory."""
-    # Check relative to the package (installed)
-    pkg_dir = Path(__file__).resolve().parent.parent.parent.parent / "web" / "out"
-    if pkg_dir.is_dir():
-        return pkg_dir
-    # Check cwd (development)
-    cwd_dir = Path.cwd() / "web" / "out"
-    if cwd_dir.is_dir():
-        return cwd_dir
-    return None
+    """Locate the Next.js static export directory.
+
+    Resolution order:
+    1. ``SQUIRE_WEB_STATIC_DIR`` — explicit path (set by ``make web`` so the bundle matches the build).
+    2. ``<cwd>/web/out`` then package-root ``web/out``; if both exist and differ, pick the tree with
+       the newer ``index.html`` (avoids serving a stale duplicate checkout).
+    """
+    override = os.environ.get("SQUIRE_WEB_STATIC_DIR")
+    if override:
+        p = Path(override).expanduser().resolve()
+        if p.is_dir() and (p / "index.html").is_file():
+            return p
+
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent
+    candidates: list[Path] = []
+    for base in (Path.cwd(), repo_root):
+        out = (base / "web" / "out").resolve()
+        if out.is_dir() and (out / "index.html").is_file():
+            candidates.append(out)
+
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for c in candidates:
+        if c not in seen:
+            seen.add(c)
+            unique.append(c)
+
+    if not unique:
+        return None
+    if len(unique) == 1:
+        return unique[0]
+    return max(unique, key=lambda p: (p / "index.html").stat().st_mtime)
 
 
 def create_app() -> FastAPI:
@@ -186,8 +211,8 @@ def create_app() -> FastAPI:
                     "<h1>Squire API</h1>"
                     "<p>The API is running. To use the web interface:</p>"
                     "<ol>"
-                    "<li>Build the frontend: <code>cd web && npm install && npm run build</code></li>"
-                    "<li>Restart: <code>squire web</code></li>"
+                    "<li>From the repo root: <code>make web</code> (builds the frontend and starts the server)</li>"
+                    "<li>Or: <code>cd web && npm run build</code> then <code>squire web</code></li>"
                     "</ol>"
                     "<p>Or for development, run <code>cd web && npm run dev</code> separately "
                     "(frontend on port 3000, API on this port).</p>"

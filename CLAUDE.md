@@ -1,4 +1,4 @@
-# CLAUDE.md
+# [CLAUDE.md](http://CLAUDE.md)
 
 ## Project overview
 
@@ -7,6 +7,7 @@ Squire is an AI-powered homelab monitoring and management agent. It uses Google 
 ## Tech stack
 
 **Backend (Python 3.12+):**
+
 - Google ADK — agent orchestration
 - FastAPI + Uvicorn — web API
 - Typer — CLI
@@ -18,6 +19,7 @@ Squire is an AI-powered homelab monitoring and management agent. It uses Google 
 - agent-risk-engine — risk evaluation library (PyPI package, zero external deps)
 
 **Frontend (`web/`, Next.js 16):**
+
 - React 19 with App Router
 - shadcn/ui v4 + Tailwind CSS v4
 - Recharts — trend charts
@@ -25,6 +27,7 @@ Squire is an AI-powered homelab monitoring and management agent. It uses Google 
 - WebSocket — real-time chat
 
 **Tooling:**
+
 - uv — package manager
 - Hatchling — build backend
 - ruff — linter and formatter
@@ -80,10 +83,9 @@ make format        # Auto-format Python
 make test          # pytest
 make ci            # Lint + format check + test (mirrors CI)
 
-make web-dev       # Next.js dev server
-make web-build     # Next.js production build
-
-make web           # Web interface (FastAPI, --reload)
+make web-dev       # Next.js dev server (set NEXT_PUBLIC_API_URL for API on another port)
+make web-build     # Next.js static export → web/out (also run by make web)
+make web           # web-build + FastAPI with static UI (--reload)
 make watch         # Autonomous watch mode
 
 make docker-build  # Build Docker image
@@ -94,8 +96,10 @@ Or invoke directly:
 
 ```bash
 uv run pytest tests/test_tools/test_docker.py   # Single test file
-uv run squire web --port 9000                    # Custom port
+uv run squire web --port 9000                    # Custom port (run from repo root, or set SQUIRE_WEB_STATIC_DIR to .../web/out)
 ```
+
+`make web` sets `SQUIRE_WEB_STATIC_DIR` to this repo’s `web/out` so FastAPI never serves an older `web/out` from another path. If the UI still looks wrong after a rebuild, hard-refresh the browser (cache) or run `make clean-web && make web`.
 
 ## Code conventions
 
@@ -114,6 +118,7 @@ uv run squire web --port 9000                    # Custom port
 ## CI
 
 GitHub Actions runs on every push/PR to `main`:
+
 1. `ruff check` (lint)
 2. `ruff format --check` (format verification)
 3. `pytest` (tests)

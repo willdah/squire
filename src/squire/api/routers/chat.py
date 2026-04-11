@@ -16,8 +16,9 @@ from google.genai import types
 
 from ...agents import create_squire_agent
 from ...callbacks.risk_gate import ADK_INTERNAL_TOOLS, build_pattern_analyzer, create_risk_gate
-from ...config import GuardrailsConfig
 from ...tools import TOOL_RISK_LEVELS
+from ...types import RiskGateFactory
+from .. import dependencies as deps
 from ..dependencies import get_app_config, get_db, get_llm_config, get_registry
 from ..schemas import ChatSessionResponse
 
@@ -122,10 +123,10 @@ async def create_chat_session(
     runner = InMemoryRunner(app_name=app_config.app_name, app=adk_app)
 
     # Build risk evaluation pipeline
-    guardrails = GuardrailsConfig()
+    guardrails = deps.guardrails
     rule_gate = RuleGate(
-        threshold=app_config.risk_tolerance,
-        strict=app_config.risk_strict,
+        threshold=guardrails.risk_tolerance,
+        strict=guardrails.risk_strict,
         allowed=set(guardrails.tools_allow),
         approve=set(guardrails.tools_require_approval),
         denied=set(guardrails.tools_deny),
@@ -163,7 +164,6 @@ async def chat_websocket(
     # FastAPI parameter injection for WebSocket endpoints).
     skill_name = websocket.query_params.get("skill") or None
 
-    from .. import dependencies as deps
     from ..app import get_latest_snapshot
 
     app_config = deps.get_app_config()
@@ -175,13 +175,16 @@ async def chat_websocket(
     # Create approval bridge for this WebSocket connection
     approval_bridge = WebApprovalBridge(websocket)
 
-    # Build agent with approval bridge wired in
-    def _make_risk_gate(tool_risk_levels: dict[str, int]):
-        guardrails = GuardrailsConfig()
+    # Build agent with approval bridge wired in.
+    # For multi-agent, each sub-agent gets its own factory with per-agent tolerance.
+    guardrails_snapshot = deps.guardrails
+
+    def _make_risk_gate(tool_risk_levels: dict[str, int], agent_tolerance: int | None = None):
         return create_risk_gate(
             tool_risk_levels=tool_risk_levels,
-            risk_overrides=dict(guardrails.tools_risk_overrides),
+            risk_overrides=dict(guardrails_snapshot.tools_risk_overrides),
             approval_provider=approval_bridge,
+            default_threshold=agent_tolerance,
         )
 
     # Skills require direct tool access, so always use single-agent mode
@@ -190,16 +193,34 @@ async def chat_websocket(
     use_multi_agent = app_config.multi_agent and not skill_name
 
     if use_multi_agent:
+        agent_tolerances = {
+            "Monitor": guardrails_snapshot.monitor_tolerance,
+            "Container": guardrails_snapshot.container_tolerance,
+            "Admin": guardrails_snapshot.admin_tolerance,
+            "Notifier": guardrails_snapshot.notifier_tolerance,
+        }
+
+        def _resolve_threshold(name: str) -> int | None:
+            tol = agent_tolerances.get(name)
+            return RuleGate(threshold=tol).threshold if tol else None
+
+        def _per_agent_factory(agent_name: str) -> RiskGateFactory:
+            threshold = _resolve_threshold(agent_name)
+
+            def factory(tool_risk_levels: dict[str, int]):
+                return _make_risk_gate(tool_risk_levels, agent_tolerance=threshold)
+
+            return factory
+
         agent = create_squire_agent(
             app_config=app_config,
             llm_config=llm_config,
-            risk_gate_factory=_make_risk_gate,
+            risk_gate_factory_builder=_per_agent_factory,
         )
     else:
-        guardrails_for_gate = GuardrailsConfig()
         risk_gate_callback = create_risk_gate(
             tool_risk_levels=TOOL_RISK_LEVELS,
-            risk_overrides=dict(guardrails_for_gate.tools_risk_overrides),
+            risk_overrides=dict(deps.guardrails.tools_risk_overrides),
             approval_provider=approval_bridge,
         )
         # Override multi_agent so create_squire_agent takes the
@@ -215,10 +236,10 @@ async def chat_websocket(
     runner = InMemoryRunner(app_name=app_config.app_name, app=adk_app)
 
     # Build session state
-    guardrails = GuardrailsConfig()
+    guardrails = deps.guardrails
     rule_gate = RuleGate(
-        threshold=app_config.risk_tolerance,
-        strict=app_config.risk_strict,
+        threshold=guardrails.risk_tolerance,
+        strict=guardrails.risk_strict,
         allowed=set(guardrails.tools_allow),
         approve=set(guardrails.tools_require_approval),
         denied=set(guardrails.tools_deny),

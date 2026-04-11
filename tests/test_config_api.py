@@ -40,12 +40,11 @@ class TestGetConfig:
     async def test_returns_env_overrides(self, monkeypatch):
         from squire.api.routers.config import get_config
 
-        monkeypatch.setenv("SQUIRE_RISK_TOLERANCE", "full-trust")
-        # Recreate config so the env var is picked up
-        monkeypatch.setattr(deps, "app_config", AppConfig())
+        monkeypatch.setenv("SQUIRE_GUARDRAILS_RISK_TOLERANCE", "full-trust")
+        monkeypatch.setattr(deps, "guardrails", GuardrailsConfig())
 
         result = await get_config(app_config=deps.app_config, llm_config=deps.llm_config)
-        assert "risk_tolerance" in result.app.env_overrides
+        assert "risk_tolerance" in result.guardrails.env_overrides
 
     async def test_returns_section_values(self):
         from squire.api.routers.config import get_config
@@ -71,12 +70,12 @@ class TestGetConfig:
 
 @pytest.mark.usefixtures("_setup_deps")
 class TestPatchConfig:
-    async def test_patch_app_updates_in_memory(self):
+    async def test_patch_guardrails_risk_tolerance(self):
         from squire.api.routers.config import patch_config
 
-        result = await patch_config("app", {"risk_tolerance": "full-trust"}, persist=False)
+        result = await patch_config("guardrails", {"risk_tolerance": "full-trust"}, persist=False)
         assert result["values"]["risk_tolerance"] == "full-trust"
-        assert deps.app_config.risk_tolerance == "full-trust"
+        assert deps.guardrails.risk_tolerance == "full-trust"
 
     async def test_patch_llm_updates_in_memory(self):
         from squire.api.routers.config import patch_config
@@ -104,11 +103,11 @@ class TestPatchConfig:
 
         from squire.api.routers.config import patch_config
 
-        monkeypatch.setenv("SQUIRE_RISK_TOLERANCE", "read-only")
+        monkeypatch.setenv("SQUIRE_GUARDRAILS_RISK_TOLERANCE", "read-only")
         with pytest.raises(HTTPException) as exc_info:
-            await patch_config("app", {"risk_tolerance": "full-trust"}, persist=False)
+            await patch_config("guardrails", {"risk_tolerance": "full-trust"}, persist=False)
         assert exc_info.value.status_code == 409
-        assert "SQUIRE_RISK_TOLERANCE" in exc_info.value.detail
+        assert "SQUIRE_GUARDRAILS_RISK_TOLERANCE" in exc_info.value.detail
 
     async def test_strips_redacted_sentinel(self):
         from squire.api.routers.config import patch_config

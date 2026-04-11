@@ -187,7 +187,7 @@ async def start_watch() -> None:
 
     # Build the risk evaluation pipeline
     guardrails = GuardrailsConfig()
-    watch_tolerance = guardrails.watch_tolerance or app_config.risk_tolerance
+    watch_tolerance = guardrails.watch_tolerance or guardrails.risk_tolerance
     rule_gate = RuleGate(
         threshold=watch_tolerance,
         strict=True,  # Always strict in watch mode — deny, don't prompt
@@ -200,19 +200,36 @@ async def start_watch() -> None:
     # Build the agent with headless risk gate
     block_notifier = notifier if watch_config.notify_on_blocked else None
 
-    def _make_headless_risk_gate(tool_risk_levels: dict[str, int]):
+    def _make_headless_risk_gate(tool_risk_levels: dict[str, int], agent_threshold: int | None = None):
         return create_risk_gate(
             tool_risk_levels=tool_risk_levels,
             risk_overrides=dict(guardrails.tools_risk_overrides),
+            default_threshold=agent_threshold,
             headless=True,
             notifier=block_notifier,
         )
 
     if app_config.multi_agent:
+        agent_tolerances = {
+            "Monitor": guardrails.monitor_tolerance,
+            "Container": guardrails.container_tolerance,
+            "Admin": guardrails.admin_tolerance,
+            "Notifier": guardrails.notifier_tolerance,
+        }
+
+        def _per_agent_builder(agent_name: str):
+            tol = agent_tolerances.get(agent_name)
+            threshold = RuleGate(threshold=tol).threshold if tol else None
+
+            def factory(tool_risk_levels: dict[str, int]):
+                return _make_headless_risk_gate(tool_risk_levels, agent_threshold=threshold)
+
+            return factory
+
         agent = create_squire_agent(
             app_config=app_config,
             llm_config=llm_config,
-            risk_gate_factory=_make_headless_risk_gate,
+            risk_gate_factory_builder=_per_agent_builder,
         )
     else:
         agent = create_squire_agent(

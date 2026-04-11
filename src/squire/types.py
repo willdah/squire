@@ -11,3 +11,6 @@ BeforeToolCallback = Callable[[BaseTool, dict[str, Any], ToolContext], Any]
 
 # Factory that creates a scoped BeforeToolCallback from a tool risk levels dict
 RiskGateFactory = Callable[[dict[str, int]], BeforeToolCallback]
+
+# Builder that returns a per-agent RiskGateFactory given the agent name
+RiskGateFactoryBuilder = Callable[[str], RiskGateFactory]

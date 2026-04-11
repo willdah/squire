@@ -228,8 +228,6 @@ class ConfigDetailResponse(BaseModel):
 class AppConfigUpdate(BaseModel):
     app_name: str | None = None
     user_id: str | None = None
-    risk_tolerance: str | None = None
-    risk_strict: bool | None = None
     history_limit: int | None = None
     max_tool_rounds: int | None = None
     multi_agent: bool | None = None
@@ -254,6 +252,8 @@ class WatchConfigPatch(BaseModel):
 
 
 class GuardrailsConfigUpdate(BaseModel):
+    risk_tolerance: str | None = None
+    risk_strict: bool | None = None
     tools_allow: list[str] | None = None
     tools_require_approval: list[str] | None = None
     tools_deny: list[str] | None = None

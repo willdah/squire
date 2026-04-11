@@ -11,15 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Guardrails:** `run_command` and `read_config` tools now use the live guardrails config instead of a stale module-level cache — runtime changes via the config UI take effect immediately
+- **Guardrails:** Chat sessions now use the `deps.guardrails` singleton instead of loading a fresh `GuardrailsConfig()` from disk — non-persisted PATCH changes are respected by new sessions
+- **Guardrails:** Per-agent tolerances (`monitor_tolerance`, etc.) are now wired into the risk gate callback via `default_threshold` — previously declared but never consumed
+- **Guardrails:** Default `commands_allow` now includes `ls`, `stat`, `file`, `du`, `find`, `grep`, `hostname`, `date`, `whoami`, `id`, `uname`, `mount`, `lsblk`, `top`, `ps`, `which`, `netstat`, `docker`, `systemctl`, `journalctl`, `lsof`, `wc` — fixes `run_command` blocking common read-only commands even at `full-trust` tolerance
 - **Web config:** `PATCH /api/config/notifications` now rebuilds `NotificationRouter` (webhook + email) instead of replacing it with a webhook-only dispatcher, so email delivery keeps working after saving notification settings from the UI
 - **Watch live config:** `PUT /api/watch/config` now applies all documented watch fields via the `update_config` queue, including numeric risk threshold (updates the running evaluator and session state)
 - **Watch API:** `GET /api/watch/config` returns a numeric `risk_tolerance` consistent with effective guardrails/app policy (fixes response validation when watch tolerance was set)
+- **Makefile:** `make clean-web` removes `web/out` under `REPO_ROOT` (same as other web targets)
+
+### Changed
+
+- **BREAKING:** `risk_tolerance` and `risk_strict` moved from top-level app config to `[guardrails]` section — env vars change from `SQUIRE_RISK_TOLERANCE` / `SQUIRE_RISK_STRICT` to `SQUIRE_GUARDRAILS_RISK_TOLERANCE` / `SQUIRE_GUARDRAILS_RISK_STRICT`; TOML keys move from top-level to `[guardrails]`
 
 ### Added
 
+- **Web config:** Inline help on the Configuration page — section intros, per-field hints, env-override banner, and a page blurb explaining save vs disk vs env vs watch/restart behavior
 - **Web config:** `GET/PATCH /api/config/skills` for the skills directory; skills section on the Configuration page; notifications channels editor embedded as a Configuration tab
 - **Web config:** Extended PATCH schemas and forms for app name/user id, LLM `api_base`, remaining watch and guardrails fields; watch form pushes changes to a running watch process when status is `running`
 - **Web config:** Database tab explains that DB path, snapshot interval, and LLM provider secrets require env/TOML plus process restart
+- **Makefile:** `REPO_ROOT`-anchored recipes (`make web`, `web-build`, `ci` targets, etc.) so build and server use this checkout even when Make's working directory differs
+- **Web:** `make web` sets `SQUIRE_WEB_STATIC_DIR` to `<repo>/web/out` so the API always serves the bundle that was just built; `_find_static_dir()` falls back to cwd vs package root and picks the newer `index.html` if both exist
 
 ## [0.13.0] — 2026-04-11
 
@@ -191,7 +203,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `docker_image` — manage images (list, inspect, pull, remove)
   - `docker_cleanup` — prune resources and check disk usage (df, prune_containers, prune_images, prune_volumes, prune_all)
 - **Compound action risk evaluation** — risk gate now constructs `tool:action` names for per-action risk levels, enabling fine-grained guardrails configuration (e.g., `tools_deny = ["docker_cleanup:prune_volumes"]`). Also adds `force` flag risk escalation (+1 when `force=True`).
-
 - **Watch mode web integration** — manage and observe watch mode through the web UI at `/watch`.
   - Start/stop watch mode from the browser, with PID-based liveness detection
   - Live streaming of watch cycle activity via WebSocket (tokens, tool calls, tool results, cycle boundaries)
@@ -201,7 +212,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Three new SQLite tables (`watch_events`, `watch_commands`, `watch_approvals`) for process-independent IPC
   - Watch process emits granular events and polls for commands between cycles (responsive to stop/config changes)
   - Supervisor connection tracking (`supervisor_count` / `supervisor_connected` in `watch_state`)
-
 - **Skills** (replaces Runbooks) — file-based skill definitions aligned with the [Open Agent Skills spec](https://agentskills.io/specification). Each skill is a `SKILL.md` file with YAML frontmatter + freeform Markdown instructions, stored in a configurable directory (default `~/.local/share/squire/skills`). No database required — skills are version-controllable and editable with any text editor.
   - **SkillService** (`src/squire/skills/`) — file-based CRUD: `list_skills`, `get_skill`, `save_skill`, `delete_skill`. Parses YAML frontmatter with `yaml.safe_load()` and renders back to spec-compliant SKILL.md format (`name`/`description` at top level, Squire-specific fields under `metadata`). Names are validated per the spec (lowercase alphanumeric + hyphens, max 64 chars).
   - **SkillsConfig** (`src/squire/config/skills.py`) — configurable via `[skills]` in `squire.toml` or `SQUIRE_SKILLS_` env vars. Default path: `~/.local/share/squire/skills`.
@@ -220,26 +230,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - **Persona customization** — removed `house`, `squire_name`, and `squire_profile` config fields and the three built-in personality profiles (Rook, Cedric, Wynn). Squire now uses a single fixed identity across all interfaces. The `profiles.py` module has been deleted. System prompts, session state, TUI, config files, and documentation have been updated accordingly.
-- **`agent-risk-engine` v0.2.0: tool-centric models and state layer** — `ToolDef`, `ToolRegistry`, `ToolAnalyzer`, `SystemState`, `StateMonitor`, `NullStateMonitor`, and `RiskScore.alternative` removed from public API.
+- `**agent-risk-engine` v0.2.0: tool-centric models and state layer** — `ToolDef`, `ToolRegistry`, `ToolAnalyzer`, `SystemState`, `StateMonitor`, `NullStateMonitor`, and `RiskScore.alternative` removed from public API.
 
 ### Changed
 
-- **`agent-risk-engine` migrated to PyPI** — replaced local path dependency (`packages/agent-risk-engine/`) with standard PyPI dependency (`agent-risk-engine>=0.2.0`). The `packages/` directory is removed.
-
+- `**agent-risk-engine` migrated to PyPI** — replaced local path dependency (`packages/agent-risk-engine/`) with standard PyPI dependency (`agent-risk-engine>=0.2.0`). The `packages/` directory is removed.
 - **CI/CD improvements** — split CI into parallel jobs (lint, test, frontend, docker) with dependency caching. Fixed broken Dockerfile (missing `packages/` copy for `agent-risk-engine`). Added `.dockerignore`. Added Dependabot for Python, npm, and GitHub Actions. `make ci` now includes frontend lint and build checks.
 - **Release workflow** — pushing a `v*` tag now builds and publishes the Docker image to `ghcr.io/willdah/squire` and creates a GitHub Release with changelog notes.
-
-- **`agent-risk-engine` v0.2.0: action-centric protocol** — breaking refactor repositioning the package as an open protocol with Python reference implementation.
-  - **`Action` envelope** — new `Action(kind, name, parameters, risk, metadata)` dataclass replaces the `(tool_name, args, tool_risk)` tuple. `kind` enables per-category routing; `metadata` carries framework-provided context.
+- `**agent-risk-engine` v0.2.0: action-centric protocol** — breaking refactor repositioning the package as an open protocol with Python reference implementation.
+  - `**Action` envelope** — new `Action(kind, name, parameters, risk, metadata)` dataclass replaces the `(tool_name, args, tool_risk)` tuple. `kind` enables per-category routing; `metadata` carries framework-provided context.
   - **3-layer stateless pipeline** — `RuleGate` → `ActionAnalyzer` → `ActionGate`. The `StateMonitor` layer is removed; the engine no longer tracks call history internally. Temporal context (loop detection, session state) is the framework's responsibility and flows in via `Action.metadata`.
   - **Kind-aware routing** — `RuleGate` gains `kind_thresholds` for per-kind threshold overrides. `allowed_tools`/`approve_tools`/`denied_tools` renamed to `allowed`/`approve`/`denied`.
   - **Kind-scoped patterns** — `RiskPattern.kinds` enables patterns that only fire for specific action categories.
-  - **`CallTracker` standalone** — extracted from pipeline to standalone utility. `check()` returns `dict` instead of `SystemState`. New configurable `repetition_ratio` parameter.
+  - `**CallTracker` standalone** — extracted from pipeline to standalone utility. `check()` returns `dict` instead of `SystemState`. New configurable `repetition_ratio` parameter.
   - **Renames** — `ToolDef` → `ActionDef`, `ToolRegistry` → `ActionRegistry`, `ToolAnalyzer` → `ActionAnalyzer`.
-  - **`PROTOCOL.md`** — new language-agnostic protocol specification defining risk levels, gate results, action envelope, and evaluation semantics.
-
+  - `**PROTOCOL.md`** — new language-agnostic protocol specification defining risk levels, gate results, action envelope, and evaluation semantics.
 - **README restructure** — rewrote README with new Interfaces section (Web UI, TUI, CLI), Docker deployment section, Notifications config section, badges, expanded Quickstart and Development sections. Removed stale Personalization TOC entry. Trimmed config duplication in favor of linking to `docs/configuration.md`. Updated `docs/cli.md` with `squire web` command, fixed watch config table to reflect `[guardrails.watch]` restructure, added `Ctrl+X` keyboard shortcut.
-
 - **Runbooks replaced by Skills** — the database-backed runbook system (ordered steps in `runbooks` + `runbook_steps` tables) has been replaced by file-based skills. This simplifies the data model (no numbered steps, no per-step tracking), makes skills version-controllable, and aligns with the Open Agent Skills spec. The `[STEP N COMPLETE]` / `[RUNBOOK COMPLETE]` markers are replaced by a single `[SKILL COMPLETE]` marker. Existing runbook tables in the database are left in place but no longer queried. The WebSocket `?runbook=` query param is now `?skill=`. CLI commands changed from `squire runbooks` to `squire skills`. Added `pyyaml>=6.0` as an explicit dependency (was already a transitive dep).
 
 ### Fixed
@@ -261,7 +267,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Consolidated guardrails config** — merged `[security]`, `[risk]`, and watch-mode risk fields into a single `[guardrails]` section. All safety policy (tool overrides, command/path guards, per-agent tolerances, watch-mode risk) now lives in one place. The old `[security]` and `[risk]` TOML sections are removed. Watch-mode risk overrides moved to `[guardrails.watch]` sub-table; `[watch]` now contains only operational settings (interval, timeout, prompt, notifications). Renamed fields: `command_allowlist` → `commands_allow`, `command_denylist` → `commands_block`, `config_allowlist` → `config_paths`, `allow`/`approve`/`deny` → `tools_allow`/`tools_require_approval`/`tools_deny`. Per-agent tolerances moved from top-level to `[guardrails]` with shorter names (e.g., `monitor_risk_tolerance` → `monitor_tolerance`). Env prefix changed from `SQUIRE_SECURITY_`/`SQUIRE_RISK_` to `SQUIRE_GUARDRAILS_`. This is a breaking change — existing `squire.toml` files need to be updated.
-
 - **Sticky chat top bar with icon button** — the chat header (title, connection dot, new chat) now uses `shrink-0 bg-card` so it stays pinned at the top of the flex column during long conversations. Replaced the "New Chat" text link with a `SquarePen` icon button for a cleaner look.
 - **Web UI restructure: chat-first identity** — Squire is the brain, not the eyes. Removed dashboard and alert rule CRUD in favor of a chat-first experience that leans on dedicated homelab tools (Beszel, Grafana, Portainer) for metrics and container management.
   - Removed Dashboard page and all dashboard components (stat cards, container grid, trend chart) — for live metrics, use Beszel or Grafana.
@@ -325,7 +330,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Configuration viewer with tabbed sections (app, LLM, database, security, watch, notifications, risk, hosts).
   - Dark/light theme toggle with system preference detection.
   - Mobile-responsive layout with collapsible sidebar navigation.
-- **`squire web` CLI command** — starts the combined API + frontend server (`--port`, `--host`, `--reload` flags). Default port 8420.
+- `**squire web` CLI command** — starts the combined API + frontend server (`--port`, `--host`, `--reload` flags). Default port 8420.
 - `fastapi` and `uvicorn[standard]` added to project dependencies.
 - Background snapshot collection in the web server — periodic system status updates shared across all API consumers.
 
@@ -338,7 +343,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`safe_tool` decorator** — defense-in-depth wrapper applied to all ADK tool functions. Catches any uncaught exception and returns it as a string so the LLM can reason about failures instead of crashing. Preserves function metadata for ADK schema discovery.
+- `**safe_tool` decorator** — defense-in-depth wrapper applied to all ADK tool functions. Catches any uncaught exception and returns it as a string so the LLM can reason about failures instead of crashing. Preserves function metadata for ADK schema discovery.
 - **Watch mode error context injection** — when a watch cycle fails, the next cycle's prompt includes the error so the agent can adapt (e.g. skip unavailable tools).
 
 ## [0.2.0] - 2026-03-15
@@ -365,7 +370,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **`risk_tolerance` config uses `RiskTolerance` enum** — replaced untyped `Any` field with a `StrEnum` (`read-only`, `cautious`, `standard`, `full-trust`). Integer and digit-string inputs are coerced via a `BeforeValidator`, so existing TOML and env var values continue to work.
+- `**risk_tolerance` config uses `RiskTolerance` enum** — replaced untyped `Any` field with a `StrEnum` (`read-only`, `cautious`, `standard`, `full-trust`). Integer and digit-string inputs are coerced via a `BeforeValidator`, so existing TOML and env var values continue to work.
 - **Risk gate callback refactored to factory pattern** — `risk_gate_callback` replaced by `create_risk_gate()` which accepts `ApprovalProvider` via closure instead of importing a TUI singleton. Core agent logic no longer imports from `tui/`.
 - **Approval bridge singleton removed** — `ApprovalBridge` is now instantiated in `main.py` and injected into the risk gate factory and TUI via constructor parameters.
 - **Background snapshots decoupled from TUI** — `_background_snapshots()` accepts an `on_snapshot` callback instead of a TUI reference.
@@ -417,7 +422,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Tools now resolve their backend via a central `BackendRegistry` instead of module-level `LocalBackend()` singletons. This is a transparent internal change — tool signatures gain an optional `host` parameter but behavior is unchanged when omitted.
-- Renamed `PathsConfig` → `SecurityConfig` and `[paths]` → `[security]` TOML section — better reflects its role as tool security allow/deny lists. Env prefix changed from `SQUIRE_PATHS_` to `SQUIRE_SECURITY_`.
+- Renamed `PathsConfig` → `SecurityConfig` and `[paths]` → `[security]` TOML section — better reflects its role as tool security allow/deny lists. Env prefix changed from `SQUIRE_PATHS`_ to `SQUIRE_SECURITY_`.
 - Improved system prompt for conversational intelligence — Squire now matches its response to user intent (greetings get greetings, not system dumps). Reordered prompt sections so behavioral guidance comes before system data. Personality profiles now include conversational hints for greetings.
 - Tool calls and results no longer clutter the main chat — they appear only in the activity log.
 
@@ -430,3 +435,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Streaming message prefix — `[bold]Squire[/bold]:` no longer appears as literal text during streaming; markup prefix and user content are tracked separately.
 - Test isolation — config tests no longer pick up local `squire.toml` file.
 - Cross-platform CI — `test_system_info_basic` now patches `platform` so it passes on Linux runners.
+
