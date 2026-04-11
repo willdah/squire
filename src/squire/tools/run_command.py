@@ -2,19 +2,9 @@
 
 import shlex
 
-from ..config import GuardrailsConfig
-from ._registry import get_registry
+from ._registry import get_guardrails, get_registry
 
 RISK_LEVEL = 5  # Critical
-
-_guardrails_config: GuardrailsConfig | None = None
-
-
-def _get_guardrails_config() -> GuardrailsConfig:
-    global _guardrails_config
-    if _guardrails_config is None:
-        _guardrails_config = GuardrailsConfig()
-    return _guardrails_config
 
 
 async def run_command(command: str, timeout: float = 30.0, host: str = "local") -> str:
@@ -41,7 +31,7 @@ async def run_command(command: str, timeout: float = 30.0, host: str = "local") 
 
     base_cmd = parts[0]
 
-    guardrails = _get_guardrails_config()
+    guardrails = get_guardrails()
 
     # Check blocklist first
     if base_cmd in guardrails.commands_block:

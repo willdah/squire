@@ -12,6 +12,7 @@ import { LLMConfigForm } from "./llm-config-form";
 import { WatchConfigForm } from "./watch-config-form";
 import { GuardrailsConfigForm } from "./guardrails-config-form";
 import { SkillsConfigForm } from "./skills-config-form";
+import { ConfigEnvOverrideNotice, ConfigIntro } from "./config-help";
 
 interface ConfigEditorProps {
   config: ConfigDetailResponse;
@@ -92,7 +93,9 @@ function ReadOnlySection({
 
 export function ConfigEditor({ config, onSaved }: ConfigEditorProps) {
   return (
-    <Tabs defaultValue="app">
+    <div className="space-y-4">
+      <ConfigEnvOverrideNotice config={config} />
+      <Tabs defaultValue="app">
       <TabsList className="flex flex-wrap">
         <TabsTrigger value="app">App</TabsTrigger>
         <TabsTrigger value="llm">LLM</TabsTrigger>
@@ -139,7 +142,16 @@ export function ConfigEditor({ config, onSaved }: ConfigEditorProps) {
       </TabsContent>
 
       <TabsContent value="notifications">
-        <ChannelsTab />
+        <div className="space-y-4">
+          <ConfigIntro title="What this controls">
+            <p>
+              Turn channels on or off, add webhooks, and configure email. Saving updates the running server immediately
+              and rebuilds notification delivery. Use <strong>Save</strong> on this page to persist to{" "}
+              <code>squire.toml</code> when a config file is present.
+            </p>
+          </ConfigIntro>
+          <ChannelsTab />
+        </div>
       </TabsContent>
 
       <TabsContent value="guardrails">
@@ -170,8 +182,17 @@ export function ConfigEditor({ config, onSaved }: ConfigEditorProps) {
       </TabsContent>
 
       <TabsContent value="hosts">
-        <ReadOnlySection title="Hosts" data={config.hosts} />
+        <div className="space-y-4">
+          <ConfigIntro title="Hosts">
+            <p>
+              Read-only snapshot of managed hosts. Add, remove, or enroll hosts on the <strong>Hosts</strong> page;
+              refresh this page (or revisit the tab) after changes to see updates here.
+            </p>
+          </ConfigIntro>
+          <ReadOnlySection title="Hosts" data={config.hosts} />
+        </div>
       </TabsContent>
     </Tabs>
+    </div>
   );
 }

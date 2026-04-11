@@ -13,6 +13,7 @@ from squire.config.notifications import EmailConfig, WebhookConfig
 from squire.config.skills import SkillsConfig
 from squire.notifications.factory import build_notification_router
 from squire.skills import SkillService
+from squire.tools import set_guardrails as tools_set_guardrails
 from squire.tools import set_notifier as tools_set_notifier
 
 from .. import dependencies as deps
@@ -253,6 +254,9 @@ async def patch_config(
         tools_set_notifier(deps.notifier)
         if old_notifier is not None:
             await old_notifier.close()
+
+    if section == "guardrails":
+        tools_set_guardrails(new_config)
 
     if section == "skills":
         deps.skills_service = SkillService(new_config.path)

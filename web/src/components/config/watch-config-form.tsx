@@ -15,7 +15,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfigHint, ConfigIntro } from "./config-help";
 
 interface WatchConfigFormProps {
   values: Record<string, unknown>;
@@ -122,13 +123,23 @@ export function WatchConfigForm({ values, envOverrides, tomlPath, onSaved }: Wat
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Watch</CardTitle>
+        <CardDescription>
+          Autonomous <code>squire watch</code> loop: timing, prompts, limits, and notifications. Separate from web chat,
+          but many fields sync to a running watch when you save.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-xs text-muted-foreground">
-          These settings apply to the web API immediately. If autonomous watch mode is running, compatible fields are
-          also pushed to the watch process so they take effect on the next poll (typically within a few seconds).
-          Risk tolerance for watch is controlled under Guardrails (watch tolerance); restart watch after changing it.
-        </p>
+        <ConfigIntro title="Live vs restart">
+          <p>
+            Saving updates the web API’s copy of watch settings immediately. If watch status is <strong>running</strong>,
+            the same changes are queued for the watch process (usually within a few seconds).
+          </p>
+          <p>
+            Effective <strong>risk threshold</strong> during a watch cycle can be changed from the Watch page drawer or
+            live queue; changing <strong>Guardrails → Watch tolerance</strong> requires restarting watch to reload from
+            config files.
+          </p>
+        </ConfigIntro>
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
             <Label>Interval (minutes)</Label>
@@ -141,6 +152,7 @@ export function WatchConfigForm({ values, envOverrides, tomlPath, onSaved }: Wat
             onChange={(e) => setIntervalMinutes(parseInt(e.target.value) || 1)}
             disabled={isLocked("interval_minutes")}
           />
+          <ConfigHint>Wall-clock wait between autonomous check-in cycles. Lower = more frequent monitoring.</ConfigHint>
         </div>
 
         <div className="space-y-2">
@@ -155,6 +167,9 @@ export function WatchConfigForm({ values, envOverrides, tomlPath, onSaved }: Wat
             onChange={(e) => setCycleTimeout(parseInt(e.target.value) || 30)}
             disabled={isLocked("cycle_timeout_seconds")}
           />
+          <ConfigHint>
+            Maximum time one watch cycle may run before it is aborted. Prevents a stuck agent from blocking the loop.
+          </ConfigHint>
         </div>
 
         <div className="space-y-2">
@@ -168,30 +183,39 @@ export function WatchConfigForm({ values, envOverrides, tomlPath, onSaved }: Wat
             onChange={(e) => setCheckinPrompt(e.target.value)}
             disabled={isLocked("checkin_prompt")}
           />
+          <ConfigHint>Instructions injected each cycle; shapes what the agent prioritizes during check-ins.</ConfigHint>
         </div>
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Label>Notify on Action</Label>
-            {isLocked("notify_on_action") && <EnvLock field="notify_on_action" prefix="SQUIRE_WATCH_" />}
+        <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5">
+              <Label>Notify on Action</Label>
+              {isLocked("notify_on_action") && <EnvLock field="notify_on_action" prefix="SQUIRE_WATCH_" />}
+            </div>
+            <Switch
+              checked={notifyOnAction}
+              onCheckedChange={setNotifyOnAction}
+              disabled={isLocked("notify_on_action")}
+            />
           </div>
-          <Switch
-            checked={notifyOnAction}
-            onCheckedChange={setNotifyOnAction}
-            disabled={isLocked("notify_on_action")}
-          />
+          <ConfigHint>Notify when the watch agent runs one or more tools in a successful cycle.</ConfigHint>
         </div>
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Label>Notify on Blocked</Label>
-            {isLocked("notify_on_blocked") && <EnvLock field="notify_on_blocked" prefix="SQUIRE_WATCH_" />}
+        <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5">
+              <Label>Notify on Blocked</Label>
+              {isLocked("notify_on_blocked") && <EnvLock field="notify_on_blocked" prefix="SQUIRE_WATCH_" />}
+            </div>
+            <Switch
+              checked={notifyOnBlocked}
+              onCheckedChange={setNotifyOnBlocked}
+              disabled={isLocked("notify_on_blocked")}
+            />
           </div>
-          <Switch
-            checked={notifyOnBlocked}
-            onCheckedChange={setNotifyOnBlocked}
-            disabled={isLocked("notify_on_blocked")}
-          />
+          <ConfigHint>
+            Notify when a tool call is blocked by watch risk policy (visibility in strict setups).
+          </ConfigHint>
         </div>
 
         <div className="space-y-2">
@@ -208,6 +232,7 @@ export function WatchConfigForm({ values, envOverrides, tomlPath, onSaved }: Wat
             onChange={(e) => setMaxToolCallsPerCycle(parseInt(e.target.value) || 1)}
             disabled={isLocked("max_tool_calls_per_cycle")}
           />
+          <ConfigHint>Hard cap on tools per cycle to limit blast radius and cost.</ConfigHint>
         </div>
 
         <div className="space-y-2">
@@ -222,6 +247,10 @@ export function WatchConfigForm({ values, envOverrides, tomlPath, onSaved }: Wat
             onChange={(e) => setCyclesPerSession(parseInt(e.target.value) || 1)}
             disabled={isLocked("cycles_per_session")}
           />
+          <ConfigHint>
+            After this many completed cycles, watch starts a fresh ADK session with a short carryover summary—reduces
+            memory growth over long runs.
+          </ConfigHint>
         </div>
 
         <div className="space-y-2">
@@ -236,12 +265,16 @@ export function WatchConfigForm({ values, envOverrides, tomlPath, onSaved }: Wat
             onChange={(e) => setMaxContextEvents(parseInt(e.target.value) || 10)}
             disabled={isLocked("max_context_events")}
           />
+          <ConfigHint>
+            How many recent ADK events are kept in session context each cycle. Lower trims history earlier; higher keeps
+            more tool transcript in memory.
+          </ConfigHint>
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="flex items-center justify-between pt-2 border-t">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center">
             <input
               type="checkbox"
               checked={persist}
@@ -249,7 +282,10 @@ export function WatchConfigForm({ values, envOverrides, tomlPath, onSaved }: Wat
               disabled={!tomlPath}
               className="rounded"
             />
-            Save to disk{tomlPath ? "" : " (no squire.toml found)"}
+            <span>
+              Save to disk{tomlPath ? "" : " (no squire.toml found)"} — writes the{" "}
+              <code className="font-mono text-[11px]">[watch]</code> section.
+            </span>
           </label>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={revert} disabled={!isDirty}>

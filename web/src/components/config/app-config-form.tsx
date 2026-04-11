@@ -6,13 +6,6 @@ import { apiPatch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
@@ -20,7 +13,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfigHint, ConfigIntro } from "./config-help";
 
 interface AppConfigFormProps {
   values: Record<string, unknown>;
@@ -28,13 +22,6 @@ interface AppConfigFormProps {
   tomlPath: string | null;
   onSaved: () => void;
 }
-
-const RISK_OPTIONS = [
-  { value: "read-only", label: "Read Only" },
-  { value: "cautious", label: "Cautious" },
-  { value: "standard", label: "Standard" },
-  { value: "full-trust", label: "Full Trust" },
-];
 
 function EnvLock({ field, prefix }: { field: string; prefix: string }) {
   return (
@@ -54,8 +41,6 @@ function EnvLock({ field, prefix }: { field: string; prefix: string }) {
 export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppConfigFormProps) {
   const [appName, setAppName] = useState(String(values.app_name ?? "Squire"));
   const [userId, setUserId] = useState(String(values.user_id ?? "squire-user"));
-  const [riskTolerance, setRiskTolerance] = useState(String(values.risk_tolerance ?? "cautious"));
-  const [riskStrict, setRiskStrict] = useState(Boolean(values.risk_strict));
   const [historyLimit, setHistoryLimit] = useState(Number(values.history_limit ?? 50));
   const [maxToolRounds, setMaxToolRounds] = useState(Number(values.max_tool_rounds ?? 10));
   const [multiAgent, setMultiAgent] = useState(Boolean(values.multi_agent));
@@ -68,8 +53,6 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
   const isDirty =
     appName !== String(values.app_name ?? "Squire") ||
     userId !== String(values.user_id ?? "squire-user") ||
-    riskTolerance !== String(values.risk_tolerance ?? "cautious") ||
-    riskStrict !== Boolean(values.risk_strict) ||
     historyLimit !== Number(values.history_limit ?? 50) ||
     maxToolRounds !== Number(values.max_tool_rounds ?? 10) ||
     multiAgent !== Boolean(values.multi_agent);
@@ -77,8 +60,6 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
   const revert = () => {
     setAppName(String(values.app_name ?? "Squire"));
     setUserId(String(values.user_id ?? "squire-user"));
-    setRiskTolerance(String(values.risk_tolerance ?? "cautious"));
-    setRiskStrict(Boolean(values.risk_strict));
     setHistoryLimit(Number(values.history_limit ?? 50));
     setMaxToolRounds(Number(values.max_tool_rounds ?? 10));
     setMultiAgent(Boolean(values.multi_agent));
@@ -92,8 +73,6 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
       const changed: Record<string, unknown> = {};
       if (appName !== String(values.app_name ?? "Squire")) changed.app_name = appName;
       if (userId !== String(values.user_id ?? "squire-user")) changed.user_id = userId;
-      if (riskTolerance !== String(values.risk_tolerance ?? "cautious")) changed.risk_tolerance = riskTolerance;
-      if (riskStrict !== Boolean(values.risk_strict)) changed.risk_strict = riskStrict;
       if (historyLimit !== Number(values.history_limit ?? 50)) changed.history_limit = historyLimit;
       if (maxToolRounds !== Number(values.max_tool_rounds ?? 10)) changed.max_tool_rounds = maxToolRounds;
       if (multiAgent !== Boolean(values.multi_agent)) changed.multi_agent = multiAgent;
@@ -112,8 +91,17 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
     <Card>
       <CardHeader>
         <CardTitle className="text-base">App</CardTitle>
+        <CardDescription>
+          Identity and session behavior. Affects new and ongoing chat sessions.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <ConfigIntro title="When changes apply">
+          <p>
+            Saving updates the running API server immediately for new and ongoing chat sessions. Check{" "}
+            <strong>Save to disk</strong> below to write values into <code>squire.toml</code> when a file is found.
+          </p>
+        </ConfigIntro>
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
             <Label>App name</Label>
@@ -125,7 +113,7 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
             disabled={isLocked("app_name")}
             className="text-sm"
           />
-          <p className="text-xs text-muted-foreground">Passed to the ADK runner as the application name.</p>
+          <ConfigHint>Application name registered with the ADK runner (sessions and tooling see this label).</ConfigHint>
         </div>
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
@@ -138,43 +126,11 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
             disabled={isLocked("user_id")}
             className="text-sm font-mono"
           />
-          <p className="text-xs text-muted-foreground">ADK session scope for this Squire instance.</p>
+          <ConfigHint>
+            User scope for ADK session storage. Changing it starts a new logical user; use only if you intentionally
+            want to separate sessions.
+          </ConfigHint>
         </div>
-        <div className="space-y-2">
-          <div className="flex items-center gap-1.5">
-            <Label>Risk Tolerance</Label>
-            {isLocked("risk_tolerance") && <EnvLock field="risk_tolerance" prefix="SQUIRE_" />}
-          </div>
-          <Select
-            value={riskTolerance}
-            onValueChange={(v) => v && setRiskTolerance(v)}
-            disabled={isLocked("risk_tolerance")}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {RISK_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Label>Risk Strict</Label>
-            {isLocked("risk_strict") && <EnvLock field="risk_strict" prefix="SQUIRE_" />}
-          </div>
-          <Switch
-            checked={riskStrict}
-            onCheckedChange={setRiskStrict}
-            disabled={isLocked("risk_strict")}
-          />
-        </div>
-
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
             <Label>History Limit</Label>
@@ -187,6 +143,10 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
             onChange={(e) => setHistoryLimit(parseInt(e.target.value) || 1)}
             disabled={isLocked("history_limit")}
           />
+          <ConfigHint>
+            Maximum chat messages kept in context for the model. Lower values reduce token use; higher values preserve
+            longer conversations.
+          </ConfigHint>
         </div>
 
         <div className="space-y-2">
@@ -201,24 +161,34 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
             onChange={(e) => setMaxToolRounds(parseInt(e.target.value) || 1)}
             disabled={isLocked("max_tool_rounds")}
           />
+          <ConfigHint>
+            Cap on tool-call iterations per single user message. Stops runaway tool loops; raise if the model often needs
+            many steps to finish one request.
+          </ConfigHint>
         </div>
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Label>Multi-Agent</Label>
-            {isLocked("multi_agent") && <EnvLock field="multi_agent" prefix="SQUIRE_" />}
+        <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5">
+              <Label>Multi-Agent</Label>
+              {isLocked("multi_agent") && <EnvLock field="multi_agent" prefix="SQUIRE_" />}
+            </div>
+            <Switch
+              checked={multiAgent}
+              onCheckedChange={setMultiAgent}
+              disabled={isLocked("multi_agent")}
+            />
           </div>
-          <Switch
-            checked={multiAgent}
-            onCheckedChange={setMultiAgent}
-            disabled={isLocked("multi_agent")}
-          />
+          <ConfigHint>
+            When enabled, requests can be routed to specialized internal agents (still presented as one assistant in the
+            UI). Uses more model calls; can improve focus for mixed tasks.
+          </ConfigHint>
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="flex items-center justify-between pt-2 border-t">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center">
             <input
               type="checkbox"
               checked={persist}
@@ -226,7 +196,10 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
               disabled={!tomlPath}
               className="rounded"
             />
-            Save to disk{tomlPath ? "" : " (no squire.toml found)"}
+            <span>
+              Save to disk{tomlPath ? "" : " (no squire.toml found)"} — also writes{" "}
+              <code className="font-mono text-[11px]">squire.toml</code> so values survive restart.
+            </span>
           </label>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={revert} disabled={!isDirty}>

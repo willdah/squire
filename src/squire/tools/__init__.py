@@ -16,9 +16,11 @@ Tool conventions:
 """
 
 from ._registry import get_db as get_db
+from ._registry import get_guardrails as get_guardrails
 from ._registry import get_notifier as get_notifier
 from ._registry import get_registry as get_registry
 from ._registry import set_db as set_db
+from ._registry import set_guardrails as set_guardrails
 from ._registry import set_notifier as set_notifier
 from ._registry import set_registry as set_registry
 from ._safe import safe_tool

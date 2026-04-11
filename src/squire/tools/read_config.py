@@ -3,19 +3,9 @@
 import os
 import posixpath
 
-from ..config import GuardrailsConfig
-from ._registry import get_registry
+from ._registry import get_guardrails, get_registry
 
 RISK_LEVEL = 2  # Low
-
-_guardrails_config: GuardrailsConfig | None = None
-
-
-def _get_guardrails_config() -> GuardrailsConfig:
-    global _guardrails_config
-    if _guardrails_config is None:
-        _guardrails_config = GuardrailsConfig()
-    return _guardrails_config
 
 
 async def read_config(path: str, head: int | None = None, host: str = "local") -> str:
@@ -32,8 +22,7 @@ async def read_config(path: str, head: int | None = None, host: str = "local") -
 
     Returns the file contents as text.
     """
-    # Resolve and check path guards
-    guardrails = _get_guardrails_config()
+    guardrails = get_guardrails()
     allowlist = guardrails.config_paths
     if allowlist:
         if host == "local":

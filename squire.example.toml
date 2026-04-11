@@ -11,8 +11,6 @@
 # --- Top-level application settings ---
 # app_name = "Squire"
 # user_id = "squire-user"
-# risk_tolerance = "cautious"      # 1-5 or alias: read-only(1), cautious(2), standard(3), full-trust(5)
-# risk_strict = false              # true = deny above threshold; false = prompt for approval
 # history_limit = 50               # Max messages in conversation context
 # max_tool_rounds = 10             # Max tool-call rounds per user message
 # multi_agent = false              # Enable sub-agent decomposition (Monitor, Container, Admin, Notifier)
@@ -29,8 +27,10 @@
 # path = "~/.local/share/squire/squire.db"
 # snapshot_interval_minutes = 15
 
-# --- Guardrails: tool overrides, command/path guards, per-agent tolerances ---
+# --- Guardrails: risk policy, tool overrides, command/path guards, per-agent tolerances ---
 [guardrails]
+# risk_tolerance = "cautious"              # 1-5 or alias: read-only(1), cautious(2), standard(3), full-trust(5)
+# risk_strict = false                      # true = deny above threshold; false = prompt for approval
 # tools_allow = ["docker_logs"]            # bypass risk check, auto-run
 # tools_require_approval = ["docker_compose"]  # always ask user first
 # tools_deny = ["run_command"]             # hard block, never run

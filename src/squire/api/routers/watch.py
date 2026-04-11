@@ -7,7 +7,7 @@ import os
 from agent_risk_engine import RuleGate
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 
-from ..dependencies import get_app_config, get_db, get_guardrails, get_watch_config
+from ..dependencies import get_db, get_guardrails, get_watch_config
 from ..schemas import (
     WatchApprovalAction,
     WatchCommandResponse,
@@ -19,9 +19,9 @@ from ..schemas import (
 router = APIRouter()
 
 
-def _effective_watch_risk_level(guardrails, app_config) -> int:
+def _effective_watch_risk_level(guardrails) -> int:
     """Numeric risk threshold (1–5) used in watch mode UI and live updates."""
-    wt = guardrails.watch_tolerance or app_config.risk_tolerance
+    wt = guardrails.watch_tolerance or guardrails.risk_tolerance
     return RuleGate(threshold=wt, strict=True, allowed=set(), denied=set()).threshold
 
 
@@ -123,7 +123,6 @@ async def watch_stop(db=Depends(get_db)):
 async def watch_config_get(
     watch_config=Depends(get_watch_config),
     guardrails=Depends(get_guardrails),
-    app_config=Depends(get_app_config),
 ):
     """Get current watch configuration."""
     return WatchConfigResponse(
@@ -135,7 +134,7 @@ async def watch_config_get(
         notify_on_blocked=watch_config.notify_on_blocked,
         cycles_per_session=watch_config.cycles_per_session,
         max_context_events=watch_config.max_context_events,
-        risk_tolerance=_effective_watch_risk_level(guardrails, app_config),
+        risk_tolerance=_effective_watch_risk_level(guardrails),
     )
 
 

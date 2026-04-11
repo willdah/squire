@@ -40,6 +40,17 @@ class GuardrailsConfig(BaseSettings):
             file_secret_settings,
         )
 
+    # --- Global risk policy ---
+
+    risk_tolerance: Annotated[RiskTolerance, BeforeValidator(_coerce_risk_tolerance)] = Field(
+        default=RiskTolerance.CAUTIOUS,
+        description="Risk tolerance (1-5 or alias: read-only, cautious, standard, full-trust)",
+    )
+    risk_strict: bool = Field(
+        default=False,
+        description="When true, tools above tolerance are denied outright instead of prompting for approval",
+    )
+
     # --- Tool-level overrides ---
 
     tools_allow: list[str] = Field(
@@ -82,18 +93,45 @@ class GuardrailsConfig(BaseSettings):
 
     commands_allow: list[str] = Field(
         default_factory=lambda: [
+            # File / directory listing
+            "ls",
+            "stat",
+            "file",
+            "du",
+            "find",
+            "wc",
+            # Text reading
+            "cat",
+            "head",
+            "tail",
+            "grep",
+            # System info
+            "hostname",
+            "date",
+            "whoami",
+            "id",
+            "uname",
+            "uptime",
+            "df",
+            "free",
+            "mount",
+            "lsblk",
+            "top",
+            "ps",
+            "which",
+            # Network diagnostics
             "ping",
             "traceroute",
             "dig",
             "nslookup",
-            "df",
-            "free",
-            "uptime",
             "ip",
             "ss",
-            "cat",
-            "head",
-            "tail",
+            "netstat",
+            # Service management (read-only actions guarded by risk levels)
+            "docker",
+            "systemctl",
+            "journalctl",
+            "lsof",
         ],
         description="Commands that run_command is allowed to execute",
     )

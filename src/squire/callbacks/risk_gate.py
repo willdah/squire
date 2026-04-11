@@ -128,11 +128,11 @@ def create_risk_gate(
         action = Action(kind="tool_call", name=compound_name, parameters=args, risk=tool_risk)
         result = await evaluator.evaluate(action)
 
-        # The PatternAnalyzer may have escalated risk beyond what the RuleGate
-        # saw (which only used the static tool_risk). If the analyzed risk now
-        # exceeds the threshold, treat it as NEEDS_APPROVAL so the existing
-        # approval/headless flow handles it.
-        risk_threshold = tool_context.state.get("risk_tolerance", 3)
+        # Use per-agent threshold when provided, otherwise fall back to session state.
+        if default_threshold is not None:
+            risk_threshold = default_threshold
+        else:
+            risk_threshold = tool_context.state.get("risk_tolerance", 3)
         analyzer_escalated = result.decision == GateResult.ALLOWED and result.risk_score.level > risk_threshold
 
         if result.decision == GateResult.DENIED:

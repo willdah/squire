@@ -1,37 +1,41 @@
 .DEFAULT_GOAL := help
 
+# Absolute path to the repo root (Makefile location). Keeps web build/serve aligned
+# even when Make is invoked with -C or from an unexpected working directory.
+REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+
 # ---------------------------------------------------------------------------
 # Python
 # ---------------------------------------------------------------------------
 
 .PHONY: install
 install: ## Install Python and frontend dependencies
-	uv sync --dev
-	cd web && npm install
+	cd $(REPO_ROOT) && uv sync --dev
+	cd $(REPO_ROOT)/web && npm install
 
 .PHONY: lint
 lint: ## Run ruff linter
-	uv run ruff check src/ tests/
+	cd $(REPO_ROOT) && uv run ruff check src/ tests/
 
 .PHONY: format
 format: ## Auto-format Python code with ruff
-	uv run ruff format src/ tests/
+	cd $(REPO_ROOT) && uv run ruff format src/ tests/
 
 .PHONY: format-check
 format-check: ## Check Python formatting (no changes)
-	uv run ruff format --check src/ tests/
+	cd $(REPO_ROOT) && uv run ruff format --check src/ tests/
 
 .PHONY: typecheck
 typecheck: ## Run mypy type checking
-	uv run mypy src/
+	cd $(REPO_ROOT) && uv run mypy src/
 
 .PHONY: test
 test: ## Run pytest suite
-	uv run pytest
+	cd $(REPO_ROOT) && uv run pytest
 
 .PHONY: test-v
 test-v: ## Run pytest with verbose output
-	uv run pytest -v
+	cd $(REPO_ROOT) && uv run pytest -v
 
 .PHONY: ci
 ci: lint format-check test web-lint web-build ## Run the full CI pipeline locally
@@ -42,31 +46,31 @@ ci: lint format-check test web-lint web-build ## Run the full CI pipeline locall
 
 .PHONY: web-install
 web-install: ## Install frontend dependencies
-	cd web && npm install
+	cd $(REPO_ROOT)/web && npm install
 
 .PHONY: web-dev
 web-dev: ## Start Next.js dev server
-	cd web && npm run dev
+	cd $(REPO_ROOT)/web && npm run dev
 
 .PHONY: web-build
-web-build: ## Build Next.js for production
-	cd web && npm run build
+web-build: ## Build Next.js static export into web/out (required for bundled UI)
+	cd $(REPO_ROOT)/web && npm run build
 
 .PHONY: web-lint
 web-lint: ## Lint frontend code
-	cd web && npm run lint
+	cd $(REPO_ROOT)/web && npm run lint
 
 # ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
 
 .PHONY: web
-web: ## Start the web interface (FastAPI + static frontend)
-	uv run squire web --reload
+web: web-build ## Build Next.js export then start FastAPI + static UI
+	cd $(REPO_ROOT) && SQUIRE_WEB_STATIC_DIR=$(REPO_ROOT)/web/out uv run squire web --reload
 
 .PHONY: watch
 watch: ## Start autonomous watch mode
-	uv run squire watch
+	cd $(REPO_ROOT) && uv run squire watch
 
 # ---------------------------------------------------------------------------
 # Docker
@@ -74,7 +78,7 @@ watch: ## Start autonomous watch mode
 
 .PHONY: docker-build
 docker-build: ## Build Docker image
-	docker build -f docker/Dockerfile -t squire .
+	cd $(REPO_ROOT) && docker build -f docker/Dockerfile -t squire .
 
 .PHONY: docker-run
 docker-run: ## Run Docker container (web UI on port 8420)
@@ -86,15 +90,15 @@ docker-run: ## Run Docker container (web UI on port 8420)
 
 .PHONY: clean
 clean: ## Remove Python caches and build artifacts
-	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-	find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
-	find . -type d -name .mypy_cache -exec rm -rf {} + 2>/dev/null || true
-	find . -type d -name .ruff_cache -exec rm -rf {} + 2>/dev/null || true
-	rm -rf dist/ build/ *.egg-info src/*.egg-info
+	cd $(REPO_ROOT) && find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	cd $(REPO_ROOT) && find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
+	cd $(REPO_ROOT) && find . -type d -name .mypy_cache -exec rm -rf {} + 2>/dev/null || true
+	cd $(REPO_ROOT) && find . -type d -name .ruff_cache -exec rm -rf {} + 2>/dev/null || true
+	rm -rf $(REPO_ROOT)/dist/ $(REPO_ROOT)/build/ $(REPO_ROOT)/*.egg-info $(REPO_ROOT)/src/*.egg-info
 
 .PHONY: clean-web
-clean-web: ## Remove frontend build artifacts and node_modules
-	rm -rf web/.next web/node_modules
+clean-web: ## Remove frontend build output, cache, and node_modules
+	rm -rf $(REPO_ROOT)/web/.next $(REPO_ROOT)/web/out $(REPO_ROOT)/web/node_modules
 
 .PHONY: clean-all
 clean-all: clean clean-web ## Remove all generated files

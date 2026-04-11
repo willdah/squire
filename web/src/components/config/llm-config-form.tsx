@@ -12,7 +12,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfigHint, ConfigIntro } from "./config-help";
 
 interface LLMConfigFormProps {
   values: Record<string, unknown>;
@@ -102,8 +103,18 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
     <Card>
       <CardHeader>
         <CardTitle className="text-base">LLM</CardTitle>
+        <CardDescription>
+          LiteLLM model id and generation parameters for chat (and the web-driven agent). Takes effect on the next
+          request that builds the model client.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <ConfigIntro title="Provider keys">
+          <p>
+            API keys for cloud providers are not stored here—configure them with environment variables as described in
+            LiteLLM. This form only changes model id, sampling, and optional base URL.
+          </p>
+        </ConfigIntro>
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
             <Label>Model</Label>
@@ -115,6 +126,10 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
             disabled={isLocked("model")}
             placeholder="e.g. ollama_chat/llama3.1:8b"
           />
+          <ConfigHint>
+            LiteLLM string such as <code>ollama_chat/...</code> or <code>gemini/...</code>. Must match a provider you
+            have credentials or local runtime for.
+          </ConfigHint>
         </div>
 
         <div className="space-y-2">
@@ -131,6 +146,10 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
             onChange={(e) => setTemperature(parseFloat(e.target.value) || 0)}
             disabled={isLocked("temperature")}
           />
+          <ConfigHint>
+            Randomness of completions: lower is more deterministic; higher explores more varied phrasing and tool
+            arguments.
+          </ConfigHint>
         </div>
 
         <div className="space-y-2">
@@ -145,6 +164,7 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
             onChange={(e) => setMaxTokens(parseInt(e.target.value) || 1)}
             disabled={isLocked("max_tokens")}
           />
+          <ConfigHint>Upper bound on tokens in each model response (output side). Raise if answers truncate.</ConfigHint>
         </div>
 
         <div className="space-y-2">
@@ -159,16 +179,16 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
             placeholder="e.g. http://localhost:11434 (Ollama)"
             className="font-mono text-xs"
           />
-          <p className="text-xs text-muted-foreground">
-            Optional LiteLLM API base. Provider API keys are usually set via environment variables (see LiteLLM docs).
-            Redacted values in the API response are omitted here; enter a new URL to replace the stored one.
-          </p>
+          <ConfigHint>
+            Override the default HTTP endpoint for the provider (e.g. local Ollama). Redacted values are hidden in the
+            API; type a new URL to replace the stored base. Clearing the field removes the override.
+          </ConfigHint>
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="flex items-center justify-between pt-2 border-t">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center">
             <input
               type="checkbox"
               checked={persist}
@@ -176,7 +196,10 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
               disabled={!tomlPath}
               className="rounded"
             />
-            Save to disk{tomlPath ? "" : " (no squire.toml found)"}
+            <span>
+              Save to disk{tomlPath ? "" : " (no squire.toml found)"} — persists the{" "}
+              <code className="font-mono text-[11px]">[llm]</code> section.
+            </span>
           </label>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={revert} disabled={!isDirty}>

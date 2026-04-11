@@ -44,6 +44,8 @@ graph TD
     SSHBackend --> RemoteHosts
 ```
 
+
+
 ## Agent Architecture
 
 Squire operates in one of two modes, controlled by `multi_agent` in `squire.toml`.
@@ -56,12 +58,14 @@ In both modes, the user always sees the single "Squire" persona — sub-agent na
 
 ### Sub-agents
 
-| Agent | Domain | Tools | Characteristic Risk |
-|---|---|---|---|
-| Monitor | System observation | `system_info`, `network_info`, `docker_ps`, `journalctl`, `read_config` | Read-only, risk 1 |
-| Container | Docker lifecycle | `docker_logs`, `docker_compose`, `docker_container`, `docker_image`, `docker_cleanup` | Cautious, risk 1–4 |
-| Admin | System administration | `systemctl`, `run_command` | Elevated, risk 1–4 |
-| Notifier | Alert management | `send_notification`, `list_alert_rules`, `create_alert_rule`, `update_alert_rule`, `delete_alert_rule` | Mostly read-only, risk 1–2 |
+
+| Agent     | Domain                | Tools                                                                                                  | Characteristic Risk        |
+| --------- | --------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------- |
+| Monitor   | System observation    | `system_info`, `network_info`, `docker_ps`, `journalctl`, `read_config`                                | Read-only, risk 1          |
+| Container | Docker lifecycle      | `docker_logs`, `docker_compose`, `docker_container`, `docker_image`, `docker_cleanup`                  | Cautious, risk 1–4         |
+| Admin     | System administration | `systemctl`, `run_command`                                                                             | Elevated, risk 1–4         |
+| Notifier  | Alert management      | `send_notification`, `list_alert_rules`, `create_alert_rule`, `update_alert_rule`, `delete_alert_rule` | Mostly read-only, risk 1–2 |
+
 
 ### Multi-agent routing
 
@@ -81,6 +85,8 @@ flowchart TD
     Root -->|"service management / shell commands"| Admin
     Root -->|"alerts / notifications"| Notifier
 ```
+
+
 
 ## Request Flow
 
@@ -113,6 +119,8 @@ sequenceDiagram
     A-->>I: Streamed response
     I-->>U: Display response
 ```
+
+
 
 ## Risk Evaluation Pipeline
 
@@ -154,18 +162,22 @@ flowchart TD
     PROMPT -->|Declined| DENY_U
 ```
 
+
+
 ### Homelab risk patterns
 
 The `PatternAnalyzer` inspects command arguments for patterns that escalate risk beyond the static level:
 
-| Pattern | Escalates to | Reason |
-|---|---|---|
-| `--privileged` | 5 | Privileged container mode |
-| `iptables`, `ufw`, `nftables` | 4 | Firewall rule modification |
-| `systemctl mask/disable` | 4 | Service disablement |
-| `/var/lib/docker/`, `/etc/docker/` | 4 | Docker data/config directories |
-| `ssh-keygen`, `authorized_keys` | 4 | SSH key modification |
-| `crontab -r/-e` | 3 | Crontab modification |
+
+| Pattern                            | Escalates to | Reason                         |
+| ---------------------------------- | ------------ | ------------------------------ |
+| `--privileged`                     | 5            | Privileged container mode      |
+| `iptables`, `ufw`, `nftables`      | 4            | Firewall rule modification     |
+| `systemctl mask/disable`           | 4            | Service disablement            |
+| `/var/lib/docker/`, `/etc/docker/` | 4            | Docker data/config directories |
+| `ssh-keygen`, `authorized_keys`    | 4            | SSH key modification           |
+| `crontab -r/-e`                    | 3            | Crontab modification           |
+
 
 ## Watch Mode Loop
 
@@ -195,39 +207,45 @@ flowchart TD
     SLEEP -->|SIGTERM / SIGINT| STOP
 ```
 
+
+
 Watch mode is started with `make watch` or `uv run squire watch`. The web UI's Watch page shows live stream events, cycle history, and current status. See [configuration.md](configuration.md) for `[watch]` and `[guardrails]` options.
 
 ## Tech Stack
 
-| Layer | Technology | Purpose |
-|---|---|---|
-| Agent Orchestration | Google ADK | Multi-agent routing, tool dispatch, conversation management |
-| LLM Abstraction | LiteLLM | Provider-agnostic model access (Ollama, Anthropic, OpenAI, Gemini, 50+) |
-| Risk Evaluation | agent-risk-engine | Pattern-based risk analysis, rule gating, tool blocking |
-| Web API | FastAPI + Uvicorn | REST endpoints, WebSocket streaming |
-| Web Frontend | Next.js + React + shadcn/ui | Browser-based chat, watch monitoring, configuration |
-| CLI | Typer | Command-line interface for scripting and quick tasks |
-| Database | aiosqlite (SQLite) | Session persistence, events, alert rules, watch state |
-| Remote Access | asyncssh | SSH-based multi-machine management |
-| Config | Pydantic Settings | Layered config (env vars > TOML > defaults) |
-| HTTP Client | httpx | Webhook notifications, health checks |
+
+| Layer               | Technology                  | Purpose                                                                 |
+| ------------------- | --------------------------- | ----------------------------------------------------------------------- |
+| Agent Orchestration | Google ADK                  | Multi-agent routing, tool dispatch, conversation management             |
+| LLM Abstraction     | LiteLLM                     | Provider-agnostic model access (Ollama, Anthropic, OpenAI, Gemini, 50+) |
+| Risk Evaluation     | agent-risk-engine           | Pattern-based risk analysis, rule gating, tool blocking                 |
+| Web API             | FastAPI + Uvicorn           | REST endpoints, WebSocket streaming                                     |
+| Web Frontend        | Next.js + React + shadcn/ui | Browser-based chat, watch monitoring, configuration                     |
+| CLI                 | Typer                       | Command-line interface for scripting and quick tasks                    |
+| Database            | aiosqlite (SQLite)          | Session persistence, events, alert rules, watch state                   |
+| Remote Access       | asyncssh                    | SSH-based multi-machine management                                      |
+| Config              | Pydantic Settings           | Layered config (env vars > TOML > defaults)                             |
+| HTTP Client         | httpx                       | Webhook notifications, health checks                                    |
+
 
 ## Database Schema
 
 All state is stored in a single SQLite file (default: `~/.local/share/squire/squire.db`). The schema is created idempotently on first connection.
 
-| Table | Purpose |
-|---|---|
-| `snapshots` | Time-series system snapshots (CPU, memory, uptime, raw JSON) |
-| `events` | Discrete events with category, tool name, and summary |
-| `conversations` | Chat messages keyed by session ID (role, content, tool calls) |
-| `sessions` | Session registry with created/last-active timestamps and preview |
-| `watch_state` | Key-value store for current watch mode status (cycle, PID, interval, etc.) |
-| `alert_rules` | Configured alert conditions with severity, cooldown, and last-fired timestamp |
-| `watch_events` | Fine-grained per-cycle events (cycle_start, tool_call, tool_result, token, cycle_end) |
-| `watch_commands` | Commands posted to the running watch loop (stop, update_config) |
-| `watch_approvals` | Approval requests from watch mode (pending / approved / denied) |
-| `managed_hosts` | Remote hosts registered via the Hosts page (address, SSH config, tags, services) |
+
+| Table             | Purpose                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| `snapshots`       | Time-series system snapshots (CPU, memory, uptime, raw JSON)                          |
+| `events`          | Discrete events with category, tool name, and summary                                 |
+| `conversations`   | Chat messages keyed by session ID (role, content, tool calls)                         |
+| `sessions`        | Session registry with created/last-active timestamps and preview                      |
+| `watch_state`     | Key-value store for current watch mode status (cycle, PID, interval, etc.)            |
+| `alert_rules`     | Configured alert conditions with severity, cooldown, and last-fired timestamp         |
+| `watch_events`    | Fine-grained per-cycle events (cycle_start, tool_call, tool_result, token, cycle_end) |
+| `watch_commands`  | Commands posted to the running watch loop (stop, update_config)                       |
+| `watch_approvals` | Approval requests from watch mode (pending / approved / denied)                       |
+| `managed_hosts`   | Remote hosts registered via the Hosts page (address, SSH config, tags, services)      |
+
 
 ## Backend Registry
 
@@ -243,8 +261,8 @@ async def close() -> None
 
 Two implementations:
 
-- **`LocalBackend`** — wraps `asyncio.create_subprocess_exec`. Always present; registered as `"local"`.
-- **`SSHBackend`** — wraps `asyncssh`. Created lazily on first access for each configured remote host.
+- `**LocalBackend**` — wraps `asyncio.create_subprocess_exec`. Always present; registered as `"local"`.
+- `**SSHBackend**` — wraps `asyncssh`. Created lazily on first access for each configured remote host.
 
 `BackendRegistry.get("local")` always returns the `LocalBackend`. For remote hosts, the registry creates an `SSHBackend` on first use and caches it. Tools accept an optional `host` parameter (default `"local"`) which the registry resolves. Passing an unconfigured host name raises a `ValueError` before any tool logic runs.
 
