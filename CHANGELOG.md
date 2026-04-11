@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-04-11
+
 ### Fixed
 
 - **Watch mode:** Fix "unable to stop" from the web UI when the watch process has crashed — `GET /api/watch/status` and `POST /api/watch/stop` now detect dead PIDs and clean up stale `running` state
