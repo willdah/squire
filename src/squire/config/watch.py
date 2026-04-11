@@ -70,7 +70,12 @@ class WatchConfig(BaseSettings):
         description="Dispatch a notification when a tool call is blocked by the risk policy",
     )
     cycles_per_session: int = Field(
-        default=50,
+        default=12,
         ge=1,
         description="Rotate ADK session after this many cycles to bound memory",
+    )
+    max_context_events: int = Field(
+        default=40,
+        ge=10,
+        description="Maximum ADK session events kept in context; older events are pruned each cycle",
     )

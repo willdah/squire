@@ -313,9 +313,20 @@ async def start_watch() -> None:
             # Run the watch cycle
             cycle_start_time = datetime.now(UTC)
             await emitter.emit_cycle_start(cycle_count, session.id)
+            cycle_tool_count = 0
+            response_text = ""
             try:
-                response_text = await asyncio.wait_for(
-                    _run_cycle(runner, session, agent, prompt, app_config, emitter=emitter, cycle=cycle_count),
+                response_text, cycle_tool_count = await asyncio.wait_for(
+                    _run_cycle(
+                        runner,
+                        session,
+                        agent,
+                        prompt,
+                        app_config,
+                        emitter=emitter,
+                        cycle=cycle_count,
+                        max_tool_calls=watch_config.max_tool_calls_per_cycle,
+                    ),
                     timeout=watch_config.cycle_timeout_seconds,
                 )
                 last_cycle_error = None
@@ -336,24 +347,26 @@ async def start_watch() -> None:
 
             cycle_duration = (datetime.now(UTC) - cycle_start_time).total_seconds()
             cycle_status = "ok" if last_cycle_error is None else "error"
-            await emitter.emit_cycle_end(cycle_count, cycle_status, cycle_duration, tool_count=0)
+            await emitter.emit_cycle_end(cycle_count, cycle_status, cycle_duration, tool_count=cycle_tool_count)
+
+            if watch_config.notify_on_action and cycle_tool_count > 0 and last_cycle_error is None:
+                await _dispatch(
+                    notifier,
+                    "watch.action",
+                    f"Watch cycle {cycle_count} executed {cycle_tool_count} tool call(s).",
+                )
+
+            # Prune session history to bound context size
+            pruned = _prune_session_history(runner, session, watch_config.max_context_events)
+            if pruned > 0:
+                logger.debug("Pruned %d old events from session history", pruned)
 
             # Session rotation
             if cycle_count >= watch_config.cycles_per_session:
+                old_session_id = session.id
                 logger.info("Rotating session after %d cycles", cycle_count)
-                try:
-                    summary = await asyncio.wait_for(
-                        _run_cycle(
-                            runner,
-                            session,
-                            agent,
-                            "Summarize your observations and actions from this session in a few sentences.",
-                            app_config,
-                        ),
-                        timeout=60,
-                    )
-                except (TimeoutError, Exception):
-                    summary = "(session summary unavailable)"
+
+                carryover = response_text[:500] if response_text else "(no prior context)"
 
                 session = await runner.session_service.create_session(
                     app_name=app_config.app_name,
@@ -363,17 +376,27 @@ async def start_watch() -> None:
                 await db.create_session(session.id)
                 await db.set_watch_state("session_id", session.id)
 
-                if summary:
-                    event = Event(
-                        author="user",
-                        invocation_id=Event.new_id(),
-                        content=types.Content(
-                            role="user",
-                            parts=[types.Part(text=f"Context from previous session: {summary}")],
-                        ),
-                    )
-                    await runner.session_service.append_event(session, event)
+                carryover_event = Event(
+                    author="user",
+                    invocation_id=Event.new_id(),
+                    content=types.Content(
+                        role="user",
+                        parts=[types.Part(text=f"Context from previous session: {carryover}")],
+                    ),
+                )
+                await runner.session_service.append_event(session, carryover_event)
 
+                # Free old session from in-memory storage
+                try:
+                    await runner.session_service.delete_session(
+                        app_name=app_config.app_name,
+                        user_id=app_config.user_id,
+                        session_id=old_session_id,
+                    )
+                except Exception:
+                    logger.debug("Failed to delete old session %s", old_session_id, exc_info=True)
+
+                await emitter.emit_session_rotated(cycle_count, old_session_id, session.id)
                 cycle_count = 0
 
             # Sleep until next cycle (interruptible by shutdown signal or commands)
@@ -397,10 +420,16 @@ async def _run_cycle(
     app_config: AppConfig,
     emitter: WatchEventEmitter | None = None,
     cycle: int = 0,
-) -> str:
-    """Inject a prompt and collect the agent's response."""
+    max_tool_calls: int = 0,
+) -> tuple[str, int]:
+    """Inject a prompt and collect the agent's response.
+
+    Returns:
+        A tuple of (response_text, tool_call_count).
+    """
     message = types.Content(parts=[types.Part(text=prompt)])
-    response_parts = []
+    response_parts: list[str] = []
+    tool_count = 0
 
     async for event in runner.run_async(
         user_id=app_config.user_id,
@@ -412,8 +441,14 @@ async def _run_cycle(
         for part in event.content.parts:
             if getattr(part, "thought", False):
                 continue
-            if part.function_call and emitter:
-                await emitter.emit_tool_call(cycle, part.function_call.name, dict(part.function_call.args or {}))
+            if part.function_call:
+                tool_count += 1
+                if emitter:
+                    await emitter.emit_tool_call(cycle, part.function_call.name, dict(part.function_call.args or {}))
+                if max_tool_calls and tool_count >= max_tool_calls:
+                    logger.warning("Cycle %d hit tool call limit (%d)", cycle, max_tool_calls)
+                    response_parts.append(f"\n[Cycle stopped: reached {max_tool_calls} tool call limit]")
+                    return "".join(response_parts), tool_count
             elif part.function_response and emitter:
                 output = str(part.function_response.response) if part.function_response.response else ""
                 await emitter.emit_tool_result(cycle, part.function_response.name or "", output)
@@ -422,7 +457,30 @@ async def _run_cycle(
                 if emitter:
                     await emitter.emit_token(cycle, part.text)
 
-    return "".join(response_parts)
+    return "".join(response_parts), tool_count
+
+
+def _prune_session_history(runner: InMemoryRunner, session, max_events: int) -> int:
+    """Trim old events from the ADK session to bound context size.
+
+    Directly accesses the InMemorySessionService storage to truncate
+    the event list in-place, keeping only the most recent ``max_events``.
+
+    Returns the number of events pruned.
+    """
+    try:
+        storage = runner.session_service.sessions
+        stored = storage.get(session.app_name, {}).get(session.user_id, {}).get(session.id)
+        if stored is None or len(stored.events) <= max_events:
+            return 0
+
+        pruned = len(stored.events) - max_events
+        stored.events = stored.events[-max_events:]
+        session.events = session.events[-max_events:]
+        return pruned
+    except Exception:
+        logger.debug("Failed to prune session history", exc_info=True)
+        return 0
 
 
 async def _update_watch_state(db: DatabaseService, state: dict[str, str]) -> None:

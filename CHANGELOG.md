@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Watch mode:** Fix "unable to stop" from the web UI when the watch process has crashed — `GET /api/watch/status` and `POST /api/watch/stop` now detect dead PIDs and clean up stale `running` state
+- **Watch mode:** Fix memory exhaustion caused by unbounded ADK session context growth — sessions now prune old events after each cycle via `max_context_events` (default 40)
+- **Watch mode:** Enforce `max_tool_calls_per_cycle` (default 15) which was previously defined but never wired into the watch loop
+- **Watch mode:** Free old sessions from `InMemorySessionService` on rotation to prevent abandoned sessions accumulating in memory
+- **Watch mode:** Replace the expensive LLM summary call at session rotation with a lightweight last-response carryover — the old approach sent the full bloated context to the model at peak size
+
+### Changed
+
+- **Watch mode:** Lower default `cycles_per_session` from 50 to 12 (rotates every ~1 hour instead of ~4 hours at default interval)
+- **Watch mode:** `_run_cycle` now returns `(response_text, tool_count)` tuple for accurate telemetry
+- **Watch mode:** Wire `notify_on_action` — dispatches `watch.action` notification when the agent executes tool calls during a cycle
+- **Watch mode:** Emit `session_rotated` watch event and report actual `tool_count` in `cycle_end` events (was hardcoded to 0)
+
+### Added
+
+- **Config:** `max_context_events` setting in `[watch]` to control how many ADK session events are kept in context
+
 ## [0.12.0] — 2026-04-10
 
 ### Added

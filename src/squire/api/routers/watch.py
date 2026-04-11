@@ -36,10 +36,27 @@ async def _decrement_supervisor_count(db) -> None:
 
 @router.get("/status", response_model=WatchStatusResponse)
 async def watch_status(db=Depends(get_db)):
-    """Current watch mode state."""
+    """Current watch mode state.
+
+    Detects stale ``running`` status when the process has exited and
+    corrects the DB so the UI stays accurate.
+    """
     state = await db.get_all_watch_state()
     if not state:
         return WatchStatusResponse()
+
+    pid = state.get("pid")
+    if pid and state.get("status") == "running":
+        try:
+            os.kill(int(pid), 0)
+        except (ProcessLookupError, ValueError):
+            from datetime import UTC, datetime
+
+            await db.set_watch_state("status", "stopped")
+            await db.set_watch_state("stopped_at", datetime.now(UTC).isoformat())
+            state["status"] = "stopped"
+            state["stopped_at"] = datetime.now(UTC).isoformat()
+
     return WatchStatusResponse(**state)
 
 
@@ -71,7 +88,26 @@ async def watch_start(db=Depends(get_db)):
 
 @router.post("/stop", response_model=WatchCommandResponse)
 async def watch_stop(db=Depends(get_db)):
-    """Stop watch mode."""
+    """Stop watch mode.
+
+    If the watch process is still alive, queues a stop command for it to
+    pick up on its next poll.  If the process has already exited (crash,
+    OOM, etc.) but the DB still says ``running``, cleans up the stale
+    state directly so the UI reflects the real status.
+    """
+    state = await db.get_all_watch_state()
+    pid = state.get("pid")
+
+    if pid and state.get("status") == "running":
+        try:
+            os.kill(int(pid), 0)
+        except (ProcessLookupError, ValueError):
+            from datetime import UTC, datetime
+
+            await db.set_watch_state("status", "stopped")
+            await db.set_watch_state("stopped_at", datetime.now(UTC).isoformat())
+            return WatchCommandResponse(status="ok", message="Watch process already exited; state cleaned up")
+
     await db.insert_watch_command("stop")
     return WatchCommandResponse(status="ok", message="Stop command sent")
 
