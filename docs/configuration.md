@@ -146,6 +146,8 @@ tools_risk_overrides = { "docker_compose:restart" = 4, "run_command" = 3 }
 
 Controls which commands `run_command` can execute:
 
+The snippet below is an **illustrative subset** only; the full default list is under **Default command allowlist**.
+
 ```toml
 [guardrails]
 commands_allow = ["ping", "nc", "dig", "ip", "df", "cat", "docker"]
@@ -167,7 +169,7 @@ commands_block = ["rm", "mkfs", "dd", "shutdown", "reboot"]
 
 The blocklist is checked first -- a command on both lists is blocked.
 
-**Host / container PATH:** `run_command` runs binaries from the process environment. Minimal images (for example `python:*-slim`) may omit `ping`, `dig`, `nc`, and similar tools even when they are allowlisted. The published Squire Docker image installs packages for the default allowlist; on bare metal or custom images, install the equivalent OS packages or adjust `commands_allow` to match what is installed.
+**Host / container PATH:** `run_command` runs binaries from the process environment. Minimal images (for example `python:*-slim`) may omit `ping`, `dig`, `nc`, and similar tools even when they are allowlisted. The published Squire Docker image installs the `apt` packages defined in `docker/Dockerfile` for those diagnostics, not every command on the default allowlist: `docker` CLI, `systemctl`, and `journalctl` are typical examples you must provide via the host, socket mounts, or extra image layers. On bare metal or custom images, install the OS packages you need or trim `commands_allow` to match what is installed.
 
 ### Config Path Guards
 

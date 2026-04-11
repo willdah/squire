@@ -12,7 +12,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# OS tools for default run_command allowlist (slim image omits most of these)
+ENV DEBIAN_FRONTEND=noninteractive
+
+# OS tools for common run_command diagnostics (slim base omits most of these; not the full default allowlist)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     dnsutils \
     iproute2 \

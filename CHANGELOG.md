@@ -9,8 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Docker:** OS packages for default `run_command` diagnostics (`ping`, `traceroute`, `dig`/`nslookup`, `nc`, `ip`/`ss`, `netstat`, `lsof`, etc.) so the slim Python base image matches the default command allowlist
+- **Docker:** OS packages for common `run_command` diagnostics that `python:*-slim` usually omits (`ping`, `traceroute`, `dig`/`nslookup`, `nc`, `ip`/`ss`, `netstat`, `lsof`, etc.); the image does not install the full default allowlist (for example `docker`, `systemctl`, and `journalctl` remain host- or deployment-specific)
 - **Guardrails:** Default `commands_allow` includes `nc` for port reachability checks (operators can remove it for stricter policies)
+
+### Changed
+
+- **Docker / docs:** Clarified that the image adds diagnostic packages, not the entire default `commands_allow`; configuration docs point at `docker/Dockerfile` as the source of truth; `DEBIAN_FRONTEND=noninteractive` set for `apt-get`
 
 ## [0.14.0] — 2026-04-11
 
