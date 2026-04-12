@@ -400,7 +400,7 @@ async def start_watch() -> None:
 
         def _per_agent_builder(agent_name: str):
             tol = agent_tolerances.get(agent_name)
-            threshold = RuleGate(threshold=tol).threshold if tol else None
+            threshold = RuleGate(threshold=tol).threshold if tol is not None else None
 
             def factory(tool_risk_levels: dict[str, int]):
                 return _make_headless_risk_gate(tool_risk_levels, agent_threshold=threshold)
@@ -910,7 +910,10 @@ async def start_watch() -> None:
                     cycle_id=cycle_id,
                 )
 
-            rotate_for_context = _session_event_count(session) > watch_config.max_context_events
+            rotate_for_context = (
+                await _session_event_count(runner, session=session, app_name=app_config.app_name)
+                > watch_config.max_context_events
+            )
             if rotate_for_context:
                 logger.info(
                     "Rotating session early: event count exceeded max_context_events (%d)",
@@ -1233,8 +1236,21 @@ async def _run_cycle(
     )
 
 
-def _session_event_count(session) -> int:
-    """Best-effort count of session events using public session attributes."""
+async def _session_event_count(runner: Runner, *, session, app_name: str) -> int:
+    """Best-effort event count using the durable session service."""
+    try:
+        fresh = await runner.session_service.get_session(
+            app_name=app_name,
+            user_id=session.user_id,
+            session_id=session.id,
+        )
+        if fresh is not None:
+            events = getattr(fresh, "events", None)
+            if isinstance(events, list):
+                return len(events)
+    except Exception:
+        logger.debug("Failed to fetch session for event count", exc_info=True)
+
     events = getattr(session, "events", None)
     if isinstance(events, list):
         return len(events)

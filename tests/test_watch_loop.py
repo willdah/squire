@@ -178,9 +178,27 @@ def test_build_watch_report_infers_session_count_from_cycles():
     assert report["major_actions"] == "3 actions executed."
 
 
-def test_session_event_count_uses_public_events_attribute():
+@pytest.mark.asyncio
+async def test_session_event_count_prefers_session_service_fetch():
     from squire.watch import _session_event_count
 
-    assert _session_event_count(SimpleNamespace(events=[1, 2, 3])) == 3
-    assert _session_event_count(SimpleNamespace(events=None)) == 0
-    assert _session_event_count(SimpleNamespace()) == 0
+    class _SessionService:
+        async def get_session(self, **kwargs):
+            return SimpleNamespace(events=[1, 2, 3, 4])
+
+    runner = SimpleNamespace(session_service=_SessionService())
+    session = SimpleNamespace(id="sid", user_id="uid", events=[1])
+    assert await _session_event_count(runner, session=session, app_name="Squire") == 4
+
+
+@pytest.mark.asyncio
+async def test_session_event_count_falls_back_to_local_session_on_error():
+    from squire.watch import _session_event_count
+
+    class _SessionService:
+        async def get_session(self, **kwargs):
+            raise RuntimeError("boom")
+
+    runner = SimpleNamespace(session_service=_SessionService())
+    session = SimpleNamespace(id="sid", user_id="uid", events=[1, 2])
+    assert await _session_event_count(runner, session=session, app_name="Squire") == 2

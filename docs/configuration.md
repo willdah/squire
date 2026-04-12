@@ -370,6 +370,8 @@ Skills with `trigger: watch` and non-empty `incident_keys` become playbook candi
 ## Database -- `[db]`
 
 Squire persists chat history, system snapshots, events, and alert rules to SQLite.
+ADK durable session state is stored in a sibling SQLite file derived from `db.path`
+(`squire.db` -> `squire.adk_sessions.db`). Include both files in backup/restore workflows.
 
 
 | Key                         | Default                           | Env Var                               | Description                                |

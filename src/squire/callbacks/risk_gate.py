@@ -41,10 +41,12 @@ HOMELAB_PATTERNS: list[RiskPattern] = [
     RiskPattern(r"\bcrontab\s+-[re]", 3, "Crontab modification"),
 ]
 
+_SHARED_PATTERN_ANALYZER = PatternAnalyzer(extra_patterns=HOMELAB_PATTERNS)
+
 
 def build_pattern_analyzer() -> PatternAnalyzer:
-    """Build a PatternAnalyzer with default + homelab-specific patterns."""
-    return PatternAnalyzer(extra_patterns=HOMELAB_PATTERNS)
+    """Return the shared PatternAnalyzer with default + homelab-specific patterns."""
+    return _SHARED_PATTERN_ANALYZER
 
 
 def is_adk_internal_tool(tool_name: str | None) -> bool:

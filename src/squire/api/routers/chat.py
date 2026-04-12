@@ -185,7 +185,7 @@ async def chat_websocket(
 
         def _resolve_threshold(name: str) -> int | None:
             tol = agent_tolerances.get(name)
-            return RuleGate(threshold=tol).threshold if tol else None
+            return RuleGate(threshold=tol).threshold if tol is not None else None
 
         def _per_agent_factory(agent_name: str) -> RiskGateFactory:
             threshold = _resolve_threshold(agent_name)

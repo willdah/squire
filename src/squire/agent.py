@@ -10,6 +10,7 @@ For interactive approval, use the web UI (`squire web`).
 """
 
 import asyncio
+import threading
 
 from dotenv import load_dotenv
 
@@ -44,14 +45,30 @@ async def _load_hosts() -> None:
     await _host_store.load()
 
 
-try:
-    asyncio.get_running_loop()
-except RuntimeError:
-    asyncio.run(_load_hosts())
-else:
-    # Some environments import this module inside an active event loop.
-    # Defer host loading rather than running nested loops at import time.
-    pass
+def _load_hosts_sync() -> None:
+    """Load hosts even when module import happens inside a running loop."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(_load_hosts())
+        return
+
+    error: list[BaseException] = []
+
+    def _runner() -> None:
+        try:
+            asyncio.run(_load_hosts())
+        except BaseException as exc:  # noqa: BLE001 - re-raised on caller thread
+            error.append(exc)
+
+    thread = threading.Thread(target=_runner, name="squire-host-loader", daemon=True)
+    thread.start()
+    thread.join()
+    if error:
+        raise RuntimeError("Failed to load hosts during agent bootstrap") from error[0]
+
+
+_load_hosts_sync()
 
 _app_config = AppConfig()
 _llm_config = LLMConfig()
