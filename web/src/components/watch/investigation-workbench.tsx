@@ -117,9 +117,7 @@ export function WatchExplorer() {
   const sessionReport = useMemo(
     () =>
       reportsForWatch.find(
-        (report) =>
-          report.watch_session_id === selectedWatchSessionId
-          && (report.report_type === "session" || report.report_type !== "watch"),
+        (report) => report.watch_session_id === selectedWatchSessionId && report.report_type === "session",
       ),
     [reportsForWatch, selectedWatchSessionId],
   );

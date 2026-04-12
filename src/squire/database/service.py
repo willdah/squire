@@ -939,11 +939,6 @@ class DatabaseService:
         await conn.execute("DELETE FROM watch_events")
         await conn.commit()
 
-    async def reset_watch_history(self) -> None:
-        """Hard-reset watch history to enforce the new scoped model."""
-        await self.delete_watch_cycles()
-        await self.clear_watch_state()
-
     async def create_watch_run(self, watch_id: str, *, started_by: str = "user") -> None:
         """Create a new watch run record."""
         conn = await self._get_conn()

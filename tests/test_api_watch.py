@@ -205,7 +205,7 @@ async def test_watch_delete_cycles(db):
 
     result = await watch_delete_cycles(db=db)
     assert result.status == "ok"
-    assert result.message == "Cycle history cleared"
+    assert result.message == "Watch datastore cleared (runs, sessions, cycles, reports, watch events)"
 
     cycles = await db.get_watch_cycles()
     assert cycles == []

@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Watch clear API:** `DELETE /api/watch/cycles` OpenAPI docs and response message now describe the full watch datastore reset (runs, sessions, cycles, reports, `watch_events`) and note that Activity `events` rows are untouched; Cycle History dialog copy matches
+- **Activity chat logging:** `tool_result` and streaming error rows persist at most 500 characters of detail, matching the live WebSocket `tool_result.output` cap
+- **Timeline APIs:** Documented when to use `GET /api/watch/timeline` vs `GET /api/events/timeline` (identical data; watch vs Activity entry points)
 - **API schemas:** Session/message/watch status and watch cycle payloads now include token usage fields for downstream clients
 - **Watch event scoping:** Watch event rows now store `watch_id`, `watch_session_id`, and `cycle_id`; websocket streaming and cycle history queries are now scoped to the active watch run
 - **Watch lifecycle:** `squire watch` now creates watch/session/cycle identifiers, persists cycle outcomes into canonical cycle rows, and emits session/watch completion reports for operator-readable summaries
@@ -37,11 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Activity completeness:** Chat now logs `tool_result` and streaming error events so Activity better reflects real chat behavior
 - **Watch stop finalization:** Stopping watch now always finalizes active cycle/session/run artifacts and emits a watch completion report, including stale-PID cleanup paths where the process already exited
 - **Watch Explorer report visibility:** Explorer now uses supported report pagination, prefers report-bearing sessions by default, and resolves `chat_session_id` deep links to the correct watch/session context
-- **Watch Explorer maintenance:** Added a clear-history action in Watch Explorer to wipe persisted watch runs/sessions/cycles/reports/events from the UI
+- **Watch Explorer maintenance:** Added a clear-history action in Watch Explorer to wipe persisted watch runs/sessions/cycles/reports and `watch_events` rows (Activity feed not cleared)
 - **Watch Explorer polish:** Repositioned and restyled the clear-history action so the destructive control is visually prominent and less awkward in the layout
 - **Watch Explorer consistency:** Updated the clear-history button to match Session History action styling (outline + eraser icon) with compact `Clear` copy
 - **Activity filters:** Added missing watch event categories (`watch.action`, `watch.error`, `watch.incident_detected`, `watch.remediation`, `watch.verification`, `watch.escalation`, `watch.digest`) so Activity filtering matches emitted notifications
 - **Watch session cycle counts:** Session summaries in Watch Explorer now include live cycle totals while a watch session is still running (instead of remaining at zero until session close)
+- **Watch Explorer reports:** Session report picker matches `report_type === "session"` only so future report types do not leak into the session slot
+- **Database:** Removed unused `reset_watch_history` helper (clear path is `delete_watch_cycles` only)
 ## [0.15.0] — 2026-04-11
 
 ### Added

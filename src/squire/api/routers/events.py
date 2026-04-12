@@ -41,7 +41,10 @@ async def watch_timeline_events(
     per_page: int = Query(30, ge=1, le=200),
     db=Depends(get_db),
 ):
-    """Unified timeline cards for investigation workbench."""
+    """Watch cycle/report timeline for Activity and shared deep links.
+
+    Same data as ``GET /api/watch/timeline``; use this path when the client is Activity-centric.
+    """
     rows = await db.get_watch_activity_timeline(
         watch_id=watch_id,
         watch_session_id=watch_session_id,

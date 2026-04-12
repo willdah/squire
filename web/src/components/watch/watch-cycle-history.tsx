@@ -166,9 +166,10 @@ export function WatchCycleHistory({ watchId, watchSessionId }: WatchCycleHistory
           />
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Clear cycle history?</DialogTitle>
+              <DialogTitle>Clear all watch history?</DialogTitle>
               <DialogDescription>
-                This will permanently delete all cycle history. This action cannot be undone.
+                This removes watch runs, sessions, cycles, reports, and watch event rows. Activity feed entries in
+                Session/Activity are not deleted. This cannot be undone.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
