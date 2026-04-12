@@ -2,6 +2,7 @@
 
 import pytest
 
+from squire.config import LLMConfig
 from squire.skills import Skill
 from squire.watch_autonomy import Incident
 from squire.watch_playbooks.router import RouterThresholds, route_playbooks_for_incidents
@@ -103,3 +104,25 @@ async def test_playbook_merge_caps_selected_count():
         max_selected_playbooks=2,
     )
     assert len(prompt_playbooks) == 2
+
+
+@pytest.mark.asyncio
+async def test_llm_budget_zero_skips_llm_calls(monkeypatch):
+    incident = Incident(key="disk-pressure:local", severity="high", title="Disk pressure", detail="95% used", host="local")
+    skills = [_skill("triage-disk", incident_keys=["disk-pressure:"], description="Handle disk pressure incidents")]
+
+    async def _fail_if_called(*args, **kwargs):
+        raise AssertionError("LLM helper should not be called when max_llm_calls=0")
+
+    monkeypatch.setattr("squire.watch_playbooks.router._llm_json", _fail_if_called)
+    prompt_playbooks, selections = await route_playbooks_for_incidents(
+        incidents=[incident],
+        playbook_skills=skills,
+        llm_config=LLMConfig(model="test-model"),
+        max_llm_calls=0,
+        thresholds=RouterThresholds(single_match_plausibility_min=0.0),
+    )
+
+    assert selections[0].selected_playbook == "triage-disk"
+    assert selections[0].path_taken == "deterministic_single"
+    assert any("triage-disk" in block for block in prompt_playbooks)

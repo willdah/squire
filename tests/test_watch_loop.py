@@ -75,6 +75,33 @@ async def test_poll_commands_update_config(db):
 
 
 @pytest.mark.asyncio
+async def test_poll_commands_update_config_rejects_invalid_safety_values(db):
+    """Invalid live safety updates should fail and keep existing values."""
+    from squire.config import WatchConfig
+    from squire.watch import _poll_commands
+
+    shutdown = asyncio.Event()
+    config = WatchConfig()
+    initial_identical_limit = config.max_identical_actions_per_cycle
+
+    cmd_id = await db.insert_watch_command(
+        "update_config",
+        payload=json.dumps({"max_identical_actions_per_cycle": 0}),
+    )
+    await _poll_commands(db, shutdown, watch_config=config)
+
+    assert config.max_identical_actions_per_cycle == initial_identical_limit
+    pending = await db.get_pending_watch_commands()
+    assert len(pending) == 0
+
+    conn = await db._get_conn()  # noqa: SLF001 - test verifies command status persistence
+    cursor = await conn.execute("SELECT status, error FROM watch_commands WHERE id = ?", (cmd_id,))
+    row = await cursor.fetchone()
+    assert row["status"] == "failed"
+    assert "max_identical_actions_per_cycle" in (row["error"] or "")
+
+
+@pytest.mark.asyncio
 async def test_poll_commands_unknown_fails(db):
     """Unknown commands should be marked as failed."""
     from squire.watch import _poll_commands

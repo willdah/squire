@@ -2,6 +2,7 @@
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from squire.api.routers.skills import (
     bootstrap_watch_playbooks,
@@ -134,3 +135,19 @@ async def test_dry_run_contract_fields(skills_service, monkeypatch):
     row = response["selections"][0]
     assert row.path_taken == "deterministic_single"
     assert row.selected_playbook == "triage-disk-pressure"
+
+
+def test_dry_run_request_rejects_too_many_incidents():
+    with pytest.raises(ValidationError):
+        PlaybookDryRunRequest(
+            incidents=[
+                {
+                    "key": f"disk-pressure:host-{idx}",
+                    "severity": "high",
+                    "host": "local",
+                    "title": "disk",
+                    "detail": "95%",
+                }
+                for idx in range(26)
+            ]
+        )

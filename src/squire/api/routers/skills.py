@@ -20,6 +20,7 @@ from ..schemas import (
 router = APIRouter()
 
 VALID_TRIGGERS = ("manual", "watch")
+_DRY_RUN_MAX_LLM_CALLS = 8
 
 
 @router.get("", response_model=list[Skill])
@@ -99,7 +100,13 @@ async def dry_run_playbook_routing(
     ]
     watch_skills = skills_service.list_skills(enabled_only=True, trigger="watch")
     playbook_skills = [s for s in watch_skills if s.incident_keys]
-    _, selections = await route_playbooks_for_incidents(incidents, playbook_skills, llm_config=llm_config)
+    selected_llm_config = llm_config if body.use_llm else None
+    _, selections = await route_playbooks_for_incidents(
+        incidents,
+        playbook_skills,
+        llm_config=selected_llm_config,
+        max_llm_calls=_DRY_RUN_MAX_LLM_CALLS,
+    )
     response_selections = [
         PlaybookDryRunSelection(
             incident={

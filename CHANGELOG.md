@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docs/config:** Updated watch-mode docs and example config to reflect strict-autonomy behavior, corrected `cycles_per_session` default to `12`, and documented new watch config fields and notification categories
 - **Skills schema:** Canonicalized skill host targeting to `metadata.hosts` (list) with legacy `metadata.host` retrofit on load; renderer persists only `hosts`
 
+### Fixed
+
+- **Watch safety updates:** Live `update_config` commands now validate incoming values against `WatchConfig` constraints and reject invalid guardrail-disabling values (such as `0` for per-cycle safety limits)
+- **Playbook routing resilience:** Added bounded LLM usage for watch/dry-run playbook routing with per-request call caps and per-call timeouts; watch mode also wraps routing in a cycle-safe timeout fallback
+- **Skills dry-run safeguards:** `POST /api/skills/playbooks/dry-run` now limits incident batch size and defaults to heuristic routing unless `use_llm=true` is explicitly requested
+
 ## [0.14.1] — 2026-04-11
 
 ### Added

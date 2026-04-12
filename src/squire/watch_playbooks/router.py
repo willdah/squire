@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -53,17 +54,28 @@ async def route_playbooks_for_incidents(
     max_selected_playbooks: int = 3,
     semantic_candidate_cap: int = 10,
     prompt_char_budget: int = 6000,
+    max_llm_calls: int = 6,
+    llm_timeout_seconds: float = 8.0,
 ) -> tuple[list[str], list[PlaybookSelection]]:
     """Route one playbook per incident; return merged prompt blocks and selection trace."""
     thresholds = thresholds or RouterThresholds()
     ordered_incidents = sorted(incidents, key=lambda inc: (severity_rank(inc.severity), inc.key))
     selections: list[PlaybookSelection] = []
+    llm_calls_remaining = max(0, max_llm_calls)
 
     for incident in ordered_incidents:
         deterministic = _deterministic_candidates(incident, playbook_skills)
         if len(deterministic) == 1:
             skill = deterministic[0]
-            confidence, reasoning = await _plausibility_check(incident, skill, llm_config)
+            active_llm_config = llm_config if llm_calls_remaining > 0 else None
+            if active_llm_config is not None:
+                llm_calls_remaining -= 1
+            confidence, reasoning = await _plausibility_check(
+                incident,
+                skill,
+                active_llm_config,
+                llm_timeout_seconds=llm_timeout_seconds,
+            )
             if confidence >= thresholds.single_match_plausibility_min:
                 selections.append(
                     PlaybookSelection(
@@ -81,11 +93,15 @@ async def route_playbooks_for_incidents(
             continue
 
         if len(deterministic) > 1:
+            active_llm_config = llm_config if llm_calls_remaining > 0 else None
+            if active_llm_config is not None:
+                llm_calls_remaining -= 1
             picked, confidence, reasoning = await _llm_choose_best(
                 incident,
                 deterministic,
-                llm_config=llm_config,
+                llm_config=active_llm_config,
                 mode="tie_break",
+                llm_timeout_seconds=llm_timeout_seconds,
             )
             if picked is not None and confidence >= thresholds.tie_break_min_confidence:
                 selections.append(
@@ -108,11 +124,15 @@ async def route_playbooks_for_incidents(
             selections.append(_generic_selection(incident, 0, 0.0, "No host-compatible semantic candidates"))
             continue
 
+        active_llm_config = llm_config if llm_calls_remaining > 0 else None
+        if active_llm_config is not None:
+            llm_calls_remaining -= 1
         picked, confidence, reasoning = await _llm_choose_best(
             incident,
             semantic_candidates,
-            llm_config=llm_config,
+            llm_config=active_llm_config,
             mode="semantic",
+            llm_timeout_seconds=llm_timeout_seconds,
         )
         if picked is not None and confidence >= thresholds.semantic_min_confidence:
             selections.append(
@@ -204,7 +224,13 @@ def _merge_selected_playbooks(
     return merged
 
 
-async def _plausibility_check(incident: Incident, skill: Skill, llm_config: LLMConfig | None) -> tuple[float, str]:
+async def _plausibility_check(
+    incident: Incident,
+    skill: Skill,
+    llm_config: LLMConfig | None,
+    *,
+    llm_timeout_seconds: float,
+) -> tuple[float, str]:
     if llm_config is None:
         return _heuristic_similarity(incident, skill), "Heuristic plausibility"
     prompt = (
@@ -213,7 +239,7 @@ async def _plausibility_check(incident: Incident, skill: Skill, llm_config: LLMC
         f"Playbook: name={skill.name}, description={skill.description}\n"
         'Return JSON: {"confidence": <0-1>, "reasoning": "..."}'
     )
-    data = await _llm_json(prompt, llm_config)
+    data = await _llm_json(prompt, llm_config, timeout_seconds=llm_timeout_seconds)
     confidence = _safe_confidence(data.get("confidence")) if data else _heuristic_similarity(incident, skill)
     reasoning = str(data.get("reasoning", "LLM plausibility")) if data else "Heuristic plausibility fallback"
     return confidence, reasoning
@@ -225,6 +251,7 @@ async def _llm_choose_best(
     *,
     llm_config: LLMConfig | None,
     mode: Literal["tie_break", "semantic"],
+    llm_timeout_seconds: float,
 ) -> tuple[Skill | None, float, str]:
     if not candidates:
         return None, 0.0, "No candidates"
@@ -243,7 +270,7 @@ async def _llm_choose_best(
         + "\n".join(candidate_lines)
         + '\nReturn JSON: {"index": <int>, "confidence": <0-1>, "reasoning": "..."}'
     )
-    data = await _llm_json(prompt, llm_config)
+    data = await _llm_json(prompt, llm_config, timeout_seconds=llm_timeout_seconds)
     if not data:
         best = max(candidates, key=lambda s: _heuristic_similarity(incident, s))
         return best, _heuristic_similarity(incident, best), f"Heuristic {mode} fallback"
@@ -272,20 +299,23 @@ def _safe_confidence(value) -> float:
         return 0.0
 
 
-async def _llm_json(prompt: str, llm_config: LLMConfig) -> dict | None:
+async def _llm_json(prompt: str, llm_config: LLMConfig, *, timeout_seconds: float) -> dict | None:
     kwargs: dict = {}
     if llm_config.api_base:
         kwargs["api_base"] = llm_config.api_base
     try:
-        response = await acompletion(
-            model=llm_config.model,
-            messages=[
-                {"role": "system", "content": "Return only valid JSON."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0,
-            max_tokens=300,
-            **kwargs,
+        response = await asyncio.wait_for(
+            acompletion(
+                model=llm_config.model,
+                messages=[
+                    {"role": "system", "content": "Return only valid JSON."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0,
+                max_tokens=300,
+                **kwargs,
+            ),
+            timeout=max(0.1, timeout_seconds),
         )
     except Exception:
         logger.debug("LLM JSON helper failed", exc_info=True)

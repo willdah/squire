@@ -74,6 +74,30 @@ _WATCH_LIVE_KEYS = frozenset(
     }
 )
 
+_WATCH_ROUTING_TIMEOUT_SECONDS = 15
+_WATCH_ROUTING_MAX_LLM_CALLS = 4
+_WATCH_ROUTING_LLM_TIMEOUT_SECONDS = 6.0
+
+
+def _validated_live_watch_updates(
+    payload: dict,
+    watch_config: WatchConfig,
+) -> tuple[dict, int | None]:
+    """Validate and normalize live watch config updates before applying them."""
+    updates = {key: payload[key] for key in _WATCH_LIVE_KEYS if key in payload}
+    if updates:
+        candidate = watch_config.model_dump()
+        candidate.update(updates)
+        validated = WatchConfig.model_validate(candidate)
+        updates = {key: getattr(validated, key) for key in updates}
+
+    risk_tolerance: int | None = None
+    if "risk_tolerance" in payload:
+        risk_tolerance = int(payload["risk_tolerance"])
+        if not 1 <= risk_tolerance <= 5:
+            raise ValueError("risk_tolerance must be between 1 and 5")
+    return updates, risk_tolerance
+
 
 async def _poll_commands(
     db: DatabaseService,
@@ -95,13 +119,15 @@ async def _poll_commands(
                 await db.update_watch_command_status(cmd_id, "completed")
             elif command == "update_config" and watch_config is not None:
                 payload = json.loads(cmd["payload"] or "{}")
-                for key in _WATCH_LIVE_KEYS:
-                    if key in payload:
-                        setattr(watch_config, key, payload[key])
-                if "interval_minutes" in payload:
-                    await db.set_watch_state("interval_minutes", str(payload["interval_minutes"]))
-                if "risk_tolerance" in payload and risk_evaluator is not None:
-                    threshold = int(payload["risk_tolerance"])
+                updates, risk_tolerance = _validated_live_watch_updates(payload, watch_config)
+
+                for key, value in updates.items():
+                    setattr(watch_config, key, value)
+                if "interval_minutes" in updates:
+                    await db.set_watch_state("interval_minutes", str(updates["interval_minutes"]))
+
+                if risk_tolerance is not None and risk_evaluator is not None:
+                    threshold = risk_tolerance
                     risk_evaluator.rule_gate.threshold = threshold
                     if session_state_template is not None:
                         session_state_template["risk_tolerance"] = threshold
@@ -424,10 +450,15 @@ async def start_watch() -> None:
                 "generic": 0,
             }
             try:
-                playbooks, playbook_selections = await route_playbooks_for_incidents(
-                    incidents,
-                    playbook_skills,
-                    llm_config=llm_config,
+                playbooks, playbook_selections = await asyncio.wait_for(
+                    route_playbooks_for_incidents(
+                        incidents,
+                        playbook_skills,
+                        llm_config=llm_config,
+                        max_llm_calls=_WATCH_ROUTING_MAX_LLM_CALLS,
+                        llm_timeout_seconds=_WATCH_ROUTING_LLM_TIMEOUT_SECONDS,
+                    ),
+                    timeout=_WATCH_ROUTING_TIMEOUT_SECONDS,
                 )
             except Exception:
                 logger.debug("Playbook routing failed; using generic fallback", exc_info=True)
