@@ -133,16 +133,59 @@ async def test_delete_watch_cycles(db):
 @pytest.mark.asyncio
 async def test_cleanup_watch_data(db):
     """Cleanup removes old events but keeps recent ones."""
-    await db.insert_watch_event(cycle=1, type="cycle_start", content="{}")
-    await db.insert_watch_event(cycle=1, type="cycle_end", content="{}")
-    await db.insert_watch_event(cycle=2, type="cycle_start", content="{}")
-    await db.insert_watch_event(cycle=2, type="cycle_end", content="{}")
+    await db.create_watch_run("watch_cleanup")
+    await db.create_watch_session("wss_cleanup", watch_id="watch_cleanup", adk_session_id="adk_cleanup")
+    await db.create_watch_cycle(
+        "cyc_cleanup_1",
+        watch_id="watch_cleanup",
+        watch_session_id="wss_cleanup",
+        cycle_number=1,
+    )
+    await db.close_watch_cycle(
+        "cyc_cleanup_1",
+        status="ok",
+        duration_seconds=1.0,
+        tool_count=0,
+        blocked_count=0,
+        remote_tool_count=0,
+        incident_count=0,
+        input_tokens=None,
+        output_tokens=None,
+        total_tokens=None,
+        incident_key=None,
+        outcome={},
+    )
+    await db.insert_watch_event(cycle=1, cycle_id="cyc_cleanup_1", type="cycle_start", content="{}")
+    await db.insert_watch_event(cycle=1, cycle_id="cyc_cleanup_1", type="cycle_end", content="{}")
+
+    await db.create_watch_cycle(
+        "cyc_cleanup_2",
+        watch_id="watch_cleanup",
+        watch_session_id="wss_cleanup",
+        cycle_number=2,
+    )
+    await db.close_watch_cycle(
+        "cyc_cleanup_2",
+        status="ok",
+        duration_seconds=1.0,
+        tool_count=0,
+        blocked_count=0,
+        remote_tool_count=0,
+        incident_count=0,
+        input_tokens=None,
+        output_tokens=None,
+        total_tokens=None,
+        incident_key=None,
+        outcome={},
+    )
+    await db.insert_watch_event(cycle=2, cycle_id="cyc_cleanup_2", type="cycle_start", content="{}")
+    await db.insert_watch_event(cycle=2, cycle_id="cyc_cleanup_2", type="cycle_end", content="{}")
 
     deleted = await db.cleanup_watch_data(max_cycles=1)
     assert deleted > 0
 
-    remaining = await db.get_watch_events_since(0)
-    assert all(e["cycle"] == 2 for e in remaining)
+    remaining = await db.get_watch_events_since(0, limit=100, watch_id="watch_cleanup")
+    assert all(e["cycle_id"] == "cyc_cleanup_2" for e in remaining)
 
 
 @pytest.mark.asyncio

@@ -49,18 +49,32 @@ export default function ActivityPage() {
   const [watchId, setWatchId] = useState("");
   const [windowPreset, setWindowPreset] = useState<(typeof WINDOW_PRESETS)[number]["value"]>("24h");
   const [customSince, setCustomSince] = useState("");
+  const [presetSinceIso, setPresetSinceIso] = useState<string | null>(null);
 
-  const sinceIso = useMemo(() => {
-    if (windowPreset === "custom") {
-      if (!customSince) return null;
-      const parsed = new Date(customSince);
-      return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  const handleWindowPresetChange = (value: (typeof WINDOW_PRESETS)[number]["value"]) => {
+    setWindowPreset(value);
+    if (value === "custom") {
+      setPresetSinceIso(null);
+      return;
     }
-    const preset = WINDOW_PRESETS.find((item) => item.value === windowPreset);
+    const preset = WINDOW_PRESETS.find((item) => item.value === value);
     const hours = preset?.hours;
-    if (!hours) return null;
-    return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-  }, [customSince, windowPreset]);
+    if (!hours) {
+      setPresetSinceIso(null);
+      return;
+    }
+    setPresetSinceIso(new Date(Date.now() - hours * 60 * 60 * 1000).toISOString());
+  };
+
+  let sinceIso: string | null = presetSinceIso;
+  if (windowPreset === "custom") {
+    if (!customSince) {
+      sinceIso = null;
+    } else {
+      const parsed = new Date(customSince);
+      sinceIso = Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+    }
+  }
 
   const params = new URLSearchParams();
   if (category !== "all") params.set("category", category);
@@ -106,7 +120,10 @@ export default function ActivityPage() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <div className="space-y-2">
               <Label>Window</Label>
-              <Select value={windowPreset} onValueChange={(value) => setWindowPreset(value as (typeof WINDOW_PRESETS)[number]["value"])}>
+              <Select
+                value={windowPreset}
+                onValueChange={(value) => handleWindowPresetChange(value as (typeof WINDOW_PRESETS)[number]["value"])}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
