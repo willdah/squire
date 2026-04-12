@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Watch safety updates:** Live `update_config` commands now validate incoming values against `WatchConfig` constraints and reject invalid guardrail-disabling values (such as `0` for per-cycle safety limits)
 - **Playbook routing resilience:** Added bounded LLM usage for watch/dry-run playbook routing with per-request call caps and per-call timeouts; watch mode also wraps routing in a cycle-safe timeout fallback
 - **Skills dry-run safeguards:** `POST /api/skills/playbooks/dry-run` now limits incident batch size and defaults to heuristic routing unless `use_llm=true` is explicitly requested
+- **Tests/CI:** Wrapped a long `Incident(...)` constructor call in `test_watch_playbook_router.py` to satisfy Ruff's 120-character line length check and unblock the lint job
 
 ## [0.14.1] — 2026-04-11
 

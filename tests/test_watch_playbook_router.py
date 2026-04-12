@@ -108,7 +108,9 @@ async def test_playbook_merge_caps_selected_count():
 
 @pytest.mark.asyncio
 async def test_llm_budget_zero_skips_llm_calls(monkeypatch):
-    incident = Incident(key="disk-pressure:local", severity="high", title="Disk pressure", detail="95% used", host="local")
+    incident = Incident(
+        key="disk-pressure:local", severity="high", title="Disk pressure", detail="95% used", host="local"
+    )
     skills = [_skill("triage-disk", incident_keys=["disk-pressure:"], description="Handle disk pressure incidents")]
 
     async def _fail_if_called(*args, **kwargs):
