@@ -24,6 +24,7 @@ from ..schemas import (
     ConfigSectionMeta,
     GuardrailsConfigUpdate,
     LLMConfigUpdate,
+    LLMModelsResponse,
     NotificationsConfigUpdate,
     SkillsConfigUpdate,
     WatchConfigPatch,
@@ -138,6 +139,49 @@ async def get_config(
         hosts=host_configs,
         toml_path=str(toml_path) if toml_path else None,
     )
+
+
+@router.get("/llm/models", response_model=LLMModelsResponse)
+async def get_llm_models(llm_config=Depends(get_llm_config)):
+    """List available models for the active provider."""
+    import litellm
+
+    current_model = llm_config.model
+    provider = "unknown"
+    resolved_api_base = llm_config.api_base
+    error: str | None = None
+
+    try:
+        _, provider, _, resolved_api_base = litellm.get_llm_provider(model=current_model, api_base=llm_config.api_base)
+    except Exception:
+        if "/" in current_model:
+            provider = current_model.split("/", 1)[0]
+
+    try:
+        discovered = litellm.get_valid_models(
+            check_provider_endpoint=True,
+            custom_llm_provider=provider if provider != "unknown" else None,
+            api_base=resolved_api_base,
+        )
+    except Exception as exc:
+        discovered = []
+        error = str(exc)
+
+    provider_prefix = f"{provider}/" if provider != "unknown" else ""
+    normalized: list[str] = []
+    for item in discovered:
+        if not isinstance(item, str):
+            continue
+        name = item.strip()
+        if not name:
+            continue
+        if "/" in name or not provider_prefix:
+            normalized.append(name)
+        else:
+            normalized.append(f"{provider_prefix}{name}")
+
+    models = sorted(set(normalized + [current_model]))
+    return LLMModelsResponse(provider=provider, current_model=current_model, models=models, error=error)
 
 
 # --- PATCH ---

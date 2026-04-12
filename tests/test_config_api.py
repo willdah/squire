@@ -65,6 +65,48 @@ class TestGetConfig:
         assert result.toml_path == str(toml_file)
 
 
+@pytest.mark.usefixtures("_setup_deps")
+class TestGetLlmModels:
+    async def test_returns_provider_models(self, monkeypatch):
+        from squire.api.routers.config import get_llm_models
+
+        def _fake_get_llm_provider(model: str, api_base=None):
+            return ("gpt-4o-mini", "openai", None, api_base)
+
+        def _fake_get_valid_models(**kwargs):
+            assert kwargs["custom_llm_provider"] == "openai"
+            return ["gpt-4o-mini", "gpt-4.1-mini"]
+
+        monkeypatch.setattr("litellm.get_llm_provider", _fake_get_llm_provider)
+        monkeypatch.setattr("litellm.get_valid_models", _fake_get_valid_models)
+        monkeypatch.setattr(deps, "llm_config", LLMConfig(model="openai/gpt-4o-mini"))
+
+        result = await get_llm_models(llm_config=deps.llm_config)
+        assert result.provider == "openai"
+        assert result.current_model == "openai/gpt-4o-mini"
+        assert "openai/gpt-4o-mini" in result.models
+        assert "openai/gpt-4.1-mini" in result.models
+        assert result.error is None
+
+    async def test_includes_current_model_when_discovery_fails(self, monkeypatch):
+        from squire.api.routers.config import get_llm_models
+
+        def _fake_get_llm_provider(model: str, api_base=None):
+            return ("llama3.2:3b", "ollama_chat", None, api_base)
+
+        def _fake_get_valid_models(**kwargs):
+            raise RuntimeError("provider unavailable")
+
+        monkeypatch.setattr("litellm.get_llm_provider", _fake_get_llm_provider)
+        monkeypatch.setattr("litellm.get_valid_models", _fake_get_valid_models)
+        monkeypatch.setattr(deps, "llm_config", LLMConfig(model="ollama_chat/llama3.2:3b"))
+
+        result = await get_llm_models(llm_config=deps.llm_config)
+        assert result.provider == "ollama_chat"
+        assert result.models == ["ollama_chat/llama3.2:3b"]
+        assert result.error == "provider unavailable"
+
+
 # --- PATCH /api/config/{section} ---
 
 

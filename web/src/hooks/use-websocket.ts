@@ -12,6 +12,7 @@ const BASE_DELAY_MS = 1000;
 export function useWebSocket(sessionId: string | null, queryParams?: Record<string, string>) {
   const wsRef = useRef<WebSocket | null>(null);
   const [status, setStatus] = useState<WsStatus>("disconnected");
+  const [reconnectToken, setReconnectToken] = useState(0);
   const onMessageRef = useRef<((msg: WsServerMessage) => void) | null>(null);
   const retriesRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -84,7 +85,7 @@ export function useWebSocket(sessionId: string | null, queryParams?: Record<stri
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [sessionId, queryString]);
+  }, [sessionId, queryString, reconnectToken]);
 
   const send = useCallback(
     (data: Record<string, unknown>) => {
@@ -102,5 +103,17 @@ export function useWebSocket(sessionId: string | null, queryParams?: Record<stri
     []
   );
 
-  return { status, send, setOnMessage };
+  const reconnect = useCallback(() => {
+    retriesRef.current = 0;
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+    intentionalCloseRef.current = true;
+    wsRef.current?.close();
+    wsRef.current = null;
+    setReconnectToken((prev) => prev + 1);
+  }, []);
+
+  return { status, send, setOnMessage, reconnect };
 }

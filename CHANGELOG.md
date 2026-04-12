@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Watch playbooks (user-managed):** Added dynamic playbook routing from Skills metadata (`incident_keys` + `hosts`) with deterministic matching, single-match plausibility checks, LLM tie-break for overlaps, semantic fallback for unmatched incidents, and generic fallback on low confidence
 - **Skills API/UI:** Added incident family catalog endpoint, router dry-run simulation endpoint, starter playbook bootstrap endpoint, conflict preview UI, and watch-playbook metadata editing (`hosts`, `incident_keys`)
 - **Watch telemetry:** Added playbook selection phase events and counters for deterministic/semantic/generic routing paths
+- **Web LLM model selection:** Chat header and Configuration > LLM now use provider-backed model dropdowns instead of free-text model entry; chat changes still persist and auto-reconnect the current session
 
 ### Changed
 
