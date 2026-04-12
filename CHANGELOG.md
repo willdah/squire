@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-04-12
+
 ### Added
 
 - **Token telemetry:** Provider-reported token usage is now captured per assistant response in chat/watch, aggregated per session/watch session, and exposed in watch cycle summaries (`input`, `output`, `total`)
