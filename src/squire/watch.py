@@ -79,6 +79,18 @@ _WATCH_ROUTING_MAX_LLM_CALLS = 4
 _WATCH_ROUTING_LLM_TIMEOUT_SECONDS = 6.0
 
 
+def _extract_token_usage_from_event(event) -> tuple[int | None, int | None, int | None]:
+    """Extract provider-reported token counts from a watch-cycle event."""
+    usage = getattr(event, "usage_metadata", None)
+    if not usage:
+        return None, None, None
+    return (
+        getattr(usage, "prompt_token_count", None),
+        getattr(usage, "candidates_token_count", None),
+        getattr(usage, "total_token_count", None),
+    )
+
+
 def _validated_live_watch_updates(
     payload: dict,
     watch_config: WatchConfig,
@@ -335,6 +347,9 @@ async def start_watch() -> None:
             "total_errors": "0",
             "total_resolved": "0",
             "total_escalated": "0",
+            "total_input_tokens": "0",
+            "total_output_tokens": "0",
+            "total_tokens": "0",
             "playbook_deterministic_match": "0",
             "playbook_semantic_match": "0",
             "playbook_generic_fallback": "0",
@@ -502,6 +517,9 @@ async def start_watch() -> None:
             cycle_start_time = datetime.now(UTC)
             await emitter.emit_cycle_start(cycle_count, session.id)
             cycle_tool_count = 0
+            cycle_input_tokens: int | None = None
+            cycle_output_tokens: int | None = None
+            cycle_total_tokens: int | None = None
             response_text = ""
             try:
                 await emitter.emit_phase(
@@ -516,6 +534,9 @@ async def start_watch() -> None:
                     blocked_count,
                     cycle_signatures,
                     remote_tool_count,
+                    cycle_input_tokens,
+                    cycle_output_tokens,
+                    cycle_total_tokens,
                 ) = await asyncio.wait_for(
                     _run_cycle(
                         runner,
@@ -533,7 +554,14 @@ async def start_watch() -> None:
                 )
                 last_cycle_error = None
                 if response_text:
-                    await db.save_message(session_id=session.id, role="assistant", content=response_text)
+                    await db.save_message(
+                        session_id=session.id,
+                        role="assistant",
+                        content=response_text,
+                        input_tokens=cycle_input_tokens,
+                        output_tokens=cycle_output_tokens,
+                        total_tokens=cycle_total_tokens,
+                    )
                     await db.set_watch_state("last_response", response_text[:500])
                     logger.info("Cycle %d:\n%s", cycle_count, response_text)
 
@@ -561,6 +589,9 @@ async def start_watch() -> None:
                 )
                 outcome["playbook_selection"] = playbook_path_counts
                 outcome["remote_tool_count"] = remote_tool_count
+                outcome["input_tokens"] = cycle_input_tokens
+                outcome["output_tokens"] = cycle_output_tokens
+                outcome["total_tokens"] = cycle_total_tokens
                 issue_key = dominant_incident_key(incidents)
                 if issue_key:
                     outcome["incident_fingerprint"] = issue_key
@@ -590,6 +621,9 @@ async def start_watch() -> None:
                 await _dispatch(notifier, "watch.error", f"Watch cycle {cycle_count} timed out.")
                 blocked_count = 0
                 cycle_tool_count = 0
+                cycle_input_tokens = None
+                cycle_output_tokens = None
+                cycle_total_tokens = None
                 outcome = build_cycle_outcome(
                     incidents,
                     {},
@@ -598,6 +632,9 @@ async def start_watch() -> None:
                     cycle_status="error",
                 )
                 outcome["playbook_selection"] = playbook_path_counts
+                outcome["input_tokens"] = cycle_input_tokens
+                outcome["output_tokens"] = cycle_output_tokens
+                outcome["total_tokens"] = cycle_total_tokens
             except Exception as e:
                 last_cycle_error = f"{type(e).__name__}: {e}"
                 logger.error("Cycle %d failed: %s", cycle_count, e, exc_info=True)
@@ -605,6 +642,9 @@ async def start_watch() -> None:
                 await _dispatch(notifier, "watch.error", f"Watch cycle {cycle_count} failed.")
                 blocked_count = 0
                 cycle_tool_count = 0
+                cycle_input_tokens = None
+                cycle_output_tokens = None
+                cycle_total_tokens = None
                 outcome = build_cycle_outcome(
                     incidents,
                     {},
@@ -613,6 +653,9 @@ async def start_watch() -> None:
                     cycle_status="error",
                 )
                 outcome["playbook_selection"] = playbook_path_counts
+                outcome["input_tokens"] = cycle_input_tokens
+                outcome["output_tokens"] = cycle_output_tokens
+                outcome["total_tokens"] = cycle_total_tokens
 
             cycle_duration = (datetime.now(UTC) - cycle_start_time).total_seconds()
             cycle_status = "ok" if last_cycle_error is None else "error"
@@ -624,6 +667,9 @@ async def start_watch() -> None:
                 tool_count=cycle_tool_count,
                 blocked_count=blocked_count,
                 outcome=outcome,
+                input_tokens=cycle_input_tokens,
+                output_tokens=cycle_output_tokens,
+                total_tokens=cycle_total_tokens,
             )
             await _persist_watch_metrics(db, outcome)
             await _dispatch_outcome_notifications(db, notifier, cycle_count, outcome)
@@ -714,17 +760,29 @@ async def _run_cycle(
     max_tool_calls: int = 0,
     max_identical_actions: int = 0,
     max_remote_actions: int = 0,
-) -> tuple[str, int, int, list[str], int]:
+) -> tuple[str, int, int, list[str], int, int | None, int | None, int | None]:
     """Inject a prompt and collect the agent's response.
 
     Returns:
-        A tuple of (response_text, tool_call_count, blocked_count, cooldown_signatures, remote_tool_count).
+        A tuple of (
+            response_text,
+            tool_call_count,
+            blocked_count,
+            cooldown_signatures,
+            remote_tool_count,
+            input_tokens,
+            output_tokens,
+            total_tokens,
+        ).
     """
     message = types.Content(parts=[types.Part(text=prompt)])
     response_parts: list[str] = []
     tool_count = 0
     blocked_count = 0
     remote_tool_count = 0
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
     signature_counts: dict[str, int] = defaultdict(int)
     cooldown_signatures: list[str] = []
 
@@ -733,6 +791,14 @@ async def _run_cycle(
         session_id=session.id,
         new_message=message,
     ):
+        event_input_tokens, event_output_tokens, event_total_tokens = _extract_token_usage_from_event(event)
+        if event_input_tokens is not None:
+            input_tokens = event_input_tokens
+        if event_output_tokens is not None:
+            output_tokens = event_output_tokens
+        if event_total_tokens is not None:
+            total_tokens = event_total_tokens
+
         if not event.content or not event.content.parts:
             continue
         for part in event.content.parts:
@@ -754,15 +820,42 @@ async def _run_cycle(
                     response_parts.append(
                         f"\n[Cycle stopped: repeated action signature exceeded limit ({max_identical_actions})]"
                     )
-                    return "".join(response_parts), tool_count, blocked_count, cooldown_signatures, remote_tool_count
+                    return (
+                        "".join(response_parts),
+                        tool_count,
+                        blocked_count,
+                        cooldown_signatures,
+                        remote_tool_count,
+                        input_tokens,
+                        output_tokens,
+                        total_tokens,
+                    )
                 if max_remote_actions and remote_tool_count > max_remote_actions:
                     blocked_count += 1
                     response_parts.append(f"\n[Cycle stopped: reached {max_remote_actions} remote action limit]")
-                    return "".join(response_parts), tool_count, blocked_count, cooldown_signatures, remote_tool_count
+                    return (
+                        "".join(response_parts),
+                        tool_count,
+                        blocked_count,
+                        cooldown_signatures,
+                        remote_tool_count,
+                        input_tokens,
+                        output_tokens,
+                        total_tokens,
+                    )
                 if max_tool_calls and tool_count >= max_tool_calls:
                     logger.warning("Cycle %d hit tool call limit (%d)", cycle, max_tool_calls)
                     response_parts.append(f"\n[Cycle stopped: reached {max_tool_calls} tool call limit]")
-                    return "".join(response_parts), tool_count, blocked_count, cooldown_signatures, remote_tool_count
+                    return (
+                        "".join(response_parts),
+                        tool_count,
+                        blocked_count,
+                        cooldown_signatures,
+                        remote_tool_count,
+                        input_tokens,
+                        output_tokens,
+                        total_tokens,
+                    )
             elif part.function_response and emitter:
                 output = str(part.function_response.response) if part.function_response.response else ""
                 if "[BLOCKED]" in output or "[DENIED]" in output:
@@ -773,7 +866,16 @@ async def _run_cycle(
                 if emitter:
                     await emitter.emit_token(cycle, part.text)
 
-    return "".join(response_parts), tool_count, blocked_count, cooldown_signatures, remote_tool_count
+    return (
+        "".join(response_parts),
+        tool_count,
+        blocked_count,
+        cooldown_signatures,
+        remote_tool_count,
+        input_tokens,
+        output_tokens,
+        total_tokens,
+    )
 
 
 def _prune_session_history(runner: InMemoryRunner, session, max_events: int) -> int:
@@ -819,6 +921,9 @@ async def _persist_watch_metrics(db: DatabaseService, outcome: dict) -> None:
     total_errors = int(await db.get_watch_state("total_errors") or "0")
     total_resolved = int(await db.get_watch_state("total_resolved") or "0")
     total_escalated = int(await db.get_watch_state("total_escalated") or "0")
+    total_input_tokens = int(await db.get_watch_state("total_input_tokens") or "0")
+    total_output_tokens = int(await db.get_watch_state("total_output_tokens") or "0")
+    total_tokens = int(await db.get_watch_state("total_tokens") or "0")
     total_playbook_deterministic = int(await db.get_watch_state("playbook_deterministic_match") or "0")
     total_playbook_semantic = int(await db.get_watch_state("playbook_semantic_match") or "0")
     total_playbook_generic = int(await db.get_watch_state("playbook_generic_fallback") or "0")
@@ -829,6 +934,9 @@ async def _persist_watch_metrics(db: DatabaseService, outcome: dict) -> None:
         "total_errors": total_errors + (1 if outcome.get("cycle_status") != "ok" else 0),
         "total_resolved": total_resolved + (1 if outcome.get("resolved") else 0),
         "total_escalated": total_escalated + (1 if outcome.get("escalated") else 0),
+        "total_input_tokens": total_input_tokens + int(outcome.get("input_tokens") or 0),
+        "total_output_tokens": total_output_tokens + int(outcome.get("output_tokens") or 0),
+        "total_tokens": total_tokens + int(outcome.get("total_tokens") or 0),
         "playbook_deterministic_match": total_playbook_deterministic
         + int(playbook_selection.get("deterministic_single", 0))
         + int(playbook_selection.get("tie_break", 0)),

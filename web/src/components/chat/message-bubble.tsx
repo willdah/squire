@@ -58,7 +58,7 @@ interface MessageBubbleProps {
 }
 
 export function MessageBubble({ message }: MessageBubbleProps) {
-  const { role, content, toolName, isStreaming } = message;
+  const { role, content, toolName, isStreaming, inputTokens, outputTokens, totalTokens } = message;
 
   const cleanContent =
     role === "assistant" ? stripRawToolCalls(stripSkillMarkers(content)) : content;
@@ -126,28 +126,35 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         {isUser ? (
           <span className="whitespace-pre-wrap">{content}</span>
         ) : (
-          <div className="chat-prose">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                code({ className, children, ...props }) {
-                  const isBlock = className?.includes("language-");
-                  if (isBlock) {
-                    return <CodeBlock className={className}>{children}</CodeBlock>;
-                  }
-                  return (
-                    <code {...props}>
-                      {children}
-                    </code>
-                  );
-                },
-                pre({ children }) {
-                  return <>{children}</>;
-                },
-              }}
-            >
-              {cleanContent}
-            </ReactMarkdown>
+          <div className="space-y-2">
+            <div className="chat-prose">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  code({ className, children, ...props }) {
+                    const isBlock = className?.includes("language-");
+                    if (isBlock) {
+                      return <CodeBlock className={className}>{children}</CodeBlock>;
+                    }
+                    return (
+                      <code {...props}>
+                        {children}
+                      </code>
+                    );
+                  },
+                  pre({ children }) {
+                    return <>{children}</>;
+                  },
+                }}
+              >
+                {cleanContent}
+              </ReactMarkdown>
+            </div>
+            {(inputTokens !== undefined || outputTokens !== undefined || totalTokens !== undefined) && (
+              <div className="text-[11px] text-muted-foreground">
+                tokens in/out/total: {inputTokens ?? "—"} / {outputTokens ?? "—"} / {totalTokens ?? "—"}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -84,6 +84,9 @@ class SessionInfo(BaseModel):
     created_at: str
     last_active: str
     preview: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
 
 
 class MessageInfo(BaseModel):
@@ -94,6 +97,9 @@ class MessageInfo(BaseModel):
     content: str | None = None
     tool_calls_json: str | None = None
     tool_call_id: str | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
 
 
 # --- Alerts ---
@@ -350,6 +356,9 @@ class WatchStatusResponse(BaseModel):
     total_errors: str | None = None
     total_resolved: str | None = None
     total_escalated: str | None = None
+    total_input_tokens: str | None = None
+    total_output_tokens: str | None = None
+    total_tokens: str | None = None
     last_outcome: str | None = None
 
 

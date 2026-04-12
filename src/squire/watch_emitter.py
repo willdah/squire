@@ -35,6 +35,9 @@ class WatchEventEmitter:
         tool_count: int,
         blocked_count: int = 0,
         outcome: dict | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+        total_tokens: int | None = None,
     ) -> None:
         await self._emit(
             cycle,
@@ -46,6 +49,9 @@ class WatchEventEmitter:
                     "tool_count": tool_count,
                     "blocked_count": blocked_count,
                     "outcome": outcome or {},
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": total_tokens,
                 }
             ),
         )

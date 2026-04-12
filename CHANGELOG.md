@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Token telemetry:** Provider-reported token usage is now captured per assistant response in chat/watch, aggregated per session/watch session, and exposed in watch cycle summaries (`input`, `output`, `total`)
+- **Web visibility:** Session History, chat message history, Watch stats, and Watch cycle history now display token usage metrics
+
+### Changed
+
+- **API schemas:** Session/message/watch status and watch cycle payloads now include token usage fields for downstream clients
+
 ## [0.15.0] — 2026-04-11
 
 ### Added
