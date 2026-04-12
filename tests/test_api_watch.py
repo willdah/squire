@@ -318,6 +318,7 @@ async def test_watch_hierarchy_endpoints_and_report_labels(db):
     sessions = await watch_run_sessions(watch_id="watch_x", page=1, per_page=20, db=db)
     assert len(sessions) == 1
     assert sessions[0].watch_session_id == "wss_x1"
+    assert sessions[0].cycle_count == 1
     assert sessions[0].session_report_id == "rep_session_x"
     assert sessions[0].session_report_status == "ok"
 

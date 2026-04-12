@@ -1381,14 +1381,26 @@ class DatabaseService:
                 ws.started_at,
                 ws.stopped_at,
                 ws.status,
-                ws.cycle_count,
+                MAX(ws.cycle_count, COALESCE(wc.live_cycle_count, 0)) AS cycle_count,
                 wr.report_id AS session_report_id,
                 wr.status AS session_report_status,
                 wr.title AS session_report_title
             FROM watch_sessions ws
+            LEFT JOIN (
+                SELECT watch_session_id, COUNT(*) AS live_cycle_count
+                FROM watch_cycles
+                GROUP BY watch_session_id
+            ) wc
+              ON wc.watch_session_id = ws.watch_session_id
             LEFT JOIN watch_reports wr
-              ON wr.watch_session_id = ws.watch_session_id
-             AND wr.report_type = 'session'
+              ON wr.id = (
+                SELECT id
+                FROM watch_reports
+                WHERE watch_session_id = ws.watch_session_id
+                  AND report_type = 'session'
+                ORDER BY created_at DESC
+                LIMIT 1
+              )
             WHERE ws.watch_id = ?
             ORDER BY ws.started_at DESC
             LIMIT ? OFFSET ?
@@ -1410,11 +1422,17 @@ class DatabaseService:
                 ws.started_at,
                 ws.stopped_at,
                 ws.status,
-                ws.cycle_count,
+                MAX(ws.cycle_count, COALESCE(wc.live_cycle_count, 0)) AS cycle_count,
                 wr.report_id AS session_report_id,
                 wr.status AS session_report_status,
                 wr.title AS session_report_title
             FROM watch_sessions ws
+            LEFT JOIN (
+                SELECT watch_session_id, COUNT(*) AS live_cycle_count
+                FROM watch_cycles
+                GROUP BY watch_session_id
+            ) wc
+              ON wc.watch_session_id = ws.watch_session_id
             LEFT JOIN watch_reports wr
               ON wr.id = (
                 SELECT id

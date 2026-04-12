@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Watch Explorer polish:** Repositioned and restyled the clear-history action so the destructive control is visually prominent and less awkward in the layout
 - **Watch Explorer consistency:** Updated the clear-history button to match Session History action styling (outline + eraser icon) with compact `Clear` copy
 - **Activity filters:** Added missing watch event categories (`watch.action`, `watch.error`, `watch.incident_detected`, `watch.remediation`, `watch.verification`, `watch.escalation`, `watch.digest`) so Activity filtering matches emitted notifications
+- **Watch session cycle counts:** Session summaries in Watch Explorer now include live cycle totals while a watch session is still running (instead of remaining at zero until session close)
 ## [0.15.0] — 2026-04-11
 
 ### Added
