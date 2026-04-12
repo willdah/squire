@@ -132,26 +132,66 @@ class AlertRuleUpdate(BaseModel):
 class Skill(BaseModel):
     name: str
     description: str = ""
-    host: str = "all"
+    hosts: list[str] = ["all"]
     trigger: str = "manual"
     enabled: bool = True
+    incident_keys: list[str] = []
     instructions: str = ""
 
 
 class SkillCreate(BaseModel):
     name: str
     description: str
-    host: str = "all"
+    hosts: list[str] = ["all"]
     trigger: str = "manual"
+    incident_keys: list[str] = []
+    allow_custom_incident_prefixes: bool = False
     instructions: str
 
 
 class SkillUpdate(BaseModel):
     description: str | None = None
-    host: str | None = None
+    hosts: list[str] | None = None
     trigger: str | None = None
     enabled: bool | None = None
+    incident_keys: list[str] | None = None
+    allow_custom_incident_prefixes: bool | None = None
     instructions: str | None = None
+
+
+class IncidentFamilyInfo(BaseModel):
+    prefix: str
+    description: str
+
+
+class PlaybookDryRunIncident(BaseModel):
+    key: str
+    severity: str = "high"
+    host: str = "local"
+    title: str = ""
+    detail: str = ""
+
+
+class PlaybookDryRunRequest(BaseModel):
+    incidents: list[PlaybookDryRunIncident]
+
+
+class PlaybookDryRunSelection(BaseModel):
+    incident: PlaybookDryRunIncident
+    candidate_count: int
+    selected_playbook: str | None = None
+    path_taken: str
+    confidence: float
+    reasoning: str
+
+
+class PlaybookDryRunResponse(BaseModel):
+    selections: list[PlaybookDryRunSelection]
+
+
+class BootstrapPlaybooksResponse(BaseModel):
+    created: list[str]
+    skipped: list[str]
 
 
 # --- Events ---

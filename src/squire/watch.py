@@ -39,6 +39,7 @@ from .notifications.alert_evaluator import evaluate_alerts
 from .notifications.email import EmailNotifier
 from .notifications.router import NotificationRouter
 from .notifications.webhook import WebhookDispatcher
+from .skills import SkillService
 from .system.registry import BackendRegistry
 from .tools import TOOL_RISK_LEVELS, set_db, set_notifier, set_registry
 from .watch_autonomy import (
@@ -50,7 +51,7 @@ from .watch_autonomy import (
     parse_contract_sections,
 )
 from .watch_emitter import WatchEventEmitter
-from .watch_playbooks import select_playbooks
+from .watch_playbooks import route_playbooks_for_incidents
 
 load_dotenv()
 
@@ -178,6 +179,7 @@ async def start_watch() -> None:
     notif_config = NotificationsConfig()
     watch_config = WatchConfig()
     skills_config = SkillsConfig()
+    skill_service = SkillService(skills_config.path)
 
     # Create backend registry (hosts loaded from DB below)
     registry = BackendRegistry()
@@ -307,6 +309,9 @@ async def start_watch() -> None:
             "total_errors": "0",
             "total_resolved": "0",
             "total_escalated": "0",
+            "playbook_deterministic_match": "0",
+            "playbook_semantic_match": "0",
+            "playbook_generic_fallback": "0",
             "last_outcome": "{}",
         },
     )
@@ -404,21 +409,55 @@ async def start_watch() -> None:
             session.state["watch_max_identical_actions_per_cycle"] = watch_config.max_identical_actions_per_cycle
             session.state["watch_max_remote_actions_per_cycle"] = watch_config.max_remote_actions_per_cycle
 
-            playbooks = select_playbooks(incidents)
+            watch_skills = []
+            playbook_skills = []
+            try:
+                watch_skills = skill_service.list_skills(enabled_only=True, trigger="watch")
+                playbook_skills = [sk for sk in watch_skills if sk.incident_keys]
+            except Exception:
+                logger.debug("Failed to load watch skills", exc_info=True)
+
+            playbook_path_counts = {
+                "deterministic_single": 0,
+                "tie_break": 0,
+                "semantic": 0,
+                "generic": 0,
+            }
+            try:
+                playbooks, playbook_selections = await route_playbooks_for_incidents(
+                    incidents,
+                    playbook_skills,
+                    llm_config=llm_config,
+                )
+            except Exception:
+                logger.debug("Playbook routing failed; using generic fallback", exc_info=True)
+                playbooks = []
+                playbook_selections = []
+
+            if playbook_selections:
+                for selection in playbook_selections:
+                    playbook_path_counts[selection.path_taken] = playbook_path_counts.get(selection.path_taken, 0) + 1
+                    sel_name = selection.selected_playbook or "default-watch-triage"
+                    await emitter.emit_phase(
+                        cycle_count,
+                        "playbook",
+                        f"{selection.incident.key} -> {sel_name}",
+                        details=(
+                            f"path={selection.path_taken}, candidates={selection.candidate_count}, "
+                            f"confidence={selection.confidence:.2f}, reason={selection.reasoning}"
+                        ),
+                    )
             prompt = build_cycle_contract_prompt(prompt, incidents, playbooks, blocked_signatures)
 
             # Append watch-triggered skills
             try:
-                from .skills import SkillService
-
-                skill_service = SkillService(skills_config.path)
-                watch_skills = skill_service.list_skills(enabled_only=True, trigger="watch")
-                if watch_skills:
+                non_playbook_skills = [sk for sk in watch_skills if not sk.incident_keys]
+                if non_playbook_skills:
                     skill_sections = []
-                    for sk in watch_skills:
+                    for sk in non_playbook_skills:
                         if not sk.instructions:
                             continue
-                        host_label = sk.host
+                        host_label = ",".join(sk.hosts)
                         skill_sections.append(f"### Skill: {sk.name} (host: {host_label})\n{sk.instructions}")
                     if skill_sections:
                         prompt += (
@@ -489,6 +528,7 @@ async def start_watch() -> None:
                     blocked_count=blocked_count,
                     cycle_status="ok",
                 )
+                outcome["playbook_selection"] = playbook_path_counts
                 outcome["remote_tool_count"] = remote_tool_count
                 issue_key = dominant_incident_key(incidents)
                 if issue_key:
@@ -526,6 +566,7 @@ async def start_watch() -> None:
                     blocked_count=0,
                     cycle_status="error",
                 )
+                outcome["playbook_selection"] = playbook_path_counts
             except Exception as e:
                 last_cycle_error = f"{type(e).__name__}: {e}"
                 logger.error("Cycle %d failed: %s", cycle_count, e, exc_info=True)
@@ -540,6 +581,7 @@ async def start_watch() -> None:
                     blocked_count=0,
                     cycle_status="error",
                 )
+                outcome["playbook_selection"] = playbook_path_counts
 
             cycle_duration = (datetime.now(UTC) - cycle_start_time).total_seconds()
             cycle_status = "ok" if last_cycle_error is None else "error"
@@ -746,12 +788,21 @@ async def _persist_watch_metrics(db: DatabaseService, outcome: dict) -> None:
     total_errors = int(await db.get_watch_state("total_errors") or "0")
     total_resolved = int(await db.get_watch_state("total_resolved") or "0")
     total_escalated = int(await db.get_watch_state("total_escalated") or "0")
+    total_playbook_deterministic = int(await db.get_watch_state("playbook_deterministic_match") or "0")
+    total_playbook_semantic = int(await db.get_watch_state("playbook_semantic_match") or "0")
+    total_playbook_generic = int(await db.get_watch_state("playbook_generic_fallback") or "0")
+    playbook_selection = outcome.get("playbook_selection", {}) or {}
     totals = {
         "total_actions": total_actions + int(outcome.get("tool_count", 0)),
         "total_blocked": total_blocked + int(outcome.get("blocked_count", 0)),
         "total_errors": total_errors + (1 if outcome.get("cycle_status") != "ok" else 0),
         "total_resolved": total_resolved + (1 if outcome.get("resolved") else 0),
         "total_escalated": total_escalated + (1 if outcome.get("escalated") else 0),
+        "playbook_deterministic_match": total_playbook_deterministic
+        + int(playbook_selection.get("deterministic_single", 0))
+        + int(playbook_selection.get("tie_break", 0)),
+        "playbook_semantic_match": total_playbook_semantic + int(playbook_selection.get("semantic", 0)),
+        "playbook_generic_fallback": total_playbook_generic + int(playbook_selection.get("generic", 0)),
     }
     for key, value in totals.items():
         await db.set_watch_state(key, str(value))

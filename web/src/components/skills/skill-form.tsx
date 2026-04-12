@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Skill } from "@/lib/types";
+import type { HostInfo, IncidentFamilyInfo, Skill } from "@/lib/types";
 
 interface SkillFormProps {
   open: boolean;
@@ -28,18 +28,25 @@ interface SkillFormProps {
   onSubmit: (data: {
     name: string;
     description: string;
-    host: string;
+    hosts: string[];
     trigger: string;
+    incident_keys: string[];
+    allow_custom_incident_prefixes: boolean;
     instructions: string;
   }) => void;
   skill?: Skill | null;
+  incidentFamilies: IncidentFamilyInfo[];
+  availableHosts: HostInfo[];
 }
 
-export function SkillForm({ open, onOpenChange, onSubmit, skill }: SkillFormProps) {
+export function SkillForm({ open, onOpenChange, onSubmit, skill, incidentFamilies, availableHosts }: SkillFormProps) {
   const [name, setName] = useState(skill?.name ?? "");
   const [description, setDescription] = useState(skill?.description ?? "");
-  const [host, setHost] = useState(skill?.host ?? "all");
+  const [selectedHost, setSelectedHost] = useState(skill?.hosts?.[0] ?? "all");
   const [trigger, setTrigger] = useState(skill?.trigger ?? "manual");
+  const [incidentKeys, setIncidentKeys] = useState<string[]>(skill?.incident_keys ?? []);
+  const [customIncidentKeys, setCustomIncidentKeys] = useState("");
+  const [allowCustomIncidentPrefixes, setAllowCustomIncidentPrefixes] = useState(false);
   const [instructions, setInstructions] = useState(skill?.instructions ?? "");
 
   const isEdit = !!skill;
@@ -51,11 +58,18 @@ export function SkillForm({ open, onOpenChange, onSubmit, skill }: SkillFormProp
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isNameValid || !description.trim() || !instructions.trim()) return;
+    const extraIncidentKeys = customIncidentKeys
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
+    const mergedIncidentKeys = Array.from(new Set([...incidentKeys, ...extraIncidentKeys]));
     onSubmit({
       name: name.trim(),
       description: description.trim(),
-      host,
+      hosts: [selectedHost || "all"],
       trigger,
+      incident_keys: trigger === "watch" ? mergedIncidentKeys : [],
+      allow_custom_incident_prefixes: trigger === "watch" ? allowCustomIncidentPrefixes : false,
       instructions: instructions.trim(),
     });
   };
@@ -105,11 +119,23 @@ export function SkillForm({ open, onOpenChange, onSubmit, skill }: SkillFormProp
             <div className="flex gap-4">
               <div className="space-y-2 flex-1">
                 <Label>Host</Label>
-                <Input
-                  value={host}
-                  onChange={(e) => setHost(e.target.value)}
-                  placeholder="all"
-                />
+                <Select value={selectedHost} onValueChange={(v) => setSelectedHost(v ?? "all")}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">all</SelectItem>
+                    <SelectItem value="local">local</SelectItem>
+                    {(availableHosts ?? [])
+                      .filter((h) => h.name !== "local")
+                      .map((h) => (
+                        <SelectItem key={h.name} value={h.name}>
+                          {h.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Choose a specific host or `all`.</p>
               </div>
               <div className="space-y-2 flex-1">
                 <Label>Trigger</Label>
@@ -124,6 +150,55 @@ export function SkillForm({ open, onOpenChange, onSubmit, skill }: SkillFormProp
                 </Select>
               </div>
             </div>
+
+            {trigger === "watch" && (
+              <div className="space-y-2">
+                <Label>Incident Families (Playbook Routing)</Label>
+                <div className="rounded-md border p-3 space-y-2 max-h-40 overflow-y-auto">
+                  {incidentFamilies.map((family) => {
+                    const checked = incidentKeys.includes(family.prefix);
+                    return (
+                      <label key={family.prefix} className="flex items-start gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setIncidentKeys((prev) => [...prev, family.prefix]);
+                            } else {
+                              setIncidentKeys((prev) => prev.filter((k) => k !== family.prefix));
+                            }
+                          }}
+                        />
+                        <span>
+                          <code>{family.prefix}</code> — {family.description}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  A watch skill becomes a playbook candidate when at least one incident family is selected.
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="custom-incident-keys">Custom Incident Prefixes (advanced)</Label>
+                  <Input
+                    id="custom-incident-keys"
+                    value={customIncidentKeys}
+                    onChange={(e) => setCustomIncidentKeys(e.target.value)}
+                    placeholder="power-event:, network-latency:"
+                  />
+                  <label className="text-xs text-muted-foreground flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={allowCustomIncidentPrefixes}
+                      onChange={(e) => setAllowCustomIncidentPrefixes(e.target.checked)}
+                    />
+                    Allow non-catalog prefixes for this save
+                  </label>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="skill-instructions">Instructions</Label>

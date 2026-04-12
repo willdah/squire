@@ -187,7 +187,7 @@ def alerts_list() -> None:
     table = Table(title="Alert Rules")
     table.add_column("Name", style="cyan", no_wrap=True)
     table.add_column("Condition", style="white")
-    table.add_column("Host", style="blue")
+    table.add_column("Hosts", style="blue")
     table.add_column("Severity", style="yellow")
     table.add_column("Cooldown", style="dim")
     table.add_column("Status", style="green")
@@ -363,7 +363,7 @@ def skills_list() -> None:
         table.add_row(
             s.name,
             (s.description or "")[:40],
-            s.host,
+            ",".join(s.hosts),
             s.trigger,
             status,
         )
@@ -392,7 +392,7 @@ def skills_show(
     console.print(f"[bold cyan]{skill.name}[/bold cyan]  [{status}]")
     if skill.description:
         console.print(f"  {skill.description}")
-    console.print(f"  Host: {skill.host}  |  Trigger: {skill.trigger}")
+    console.print(f"  Hosts: {', '.join(skill.hosts)}  |  Trigger: {skill.trigger}")
     console.print()
 
     if skill.instructions:
@@ -409,9 +409,15 @@ def skills_add(
     instructions_file: Annotated[
         str | None, typer.Option("--instructions-file", "-f", help="Markdown file with skill instructions")
     ] = None,
-    host: Annotated[str, typer.Option("--host", help="Target host ('all' or specific name)")] = "all",
+    hosts: Annotated[
+        str, typer.Option("--hosts", help="Comma-separated target hosts (use 'all' for unrestricted)")
+    ] = "all",
     trigger: Annotated[str, typer.Option("--trigger", "-t", help="'manual' or 'watch'")] = "manual",
 ) -> None:
+    host_list = [h.strip() for h in hosts.split(",") if h.strip()]
+    if not host_list:
+        host_list = ["all"]
+
     """Add a new skill."""
     from pathlib import Path
 
@@ -449,7 +455,7 @@ def skills_add(
         skill = Skill(
             name=name,
             description=description,
-            host=host,
+            hosts=host_list,
             trigger=trigger,
             instructions=instructions,
         )

@@ -1,5 +1,6 @@
 """Tests for watch autonomy helpers."""
 
+from squire.skills import Skill
 from squire.watch_autonomy import (
     Incident,
     build_cycle_contract_prompt,
@@ -7,7 +8,7 @@ from squire.watch_autonomy import (
     detect_incidents,
     parse_contract_sections,
 )
-from squire.watch_playbooks import select_playbooks
+from squire.watch_playbooks import route_playbooks_for_incidents
 
 
 def test_detect_incidents_container_and_disk():
@@ -55,12 +56,52 @@ none
     assert outcome["escalated"] is False
 
 
-def test_select_playbooks_for_incidents():
+def test_markdown_none_escalation_is_not_escalated():
+    response = """
+## Incident Summary
+Disk check completed.
+
+## RCA Hypotheses
+False positive from mount parsing.
+
+## Action Plan and Actions Taken
+Ran diagnostics only.
+
+## Verification Results
+Healthy.
+
+## Escalation
+**None**: no further action required.
+"""
+    sections = parse_contract_sections(response)
+    outcome = build_cycle_outcome([], sections, tool_count=1, blocked_count=0, cycle_status="ok")
+    assert outcome["escalated"] is False
+
+
+async def test_select_playbooks_for_incidents():
     incidents = [
         Incident(key="container-unhealthy:local:api", severity="high", title="Container unhealthy", detail="x"),
         Incident(key="host-unreachable:node-1", severity="high", title="Host unreachable", detail="x", host="node-1"),
     ]
-    playbooks = select_playbooks(incidents)
+    playbook_skills = [
+        Skill(
+            name="container-recovery",
+            description="Recover unhealthy containers",
+            trigger="watch",
+            hosts=["all"],
+            incident_keys=["container-unhealthy:"],
+            instructions="Container Recovery",
+        ),
+        Skill(
+            name="host-reachability",
+            description="Handle unreachable hosts",
+            trigger="watch",
+            hosts=["node-1"],
+            incident_keys=["host-unreachable:"],
+            instructions="Host Reachability",
+        ),
+    ]
+    playbooks, _ = await route_playbooks_for_incidents(incidents, playbook_skills)
     joined = "\n".join(playbooks)
-    assert "Container Recovery" in joined
-    assert "Host Reachability" in joined
+    assert "container-recovery" in joined
+    assert "host-reachability" in joined

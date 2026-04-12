@@ -17,9 +17,10 @@ def _make_skill(**kwargs) -> Skill:
     defaults = {
         "name": "test-skill",
         "description": "A test skill",
-        "host": "all",
+        "hosts": ["all"],
         "trigger": "manual",
         "enabled": True,
+        "incident_keys": [],
         "instructions": "Check the status of all containers.",
     }
     defaults.update(kwargs)
@@ -34,7 +35,7 @@ class TestSaveAndGet:
         assert loaded is not None
         assert loaded.name == "test-skill"
         assert loaded.description == "A test skill"
-        assert loaded.host == "all"
+        assert loaded.hosts == ["all"]
         assert loaded.trigger == "manual"
         assert loaded.enabled is True
         assert loaded.instructions == "Check the status of all containers."
@@ -128,15 +129,16 @@ class TestParsing:
 
     def test_metadata_roundtrip(self, skill_service):
         """Squire-specific fields survive a save/load cycle via metadata."""
-        skill = _make_skill(host="prod-01", trigger="watch", enabled=False)
+        skill = _make_skill(hosts=["prod-01"], trigger="watch", enabled=False, incident_keys=["disk-pressure:"])
         skill_service.save_skill(skill)
         loaded = skill_service.get_skill("test-skill")
-        assert loaded.host == "prod-01"
+        assert loaded.hosts == ["prod-01"]
         assert loaded.trigger == "watch"
         assert loaded.enabled is False
+        assert loaded.incident_keys == ["disk-pressure:"]
 
     def test_default_metadata_omitted(self, skill_service, tmp_path):
-        """When host/trigger/enabled are defaults, metadata key is omitted."""
+        """When hosts/trigger/enabled are defaults, metadata key is omitted."""
         skill = _make_skill()
         skill_service.save_skill(skill)
         content = (tmp_path / "test-skill" / "SKILL.md").read_text()
@@ -144,15 +146,33 @@ class TestParsing:
 
     def test_spec_compliant_frontmatter(self, skill_service, tmp_path):
         """Rendered SKILL.md has name/description at top level, custom fields under metadata."""
-        skill = _make_skill(host="nas", trigger="watch")
+        skill = _make_skill(hosts=["nas"], trigger="watch")
         skill_service.save_skill(skill)
         content = (tmp_path / "test-skill" / "SKILL.md").read_text()
         assert content.startswith("---\n")
         assert "name: test-skill\n" in content
         assert "description: A test skill\n" in content
         assert "metadata:\n" in content
-        assert "  host: nas\n" in content
+        assert "  hosts:\n" in content
+        assert "  - nas\n" in content
         assert "  trigger: watch\n" in content
+
+    def test_legacy_host_metadata_is_retrofitted_to_hosts(self, skill_service, tmp_path):
+        skill_dir = tmp_path / "legacy-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text(
+            "---\n"
+            "name: legacy-skill\n"
+            "description: legacy\n"
+            "metadata:\n"
+            "  host: remote-1\n"
+            "  trigger: watch\n"
+            "---\n\n"
+            "Run checks."
+        )
+        loaded = skill_service.get_skill("legacy-skill")
+        assert loaded is not None
+        assert loaded.hosts == ["remote-1"]
 
 
 class TestNameValidation:

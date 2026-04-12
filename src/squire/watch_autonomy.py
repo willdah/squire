@@ -7,6 +7,13 @@ import json
 import re
 from dataclasses import dataclass
 
+INCIDENT_FAMILY_CATALOG: dict[str, str] = {
+    "container-unhealthy:": "Container is unhealthy/restarting/dead/exited.",
+    "disk-pressure:": "Disk usage is critically high.",
+    "disk-warning:": "Disk usage is elevated.",
+    "host-unreachable:": "Host snapshot could not be collected.",
+}
+
 
 @dataclass(slots=True)
 class Incident:
@@ -87,14 +94,12 @@ def build_cycle_contract_prompt(
     """Compose a strict contract prompt for autonomous watch cycles."""
     sections = [base_prompt.strip()]
     sections.append(
-        
-            "You are operating in strict autonomous watch mode. Follow this exact lifecycle:\n"
-            "1) Detect incidents and prioritize by severity.\n"
-            "2) Produce RCA hypotheses with confidence.\n"
-            "3) Execute only bounded, low-blast-radius remediation actions.\n"
-            "4) Verify outcomes with fresh checks.\n"
-            "5) Escalate unresolved issues with explicit reason."
-        
+        "You are operating in strict autonomous watch mode. Follow this exact lifecycle:\n"
+        "1) Detect incidents and prioritize by severity.\n"
+        "2) Produce RCA hypotheses with confidence.\n"
+        "3) Execute only bounded, low-blast-radius remediation actions.\n"
+        "4) Verify outcomes with fresh checks.\n"
+        "5) Escalate unresolved issues with explicit reason."
     )
     if incidents:
         lines = [f"- [{inc.severity}] {inc.title} ({inc.host}) :: {inc.detail}" for inc in incidents]
@@ -103,9 +108,7 @@ def build_cycle_contract_prompt(
         sections.append("Detected incidents:\n- none; run proactive health checks and report status.")
 
     if playbook_instructions:
-        sections.append(
-            "Autonomous playbooks to apply (only when relevant):\n" + "\n\n".join(playbook_instructions)
-        )
+        sections.append("Autonomous playbooks to apply (only when relevant):\n" + "\n\n".join(playbook_instructions))
 
     if blocked_signatures:
         blocked = "\n".join(f"- {signature}" for signature in blocked_signatures)
@@ -116,14 +119,12 @@ def build_cycle_contract_prompt(
         )
 
     sections.append(
-        
-            "Format your final response with these sections:\n"
-            "## Incident Summary\n"
-            "## RCA Hypotheses\n"
-            "## Action Plan and Actions Taken\n"
-            "## Verification Results\n"
-            "## Escalation"
-        
+        "Format your final response with these sections:\n"
+        "## Incident Summary\n"
+        "## RCA Hypotheses\n"
+        "## Action Plan and Actions Taken\n"
+        "## Verification Results\n"
+        "## Escalation"
     )
     return "\n\n".join(sections)
 
@@ -158,7 +159,7 @@ def build_cycle_outcome(
     action_text = sections.get("action plan and actions taken", "")
 
     resolved = bool(verification) and "unresolved" not in verification.lower() and "failed" not in verification.lower()
-    escalated = bool(escalation) and escalation.lower() not in {"none", "n/a", "no escalation"}
+    escalated = bool(escalation) and not _is_non_escalation_text(escalation)
     issue_key = dominant_incident_key(incidents)
 
     return {
@@ -206,3 +207,30 @@ def _extract_max_percent(disk_usage_raw: str) -> float:
     if not matches:
         return 0.0
     return max(float(m) for m in matches)
+
+
+def _is_non_escalation_text(text: str) -> bool:
+    """Return True when escalation text explicitly means no escalation needed."""
+    normalized = re.sub(r"[*_`>#-]", " ", text.lower())
+    normalized = re.sub(r"\s+", " ", normalized).strip(" .:")
+    if not normalized:
+        return True
+
+    markers = (
+        "none",
+        "n/a",
+        "na",
+        "no escalation",
+        "not required",
+        "not needed",
+        "no further action",
+    )
+    if normalized in markers:
+        return True
+    return any(normalized.startswith(f"{marker} ") or normalized.startswith(f"{marker}:") for marker in markers)
+
+
+def severity_rank(severity: str) -> int:
+    """Sort helper for deterministic incident ordering."""
+    ranks = {"high": 0, "medium": 1, "low": 2}
+    return ranks.get(severity.lower(), 3)

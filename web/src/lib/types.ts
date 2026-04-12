@@ -99,10 +99,33 @@ export interface AlertRuleCreate {
 export interface Skill {
   name: string;
   description: string;
-  host: string;
+  hosts: string[];
   trigger: string;
   enabled: boolean;
+  incident_keys: string[];
   instructions: string;
+}
+
+export interface IncidentFamilyInfo {
+  prefix: string;
+  description: string;
+}
+
+export interface PlaybookDryRunIncident {
+  key: string;
+  severity: string;
+  host: string;
+  title: string;
+  detail: string;
+}
+
+export interface PlaybookDryRunSelection {
+  incident: PlaybookDryRunIncident;
+  candidate_count: number;
+  selected_playbook: string | null;
+  path_taken: "deterministic_single" | "tie_break" | "semantic" | "generic";
+  confidence: number;
+  reasoning: string;
 }
 
 export interface EventInfo {

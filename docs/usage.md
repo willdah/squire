@@ -353,7 +353,7 @@ Skills are file-based instruction sets following the [Open Agent Skills](https:/
 name: restart-on-error
 description: Check container health and restart errored containers.
 metadata:
-  host: prod-apps-01
+  hosts: ["prod-apps-01"]
   trigger: manual
 ---
 
@@ -363,7 +363,7 @@ the root cause and restart them.
 Verify the containers come back healthy after restart.
 ```
 
-`name` and `description` are required by the spec. Names must be lowercase letters, numbers, and hyphens (max 64 chars). Squire-specific fields (`host`, `trigger`, `enabled`) live under `metadata`.
+`name` and `description` are required by the spec. Names must be lowercase letters, numbers, and hyphens (max 64 chars). Squire-specific fields (`hosts`, `trigger`, `enabled`, `incident_keys`) live under `metadata`.
 
 ### Triggers
 
@@ -371,7 +371,7 @@ Verify the containers come back healthy after restart.
 | Trigger  | When it runs                                          |
 | -------- | ----------------------------------------------------- |
 | `manual` | On demand — from the web UI, CLI, or API              |
-| `watch`  | Appended to the check-in prompt each watch mode cycle |
+| `watch`  | Routed as playbooks for matching incidents (or appended as generic watch skills when no `incident_keys` are provided) |
 
 
 Here is a watch-triggered example:
@@ -381,8 +381,9 @@ Here is a watch-triggered example:
 name: nightly-cleanup
 description: Clean up unused Docker images and volumes nightly.
 metadata:
-  host: all
+  hosts: ["all"]
   trigger: watch
+  incident_keys: ["disk-pressure:", "disk-warning:"]
 ---
 
 Check for unused Docker images older than 7 days and dangling volumes.
@@ -390,6 +391,12 @@ Remove them to free disk space. Report what was cleaned up.
 ```
 
 Executing a manual skill opens a new chat session with the instructions pre-loaded.
+
+The Skills page now includes watch-playbook tools:
+- incident family picker (`incident_keys`)
+- conflict preview for overlapping playbooks
+- one-click starter install (`recover-container-unhealthy`, `triage-disk-pressure`)
+- dry-run router simulation for "given incident X, what playbook is selected?"
 
 ### CLI Management
 

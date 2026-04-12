@@ -7,8 +7,8 @@ Each skill lives in its own directory under the configured skills path:
         SKILL.md
 
 SKILL.md uses YAML frontmatter + freeform Markdown body (Open Agent Skills spec).
-Squire-specific fields (host, trigger, enabled) are stored under the ``metadata``
-key to stay spec-compliant.
+Squire-specific fields (hosts, trigger, enabled, incident_keys) are stored under
+the ``metadata`` key to stay spec-compliant.
 """
 
 import re
@@ -16,7 +16,7 @@ import shutil
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 # Spec: lowercase alphanumeric + hyphens, no leading/trailing/consecutive hyphens, max 64 chars.
 _NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
@@ -27,9 +27,10 @@ class Skill(BaseModel):
 
     name: str
     description: str = ""
-    host: str = "all"
+    hosts: list[str] = Field(default_factory=lambda: ["all"])
     trigger: str = "manual"  # "manual" | "watch"
     enabled: bool = True
+    incident_keys: list[str] = Field(default_factory=list)
     instructions: str = ""  # freeform Markdown body
 
     @field_validator("name")
@@ -42,6 +43,30 @@ class Skill(BaseModel):
         if not _NAME_RE.match(v):
             raise ValueError("name must be lowercase letters, numbers, and hyphens only (no leading/trailing hyphens)")
         return v
+
+    @field_validator("hosts", mode="before")
+    @classmethod
+    def validate_hosts(cls, value) -> list[str]:
+        if value is None:
+            return ["all"]
+        if isinstance(value, str):
+            value = [value]
+        hosts = [str(v).strip() for v in value if str(v).strip()]
+        if not hosts:
+            return ["all"]
+        if "all" in hosts:
+            return ["all"]
+        return sorted(set(hosts))
+
+    @field_validator("incident_keys", mode="before")
+    @classmethod
+    def validate_incident_keys(cls, value) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            value = [value]
+        keys = [str(v).strip() for v in value if str(v).strip()]
+        return sorted(set(keys))
 
 
 class SkillService:
@@ -116,13 +141,18 @@ class SkillService:
 
         # Squire-specific fields live under metadata (spec-compliant)
         meta = frontmatter.get("metadata") or {}
+        hosts = meta.get("hosts")
+        if hosts is None and "host" in meta:
+            # Legacy retrofit: host -> hosts
+            hosts = [meta.get("host", "all")]
 
         return Skill(
             name=frontmatter.get("name", dir_name),
             description=frontmatter.get("description", ""),
-            host=meta.get("host", "all"),
+            hosts=hosts if hosts is not None else ["all"],
             trigger=meta.get("trigger", "manual"),
             enabled=meta.get("enabled", True),
+            incident_keys=meta.get("incident_keys", []),
             instructions=body,
         )
 
@@ -137,12 +167,14 @@ class SkillService:
             "description": skill.description,
         }
         metadata: dict = {}
-        if skill.host != "all":
-            metadata["host"] = skill.host
+        if skill.hosts != ["all"]:
+            metadata["hosts"] = skill.hosts
         if skill.trigger != "manual":
             metadata["trigger"] = skill.trigger
         if not skill.enabled:
             metadata["enabled"] = skill.enabled
+        if skill.incident_keys:
+            metadata["incident_keys"] = skill.incident_keys
         if metadata:
             frontmatter["metadata"] = metadata
         fm_str = yaml.dump(frontmatter, default_flow_style=False, sort_keys=False).strip()

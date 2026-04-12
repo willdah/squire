@@ -74,10 +74,19 @@ def build_skill_section(ctx: ReadonlyContext) -> str:
     if not instructions:
         return ""
 
-    host = active_skill.get("host", "all")
+    hosts = active_skill.get("hosts", ["all"])
+    if isinstance(hosts, str):
+        hosts = [hosts]
     host_line = ""
-    if host != "all":
-        host_line = f"\n**Target host:** `{host}` — pass this as the `host` parameter to every tool call."
+    if hosts and hosts != ["all"]:
+        if len(hosts) == 1:
+            host_line = f"\n**Target host:** `{hosts[0]}` — pass this as the `host` parameter to every tool call."
+        else:
+            host_line = (
+                "\n**Target hosts:** "
+                + ", ".join(f"`{h}`" for h in hosts)
+                + " — choose the appropriate `host` per tool call."
+            )
 
     return f"""
 ## Active Skill: "{skill_name}"

@@ -340,7 +340,7 @@ Each skill is a directory containing a `SKILL.md` file with YAML frontmatter and
 name: restart-on-error
 description: Check container health and restart errored containers.
 metadata:
-  host: prod-apps-01
+  hosts: ["prod-apps-01"]
   trigger: manual
 ---
 
@@ -355,14 +355,15 @@ The format follows the [Open Agent Skills spec](https://agentskills.io/specifica
 | ------------------ | -------- | -------- | ------------------------------------------------------------------------------------------ |
 | `name`             | Yes      |          | Skill name — lowercase letters, numbers, hyphens, max 64 chars. Must match directory name. |
 | `description`      | Yes      |          | What the skill does and when to use it (max 1024 chars).                                   |
-| `metadata.host`    | No       | `all`    | Target host (`all` or a specific host name)                                                |
+| `metadata.hosts`   | No       | `["all"]`| Target hosts (`["all"]` or specific host names)                                            |
 | `metadata.trigger` | No       | `manual` | `manual` (on-demand) or `watch` (each watch cycle)                                         |
 | `metadata.enabled` | No       | `true`   | Whether the skill is active                                                                |
+| `metadata.incident_keys` | No | `[]`     | Watch-playbook incident-family prefixes (for example `disk-pressure:`)                    |
 
 
 The `metadata` key is omitted entirely when all Squire-specific fields are at their defaults.
 
-Skills with `trigger: watch` are appended to the watch mode check-in prompt each cycle. Manual skills can be executed from the web UI or CLI.
+Skills with `trigger: watch` and non-empty `incident_keys` become playbook candidates for dynamic routing (deterministic prefix matching, LLM tie-break, semantic fallback, generic fallback). Watch skills with no `incident_keys` are appended as generic watch instructions. Manual skills can be executed from the web UI or CLI.
 
 ---
 
