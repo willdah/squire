@@ -265,7 +265,7 @@ async def chat_websocket(
             skill_active = True
             session_state["active_skill"] = {
                 "skill_name": skill_data.name,
-                "host": skill_data.host,
+                "hosts": skill_data.hosts,
                 "instructions": skill_data.instructions,
             }
             logger.info("Loaded skill '%s' into session %s", skill_name, session_id)

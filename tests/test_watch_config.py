@@ -31,6 +31,12 @@ class TestWatchConfigDefaults:
         c = WatchConfig()
         assert c.max_context_events == 40
 
+    def test_default_action_safety_bounds(self):
+        c = WatchConfig()
+        assert c.max_identical_actions_per_cycle == 2
+        assert c.blocked_action_cooldown_cycles == 3
+        assert c.max_remote_actions_per_cycle == 4
+
     def test_override_interval(self):
         c = WatchConfig(interval_minutes=10)
         assert c.interval_minutes == 10

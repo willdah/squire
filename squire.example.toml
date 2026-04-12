@@ -75,7 +75,11 @@
 # interval_minutes = 5
 # max_tool_calls_per_cycle = 15
 # cycle_timeout_seconds = 300
-# cycles_per_session = 50
+# cycles_per_session = 12
+# max_context_events = 40
+# max_identical_actions_per_cycle = 2
+# blocked_action_cooldown_cycles = 3
+# max_remote_actions_per_cycle = 4
 # notify_on_action = true
 # notify_on_blocked = true
 

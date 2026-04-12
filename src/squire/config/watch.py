@@ -79,3 +79,18 @@ class WatchConfig(BaseSettings):
         ge=10,
         description="Maximum ADK session events kept in context; older events are pruned each cycle",
     )
+    max_identical_actions_per_cycle: int = Field(
+        default=2,
+        ge=1,
+        description="Maximum identical tool signatures allowed within one cycle before suppression",
+    )
+    blocked_action_cooldown_cycles: int = Field(
+        default=3,
+        ge=1,
+        description="How many cycles to suppress recently blocked/repeated action signatures",
+    )
+    max_remote_actions_per_cycle: int = Field(
+        default=4,
+        ge=1,
+        description="Maximum remote-host tool calls allowed in a single cycle",
+    )

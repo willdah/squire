@@ -33,12 +33,28 @@ function EventRow({ event }: { event: WatchEvent }) {
     case "cycle_end": {
       const status = (content.status as string) || "unknown";
       const duration = content.duration_seconds as number;
+      const blocked = (content.blocked_count as number) || 0;
+      const incidentCount = ((content.outcome as Record<string, unknown>)?.incident_count as number) || 0;
       return (
         <div className="text-primary font-medium py-1">
-          ── Cycle {event.cycle} ended ({status}{duration ? `, ${duration.toFixed(1)}s` : ""}) ──
+          ── Cycle {event.cycle} ended ({status}{duration ? `, ${duration.toFixed(1)}s` : ""}, incidents:{" "}
+          {incidentCount}, blocked: {blocked}) ──
         </div>
       );
     }
+    case "incident":
+      return (
+        <div className="py-0.5 text-orange-500">
+          ⚠ {(content.severity as string)?.toUpperCase()} {(content.title as string)} ({content.host as string}) -{" "}
+          {content.detail as string}
+        </div>
+      );
+    case "phase":
+      return (
+        <div className="py-0.5 text-blue-500">
+          ◇ {(content.phase as string)}: {(content.summary as string)}
+        </div>
+      );
     case "tool_call":
       return (
         <div className="py-0.5">

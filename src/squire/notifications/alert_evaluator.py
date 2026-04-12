@@ -9,14 +9,14 @@ from datetime import UTC, datetime, timedelta
 
 from ..database.service import DatabaseService
 from .conditions import ConditionError, evaluate_condition, parse_condition
-from .webhook import WebhookDispatcher
+from .router import NotificationRouter
 
 logger = logging.getLogger(__name__)
 
 
 async def evaluate_alerts(
     db: DatabaseService,
-    notifier: WebhookDispatcher,
+    notifier: NotificationRouter,
     snapshot: dict[str, dict],
 ) -> int:
     """Evaluate all active alert rules against the current snapshot.
@@ -75,7 +75,7 @@ async def evaluate_alerts(
 
 
 async def _dispatch_alert(
-    notifier: WebhookDispatcher,
+    notifier: NotificationRouter,
     summary: str,
     rule: dict,
     host: str,

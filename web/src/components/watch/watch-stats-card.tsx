@@ -18,6 +18,10 @@ function formatUptime(startedAt: string | null | undefined): string {
 
 export function WatchStatsCard({ status }: WatchStatsCardProps) {
   const isRunning = status?.status === "running";
+  const totalActions = Number(status?.total_actions || 0);
+  const totalBlocked = Number(status?.total_blocked || 0);
+  const totalResolved = Number(status?.total_resolved || 0);
+  const totalEscalated = Number(status?.total_escalated || 0);
 
   return (
     <Card>
@@ -39,6 +43,22 @@ export function WatchStatsCard({ status }: WatchStatsCardProps) {
           <div>
             <span className="text-muted-foreground">Interval</span>
             <p>{status?.interval_minutes || "5"}m</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Actions</span>
+            <p>{totalActions}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Blocked</span>
+            <p>{totalBlocked}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Resolved</span>
+            <p>{totalResolved}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Escalated</span>
+            <p>{totalEscalated}</p>
           </div>
         </div>
       </CardContent>

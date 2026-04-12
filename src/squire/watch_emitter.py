@@ -27,7 +27,15 @@ class WatchEventEmitter:
     async def emit_cycle_start(self, cycle: int, session_id: str) -> None:
         await self._emit(cycle, "cycle_start", json.dumps({"session_id": session_id}))
 
-    async def emit_cycle_end(self, cycle: int, status: str, duration_seconds: float, tool_count: int) -> None:
+    async def emit_cycle_end(
+        self,
+        cycle: int,
+        status: str,
+        duration_seconds: float,
+        tool_count: int,
+        blocked_count: int = 0,
+        outcome: dict | None = None,
+    ) -> None:
         await self._emit(
             cycle,
             "cycle_end",
@@ -36,6 +44,8 @@ class WatchEventEmitter:
                     "status": status,
                     "duration_seconds": duration_seconds,
                     "tool_count": tool_count,
+                    "blocked_count": blocked_count,
+                    "outcome": outcome or {},
                 }
             ),
         )
@@ -84,6 +94,34 @@ class WatchEventEmitter:
                 {
                     "old_session_id": old_session_id,
                     "new_session_id": new_session_id,
+                }
+            ),
+        )
+
+    async def emit_phase(self, cycle: int, phase: str, summary: str, details: str | None = None) -> None:
+        await self._emit(
+            cycle,
+            "phase",
+            json.dumps(
+                {
+                    "phase": phase,
+                    "summary": summary,
+                    "details": details or "",
+                }
+            ),
+        )
+
+    async def emit_incident(self, cycle: int, key: str, severity: str, title: str, detail: str, host: str) -> None:
+        await self._emit(
+            cycle,
+            "incident",
+            json.dumps(
+                {
+                    "key": key,
+                    "severity": severity,
+                    "title": title,
+                    "detail": detail,
+                    "host": host,
                 }
             ),
         )

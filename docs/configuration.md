@@ -228,7 +228,8 @@ tools_deny = []                    # additional tools to deny in watch
 | `tools_deny`  | `SQUIRE_GUARDRAILS_WATCH_TOOLS_DENY`  | Additional tools to deny in watch       |
 
 
-Watch mode is always strict (deny, never prompt) since there's no interactive approval provider.
+Watch mode is always strict (deny, never prompt) and optimized for autonomous operation. The web dashboard can supervise
+live events and outcomes, but does not gate high-risk actions with interactive approval prompts.
 
 ---
 
@@ -339,7 +340,7 @@ Each skill is a directory containing a `SKILL.md` file with YAML frontmatter and
 name: restart-on-error
 description: Check container health and restart errored containers.
 metadata:
-  host: prod-apps-01
+  hosts: ["prod-apps-01"]
   trigger: manual
 ---
 
@@ -354,14 +355,15 @@ The format follows the [Open Agent Skills spec](https://agentskills.io/specifica
 | ------------------ | -------- | -------- | ------------------------------------------------------------------------------------------ |
 | `name`             | Yes      |          | Skill name — lowercase letters, numbers, hyphens, max 64 chars. Must match directory name. |
 | `description`      | Yes      |          | What the skill does and when to use it (max 1024 chars).                                   |
-| `metadata.host`    | No       | `all`    | Target host (`all` or a specific host name)                                                |
+| `metadata.hosts`   | No       | `["all"]`| Target hosts (`["all"]` or specific host names)                                            |
 | `metadata.trigger` | No       | `manual` | `manual` (on-demand) or `watch` (each watch cycle)                                         |
 | `metadata.enabled` | No       | `true`   | Whether the skill is active                                                                |
+| `metadata.incident_keys` | No | `[]`     | Watch-playbook incident-family prefixes (for example `disk-pressure:`)                    |
 
 
 The `metadata` key is omitted entirely when all Squire-specific fields are at their defaults.
 
-Skills with `trigger: watch` are appended to the watch mode check-in prompt each cycle. Manual skills can be executed from the web UI or CLI.
+Skills with `trigger: watch` and non-empty `incident_keys` become playbook candidates for dynamic routing (deterministic prefix matching, LLM tie-break, semantic fallback, generic fallback). Watch skills with no `incident_keys` are appended as generic watch instructions. Manual skills can be executed from the web UI or CLI.
 
 ---
 
@@ -488,7 +490,11 @@ Risk policy for watch mode is configured under `[guardrails.watch]`, not here.
 | `interval_minutes`         | `5`          | `SQUIRE_WATCH_INTERVAL_MINUTES`         | Minutes between watch cycles  |
 | `max_tool_calls_per_cycle` | `15`         | `SQUIRE_WATCH_MAX_TOOL_CALLS_PER_CYCLE` | Tool call budget per cycle    |
 | `cycle_timeout_seconds`    | `300`        | `SQUIRE_WATCH_CYCLE_TIMEOUT_SECONDS`    | Max wall-clock time per cycle |
-| `cycles_per_session`       | `50`         | `SQUIRE_WATCH_CYCLES_PER_SESSION`       | Rotate session after N cycles |
+| `cycles_per_session`       | `12`         | `SQUIRE_WATCH_CYCLES_PER_SESSION`       | Rotate session after N cycles |
+| `max_context_events`       | `40`         | `SQUIRE_WATCH_MAX_CONTEXT_EVENTS`       | Keep only recent ADK events in context |
+| `max_identical_actions_per_cycle` | `2`  | `SQUIRE_WATCH_MAX_IDENTICAL_ACTIONS_PER_CYCLE` | Anti-flapping action cap |
+| `blocked_action_cooldown_cycles` | `3`   | `SQUIRE_WATCH_BLOCKED_ACTION_COOLDOWN_CYCLES` | Cooldown for repeated actions |
+| `max_remote_actions_per_cycle` | `4`     | `SQUIRE_WATCH_MAX_REMOTE_ACTIONS_PER_CYCLE` | Safety cap for remote actions |
 | `checkin_prompt`           | *(built-in)* | `SQUIRE_WATCH_CHECKIN_PROMPT`           | Prompt injected each cycle    |
 | `notify_on_action`         | `true`       | `SQUIRE_WATCH_NOTIFY_ON_ACTION`         | Notify on corrective actions  |
 | `notify_on_blocked`        | `true`       | `SQUIRE_WATCH_NOTIFY_ON_BLOCKED`        | Notify on blocked tool calls  |
@@ -499,7 +505,11 @@ Risk policy for watch mode is configured under `[guardrails.watch]`, not here.
 interval_minutes = 5
 max_tool_calls_per_cycle = 15
 cycle_timeout_seconds = 300
-cycles_per_session = 50
+cycles_per_session = 12
+max_context_events = 40
+max_identical_actions_per_cycle = 2
+blocked_action_cooldown_cycles = 3
+max_remote_actions_per_cycle = 4
 ```
 
 ---
@@ -587,6 +597,11 @@ events = ["watch.alert", "watch.action"]
 | `watch.blocked`   | Watch  | Tool call denied by risk policy       |
 | `watch.alert`     | Watch  | Alert rule triggered                  |
 | `watch.error`     | Watch  | Exception during a watch cycle        |
+| `watch.incident_detected` | Watch | New incident fingerprint detected |
+| `watch.remediation` | Watch | Autonomous remediation action summary |
+| `watch.verification` | Watch | Verification outcome for remediation |
+| `watch.escalation` | Watch | Escalation required for unresolved issue |
+| `watch.digest` | Watch | Periodic operational summary |
 | `user`            | Agent  | Ad-hoc notification sent by the agent |
 
 

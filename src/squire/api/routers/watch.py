@@ -134,6 +134,9 @@ async def watch_config_get(
         notify_on_blocked=watch_config.notify_on_blocked,
         cycles_per_session=watch_config.cycles_per_session,
         max_context_events=watch_config.max_context_events,
+        max_identical_actions_per_cycle=watch_config.max_identical_actions_per_cycle,
+        blocked_action_cooldown_cycles=watch_config.blocked_action_cooldown_cycles,
+        max_remote_actions_per_cycle=watch_config.max_remote_actions_per_cycle,
         risk_tolerance=_effective_watch_risk_level(guardrails),
     )
 

@@ -15,6 +15,7 @@ from google.adk.tools.tool_context import ToolContext
 from ..approval import ApprovalProvider, AsyncApprovalProvider
 from ..tools import TOOL_RISK_LEVELS
 from ..types import BeforeToolCallback
+from ..watch_autonomy import action_signature
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,17 @@ def create_risk_gate(
         host = args.get("host", "local")
         if host != "local":
             tool_risk = min(tool_risk + 1, 5)
+
+        # Watch-mode action cooldown blocks repeated/flapping signatures.
+        blocked_signatures = set(tool_context.state.get("watch_blocked_action_signatures") or [])
+        signature = action_signature(tool_name, args)
+        if signature in blocked_signatures:
+            return {
+                "error": (
+                    f"[BLOCKED] '{compound_name}' suppressed by watch cooldown policy to prevent flapping. "
+                    "Do NOT retry this action in this cycle."
+                )
+            }
 
         # Bump risk for forced operations
         if args.get("force"):

@@ -37,7 +37,7 @@ The web UI has eight pages:
 | **Activity**      | Timeline of tool calls, watch mode actions, and denied requests                                                                |
 | **Sessions**      | Browse, resume, and delete past conversations                                                                                  |
 | **Skills**        | Create, edit, toggle, execute, and delete skills with a form-based editor                                                      |
-| **Watch**         | Start/stop watch mode, live-stream cycle activity, interactive tool approval with countdown timers, and runtime config changes |
+| **Watch**         | Start/stop watch mode, live-stream cycle activity, inspect structured RCA/remediation outcomes, and apply runtime config changes |
 | **Hosts**         | Host registry with reachable/unreachable status, services, and tags                                                            |
 | **Notifications** | Notification category overview and recent history                                                                              |
 | **Config**        | Current effective configuration viewer                                                                                         |
@@ -126,6 +126,7 @@ Every tool has a built-in risk level (1–5). The tolerance setting determines t
 
 
 ```toml
+[guardrails]
 risk_tolerance = "cautious"    # default
 risk_strict = false            # false = prompt for approval; true = deny outright
 ```
@@ -133,7 +134,7 @@ risk_strict = false            # false = prompt for approval; true = deny outrig
 Set via environment variable:
 
 ```bash
-export SQUIRE_RISK_TOLERANCE=standard
+export SQUIRE_GUARDRAILS_RISK_TOLERANCE=standard
 ```
 
 **Fine-grained overrides** live in the `[guardrails]` section — per-tool allow/deny/require-approval, command and path guards, and per-agent tolerances. See [Configuration Reference](configuration.md#guardrails----guardrails) for details.
@@ -226,7 +227,8 @@ uv run squire watch              # start the loop
 uv run squire watch status       # check status from another terminal
 ```
 
-You can also start and supervise watch mode from the web UI (Watch page) with live cycle streaming, cycle history, and interactive tool approval with countdown timers.
+You can also start and supervise watch mode from the web UI (Watch page) with live cycle streaming, cycle history, and
+structured autonomy telemetry (incident detection, RCA, remediation, verification, escalation).
 
 ### Getting Started with Watch Mode
 
@@ -255,7 +257,11 @@ Operational settings go in `[watch]`; risk policy goes in `[guardrails.watch]`.
 interval_minutes = 5           # minutes between cycles
 max_tool_calls_per_cycle = 15  # tool call budget per cycle
 cycle_timeout_seconds = 300    # max wall-clock time per cycle
-cycles_per_session = 50        # rotate session after N cycles
+cycles_per_session = 12        # rotate session after N cycles
+max_context_events = 40        # keep only recent ADK events
+max_identical_actions_per_cycle = 2   # anti-flapping cap
+blocked_action_cooldown_cycles = 3    # suppress repeated signatures
+max_remote_actions_per_cycle = 4      # remote safety bound
 notify_on_action = true        # notify when corrective action taken
 notify_on_blocked = true       # notify when tool call blocked
 
@@ -347,7 +353,7 @@ Skills are file-based instruction sets following the [Open Agent Skills](https:/
 name: restart-on-error
 description: Check container health and restart errored containers.
 metadata:
-  host: prod-apps-01
+  hosts: ["prod-apps-01"]
   trigger: manual
 ---
 
@@ -357,7 +363,7 @@ the root cause and restart them.
 Verify the containers come back healthy after restart.
 ```
 
-`name` and `description` are required by the spec. Names must be lowercase letters, numbers, and hyphens (max 64 chars). Squire-specific fields (`host`, `trigger`, `enabled`) live under `metadata`.
+`name` and `description` are required by the spec. Names must be lowercase letters, numbers, and hyphens (max 64 chars). Squire-specific fields (`hosts`, `trigger`, `enabled`, `incident_keys`) live under `metadata`.
 
 ### Triggers
 
@@ -365,7 +371,7 @@ Verify the containers come back healthy after restart.
 | Trigger  | When it runs                                          |
 | -------- | ----------------------------------------------------- |
 | `manual` | On demand — from the web UI, CLI, or API              |
-| `watch`  | Appended to the check-in prompt each watch mode cycle |
+| `watch`  | Routed as playbooks for matching incidents (or appended as generic watch skills when no `incident_keys` are provided) |
 
 
 Here is a watch-triggered example:
@@ -375,8 +381,9 @@ Here is a watch-triggered example:
 name: nightly-cleanup
 description: Clean up unused Docker images and volumes nightly.
 metadata:
-  host: all
+  hosts: ["all"]
   trigger: watch
+  incident_keys: ["disk-pressure:", "disk-warning:"]
 ---
 
 Check for unused Docker images older than 7 days and dangling volumes.
@@ -384,6 +391,12 @@ Remove them to free disk space. Report what was cleaned up.
 ```
 
 Executing a manual skill opens a new chat session with the instructions pre-loaded.
+
+The Skills page now includes watch-playbook tools:
+- incident family picker (`incident_keys`)
+- conflict preview for overlapping playbooks
+- one-click starter install (`recover-container-unhealthy`, `triage-disk-pressure`)
+- dry-run router simulation for "given incident X, what playbook is selected?"
 
 ### CLI Management
 

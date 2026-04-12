@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Watch autonomy:** Added structured watch lifecycle contract (detect → RCA → remediate → verify → escalate), incident/playbook injection, phase and incident event types, cycle outcomes in telemetry, anti-flapping controls (`max_identical_actions_per_cycle`, cooldown windows, remote action cap), and periodic digest notifications
+- **Watch analytics:** Persisted cumulative watch metrics in `watch_state` (`total_actions`, `total_blocked`, `total_resolved`, `total_escalated`, `last_outcome`) and exposed richer cycle summaries (`blocked_count`, incident stats, resolved/escalated flags)
+- **Tests:** Added `test_watch_autonomy.py` and expanded watch emitter/config coverage for new autonomy and safety behavior
+- **Watch playbooks (user-managed):** Added dynamic playbook routing from Skills metadata (`incident_keys` + `hosts`) with deterministic matching, single-match plausibility checks, LLM tie-break for overlaps, semantic fallback for unmatched incidents, and generic fallback on low confidence
+- **Skills API/UI:** Added incident family catalog endpoint, router dry-run simulation endpoint, starter playbook bootstrap endpoint, conflict preview UI, and watch-playbook metadata editing (`hosts`, `incident_keys`)
+- **Watch telemetry:** Added playbook selection phase events and counters for deterministic/semantic/generic routing paths
+
+### Changed
+
+- **Watch UI:** Live stream and cycle history now display incident/phase telemetry, blocked counts, and resolved/escalated outcomes; watch config drawer now supports new autonomy safety controls
+- **Docs/config:** Updated watch-mode docs and example config to reflect strict-autonomy behavior, corrected `cycles_per_session` default to `12`, and documented new watch config fields and notification categories
+- **Skills schema:** Canonicalized skill host targeting to `metadata.hosts` (list) with legacy `metadata.host` retrofit on load; renderer persists only `hosts`
+
+### Fixed
+
+- **Watch safety updates:** Live `update_config` commands now validate incoming values against `WatchConfig` constraints and reject invalid guardrail-disabling values (such as `0` for per-cycle safety limits)
+- **Playbook routing resilience:** Added bounded LLM usage for watch/dry-run playbook routing with per-request call caps and per-call timeouts; watch mode also wraps routing in a cycle-safe timeout fallback
+- **Skills dry-run safeguards:** `POST /api/skills/playbooks/dry-run` now limits incident batch size and defaults to heuristic routing unless `use_llm=true` is explicitly requested
+- **Tests/CI:** Wrapped a long `Incident(...)` constructor call in `test_watch_playbook_router.py` to satisfy Ruff's 120-character line length check and unblock the lint job
+
 ## [0.14.1] — 2026-04-11
 
 ### Added

@@ -1,6 +1,6 @@
 """Pydantic response models for the Squire web API."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # --- System / Snapshots ---
 
@@ -132,26 +132,67 @@ class AlertRuleUpdate(BaseModel):
 class Skill(BaseModel):
     name: str
     description: str = ""
-    host: str = "all"
+    hosts: list[str] = ["all"]
     trigger: str = "manual"
     enabled: bool = True
+    incident_keys: list[str] = []
     instructions: str = ""
 
 
 class SkillCreate(BaseModel):
     name: str
     description: str
-    host: str = "all"
+    hosts: list[str] = ["all"]
     trigger: str = "manual"
+    incident_keys: list[str] = []
+    allow_custom_incident_prefixes: bool = False
     instructions: str
 
 
 class SkillUpdate(BaseModel):
     description: str | None = None
-    host: str | None = None
+    hosts: list[str] | None = None
     trigger: str | None = None
     enabled: bool | None = None
+    incident_keys: list[str] | None = None
+    allow_custom_incident_prefixes: bool | None = None
     instructions: str | None = None
+
+
+class IncidentFamilyInfo(BaseModel):
+    prefix: str
+    description: str
+
+
+class PlaybookDryRunIncident(BaseModel):
+    key: str
+    severity: str = "high"
+    host: str = "local"
+    title: str = ""
+    detail: str = ""
+
+
+class PlaybookDryRunRequest(BaseModel):
+    incidents: list[PlaybookDryRunIncident] = Field(min_length=1, max_length=25)
+    use_llm: bool = False
+
+
+class PlaybookDryRunSelection(BaseModel):
+    incident: PlaybookDryRunIncident
+    candidate_count: int
+    selected_playbook: str | None = None
+    path_taken: str
+    confidence: float
+    reasoning: str
+
+
+class PlaybookDryRunResponse(BaseModel):
+    selections: list[PlaybookDryRunSelection]
+
+
+class BootstrapPlaybooksResponse(BaseModel):
+    created: list[str]
+    skipped: list[str]
 
 
 # --- Events ---
@@ -241,14 +282,17 @@ class LLMConfigUpdate(BaseModel):
 
 
 class WatchConfigPatch(BaseModel):
-    interval_minutes: int | None = None
-    max_tool_calls_per_cycle: int | None = None
-    cycle_timeout_seconds: int | None = None
+    interval_minutes: int | None = Field(default=None, ge=1)
+    max_tool_calls_per_cycle: int | None = Field(default=None, ge=1)
+    cycle_timeout_seconds: int | None = Field(default=None, ge=30)
     checkin_prompt: str | None = None
     notify_on_action: bool | None = None
     notify_on_blocked: bool | None = None
-    cycles_per_session: int | None = None
-    max_context_events: int | None = None
+    cycles_per_session: int | None = Field(default=None, ge=1)
+    max_context_events: int | None = Field(default=None, ge=10)
+    max_identical_actions_per_cycle: int | None = Field(default=None, ge=1)
+    blocked_action_cooldown_cycles: int | None = Field(default=None, ge=1)
+    max_remote_actions_per_cycle: int | None = Field(default=None, ge=1)
 
 
 class GuardrailsConfigUpdate(BaseModel):
@@ -294,18 +338,27 @@ class WatchStatusResponse(BaseModel):
     session_id: str | None = None
     last_response: str | None = None
     pid: str | None = None
+    total_actions: str | None = None
+    total_blocked: str | None = None
+    total_errors: str | None = None
+    total_resolved: str | None = None
+    total_escalated: str | None = None
+    last_outcome: str | None = None
 
 
 class WatchConfigUpdate(BaseModel):
-    interval_minutes: int | None = None
-    max_tool_calls_per_cycle: int | None = None
-    cycle_timeout_seconds: int | None = None
+    interval_minutes: int | None = Field(default=None, ge=1)
+    max_tool_calls_per_cycle: int | None = Field(default=None, ge=1)
+    cycle_timeout_seconds: int | None = Field(default=None, ge=30)
     checkin_prompt: str | None = None
     notify_on_action: bool | None = None
     notify_on_blocked: bool | None = None
-    cycles_per_session: int | None = None
-    max_context_events: int | None = None
-    risk_tolerance: int | None = None
+    cycles_per_session: int | None = Field(default=None, ge=1)
+    max_context_events: int | None = Field(default=None, ge=10)
+    max_identical_actions_per_cycle: int | None = Field(default=None, ge=1)
+    blocked_action_cooldown_cycles: int | None = Field(default=None, ge=1)
+    max_remote_actions_per_cycle: int | None = Field(default=None, ge=1)
+    risk_tolerance: int | None = Field(default=None, ge=1, le=5)
 
 
 class WatchConfigResponse(BaseModel):
@@ -317,6 +370,9 @@ class WatchConfigResponse(BaseModel):
     notify_on_blocked: bool
     cycles_per_session: int
     max_context_events: int
+    max_identical_actions_per_cycle: int
+    blocked_action_cooldown_cycles: int
+    max_remote_actions_per_cycle: int
     risk_tolerance: int | None
 
 
