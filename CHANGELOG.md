@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-04-11
+
 ### Added
 
 - **Watch autonomy:** Added structured watch lifecycle contract (detect → RCA → remediate → verify → escalate), incident/playbook injection, phase and incident event types, cycle outcomes in telemetry, anti-flapping controls (`max_identical_actions_per_cycle`, cooldown windows, remote action cap), and periodic digest notifications
