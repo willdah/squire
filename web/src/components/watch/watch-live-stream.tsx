@@ -28,6 +28,9 @@ function EventRow({ event }: { event: WatchEvent }) {
       return (
         <div className="text-primary font-medium py-1">
           ── Cycle {event.cycle} started ──
+          <span className="ml-2 text-xs text-muted-foreground">
+            {event.watch_session_id ? `watch-session ${event.watch_session_id.slice(0, 8)}` : ""}
+          </span>
         </div>
       );
     case "cycle_end": {

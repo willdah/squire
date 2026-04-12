@@ -138,6 +138,9 @@ export interface EventInfo {
   id?: number;
   timestamp: string;
   session_id?: string;
+  watch_id?: string;
+  watch_session_id?: string;
+  cycle_id?: string;
   category: string;
   tool_name?: string;
   summary: string;
@@ -153,6 +156,9 @@ export interface WatchStatus {
   interval_minutes?: string | null;
   risk_tolerance?: string | null;
   session_id?: string | null;
+  watch_id?: string | null;
+  watch_session_id?: string | null;
+  cycle_id?: string | null;
   last_response?: string | null;
   pid?: string | null;
   total_actions?: string | null;
@@ -170,6 +176,9 @@ export interface WatchStatus {
 export interface WatchEvent {
   id: number;
   cycle: number;
+  cycle_id?: string | null;
+  watch_id?: string | null;
+  watch_session_id?: string | null;
   type: string;
   content: string | null;
   created_at: string;
@@ -177,6 +186,9 @@ export interface WatchEvent {
 
 // Aggregated cycle summary
 export interface WatchCycle {
+  cycle_id?: string | null;
+  watch_id?: string | null;
+  watch_session_id?: string | null;
   cycle: number;
   started_at: string | null;
   ended_at: string | null;
@@ -192,6 +204,78 @@ export interface WatchCycle {
   escalated?: boolean;
   incident_key?: string | null;
   event_count: number;
+}
+
+export interface WatchReportInfo {
+  id?: number;
+  report_id: string;
+  watch_id: string;
+  watch_session_id?: string | null;
+  report_type: "session" | "watch" | string;
+  status: string;
+  title: string;
+  digest: string;
+  report_json: string;
+  created_at: string;
+}
+
+export interface WatchTimelineItem {
+  item_id: string;
+  kind: "cycle" | "report" | string;
+  watch_id?: string | null;
+  watch_session_id?: string | null;
+  cycle?: number | null;
+  created_at: string;
+  status?: string | null;
+  incident_count?: number | null;
+  tool_count?: number | null;
+  blocked_count?: number | null;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  total_tokens?: number | null;
+  payload_json?: string | null;
+}
+
+export interface WatchRunSummary {
+  watch_id: string;
+  started_at: string;
+  stopped_at?: string | null;
+  status: string;
+  session_count: number;
+  cycle_count: number;
+  report_count: number;
+  watch_report_id?: string | null;
+}
+
+export interface WatchSessionSummary {
+  watch_session_id: string;
+  watch_id: string;
+  adk_session_id: string;
+  started_at: string;
+  stopped_at?: string | null;
+  status: string;
+  cycle_count: number;
+  session_report_id?: string | null;
+  session_report_status?: string | null;
+  session_report_title?: string | null;
+}
+
+export interface WatchCycleSummary {
+  cycle_id: string;
+  watch_id: string;
+  watch_session_id: string;
+  cycle_number: number;
+  started_at: string;
+  ended_at?: string | null;
+  status: string;
+  duration_seconds?: number | null;
+  tool_count: number;
+  blocked_count: number;
+  incident_count: number;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  total_tokens?: number | null;
+  incident_key?: string | null;
 }
 
 // Watch config from API

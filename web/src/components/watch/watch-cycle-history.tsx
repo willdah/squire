@@ -6,6 +6,7 @@ import { apiGet, apiDelete } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import Link from "next/link";
 import {
   Dialog,
   DialogContent,
@@ -17,10 +18,12 @@ import {
 } from "@/components/ui/dialog";
 import type { WatchCycle, WatchEvent } from "@/lib/types";
 
-function CycleDetail({ cycle }: { cycle: number }) {
+function CycleDetail({ cycleId, cycleNumber, watchId }: { cycleId?: string | null; cycleNumber: number; watchId?: string | null }) {
+  const cycleRef = cycleId ?? String(cycleNumber);
+  const watchQuery = watchId ? `?watch_id=${encodeURIComponent(watchId)}` : "";
   const { data: events } = useSWR(
-    `/api/watch/cycles/${cycle}`,
-    () => apiGet<WatchEvent[]>(`/api/watch/cycles/${cycle}`),
+    `/api/watch/cycles/${cycleRef}${watchQuery}`,
+    () => apiGet<WatchEvent[]>(`/api/watch/cycles/${cycleRef}${watchQuery}`),
   );
 
   if (!events) return <div className="p-4 text-sm text-muted-foreground">Loading...</div>;
@@ -74,7 +77,12 @@ function CycleDetail({ cycle }: { cycle: number }) {
   );
 }
 
-export function WatchCycleHistory() {
+interface WatchCycleHistoryProps {
+  watchId?: string | null;
+  watchSessionId?: string | null;
+}
+
+export function WatchCycleHistory({ watchId, watchSessionId }: WatchCycleHistoryProps) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [extraCycles, setExtraCycles] = useState<WatchCycle[]>([]);
   const [nextPage, setNextPage] = useState(2);
@@ -84,10 +92,11 @@ export function WatchCycleHistory() {
   const [clearing, setClearing] = useState(false);
   const PER_PAGE = 20;
 
-  const { data: firstPage, mutate } = useSWR(
-    "/api/watch/cycles?page=1",
-    () => apiGet<WatchCycle[]>(`/api/watch/cycles?page=1&per_page=${PER_PAGE}`),
-  );
+  const baseParams = new URLSearchParams({ page: "1", per_page: String(PER_PAGE) });
+  if (watchId) baseParams.set("watch_id", watchId);
+  if (watchSessionId) baseParams.set("watch_session_id", watchSessionId);
+  const baseKey = `/api/watch/cycles?${baseParams.toString()}`;
+  const { data: firstPage, mutate } = useSWR(baseKey, () => apiGet<WatchCycle[]>(baseKey));
 
   const allCycles = firstPage ? [...firstPage, ...extraCycles] : null;
   const showLoadMore = hasMore && (firstPage?.length ?? 0) >= PER_PAGE;
@@ -95,14 +104,17 @@ export function WatchCycleHistory() {
   const handleLoadMore = useCallback(async () => {
     setLoadingMore(true);
     try {
-      const page = await apiGet<WatchCycle[]>(`/api/watch/cycles?page=${nextPage}&per_page=${PER_PAGE}`);
+      const params = new URLSearchParams({ page: String(nextPage), per_page: String(PER_PAGE) });
+      if (watchId) params.set("watch_id", watchId);
+      if (watchSessionId) params.set("watch_session_id", watchSessionId);
+      const page = await apiGet<WatchCycle[]>(`/api/watch/cycles?${params.toString()}`);
       setExtraCycles((prev) => [...prev, ...page]);
       setHasMore(page.length >= PER_PAGE);
       setNextPage((p) => p + 1);
     } finally {
       setLoadingMore(false);
     }
-  }, [nextPage]);
+  }, [nextPage, watchId, watchSessionId]);
 
   const handleBackToLatest = useCallback(() => {
     setExtraCycles([]);
@@ -154,9 +166,10 @@ export function WatchCycleHistory() {
           />
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Clear cycle history?</DialogTitle>
+              <DialogTitle>Clear all watch history?</DialogTitle>
               <DialogDescription>
-                This will permanently delete all cycle history. This action cannot be undone.
+                This removes watch runs, sessions, cycles, reports, and watch event rows. Activity feed entries in
+                Session/Activity are not deleted. This cannot be undone.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -198,8 +211,19 @@ export function WatchCycleHistory() {
                 {cycle.duration_seconds && (
                   <span className="text-muted-foreground text-xs ml-auto">{cycle.duration_seconds.toFixed(1)}s</span>
                 )}
+                {(cycle.watch_id || watchId) && (
+                  <Link
+                    href={`/watch-explorer?watch_id=${encodeURIComponent(cycle.watch_id ?? watchId ?? "")}&watch_session_id=${encodeURIComponent(
+                      cycle.watch_session_id ?? watchSessionId ?? ""
+                    )}&cycle_id=${encodeURIComponent(cycle.cycle_id ?? String(cycle.cycle))}`}
+                    className="text-xs text-primary underline-offset-2 hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    View report
+                  </Link>
+                )}
               </button>
-              {isExpanded && <CycleDetail cycle={cycle.cycle} />}
+              {isExpanded && <CycleDetail cycleId={cycle.cycle_id} cycleNumber={cycle.cycle} watchId={cycle.watch_id ?? watchId} />}
             </div>
           );
         })}

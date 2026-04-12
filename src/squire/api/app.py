@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # Create service singletons
     deps.registry = BackendRegistry()
     deps.db = DatabaseService(deps.db_config.path)
-    deps.notifier = build_notification_router(deps.notif_config)
+    deps.notifier = build_notification_router(deps.notif_config, db=deps.db)
     deps.skills_service = SkillService(deps.skills_config.path)
 
     # Load managed hosts from DB into the registry

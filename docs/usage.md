@@ -28,19 +28,21 @@ Custom port:
 uv run squire web --port 9000
 ```
 
-The web UI has eight pages:
+The web UI is organized into sidebar groups (Chat, Monitoring, System). Primary routes:
 
 
-| Page              | What it does                                                                                                                   |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Chat**          | WebSocket-streamed conversation with tool call indicators and approval dialogs                                                 |
-| **Activity**      | Timeline of tool calls, watch mode actions, and denied requests                                                                |
-| **Sessions**      | Browse, resume, and delete past conversations                                                                                  |
-| **Skills**        | Create, edit, toggle, execute, and delete skills with a form-based editor                                                      |
-| **Watch**         | Start/stop watch mode, live-stream cycle activity, inspect structured RCA/remediation outcomes, and apply runtime config changes |
-| **Hosts**         | Host registry with reachable/unreachable status, services, and tags                                                            |
-| **Notifications** | Notification category overview and recent history                                                                              |
-| **Config**        | Current effective configuration viewer                                                                                         |
+| Page                 | What it does                                                                                                                                 |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Chat**             | WebSocket-streamed conversation with tool call indicators and approval dialogs                                                               |
+| **Sessions**         | Browse, resume, and delete past conversations; links into Watch Explorer when a session was used for watch                                 |
+| **Watch**            | Start/stop watch mode, live stream, paginated cycle history (scoped to the current watch run), autonomy telemetry, and runtime config updates |
+| **Watch Explorer**   | Hierarchy-first history: watch runs → sessions → cycles, completion reports, optional timeline mode, and deep links (`/watch-explorer`). The legacy `/reports` URL redirects here. |
+| **Activity**         | Filterable event timeline (chat tool calls, watch notifications, errors); links into Chat, Watch, and Watch Explorer                         |
+| **Skills**           | Create, edit, toggle, execute, and delete skills with a form-based editor                                                                    |
+| **Hosts**            | Host registry with reachable/unreachable status, services, and tags                                                                          |
+| **Tools**            | Tool catalog and guardrail visibility                                                                                                        |
+| **Notifications**    | Notification category overview and recent history                                                                                            |
+| **Config**           | Current effective configuration viewer                                                                                                       |
 
 
 ### CLI
@@ -227,8 +229,7 @@ uv run squire watch              # start the loop
 uv run squire watch status       # check status from another terminal
 ```
 
-You can also start and supervise watch mode from the web UI (Watch page) with live cycle streaming, cycle history, and
-structured autonomy telemetry (incident detection, RCA, remediation, verification, escalation).
+You can also start and supervise watch mode from the web UI (**Watch** page) with live cycle streaming, cycle history, and structured autonomy telemetry (incident detection, RCA, remediation, verification, escalation). For long-run history across stop/start, use **Watch Explorer** (`/watch-explorer`), which reads the persisted watch run / session / cycle model and completion reports.
 
 ### Getting Started with Watch Mode
 

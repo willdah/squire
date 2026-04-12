@@ -208,6 +208,9 @@ class EventInfo(BaseModel):
     id: int | None = None
     timestamp: str
     session_id: str | None = None
+    watch_id: str | None = None
+    watch_session_id: str | None = None
+    cycle_id: str | None = None
     category: str
     tool_name: str | None = None
     summary: str
@@ -349,6 +352,9 @@ class WatchStatusResponse(BaseModel):
     interval_minutes: str | None = None
     risk_tolerance: str | None = None
     session_id: str | None = None
+    watch_id: str | None = None
+    watch_session_id: str | None = None
+    cycle_id: str | None = None
     last_response: str | None = None
     pid: str | None = None
     total_actions: str | None = None
@@ -399,6 +405,78 @@ class WatchApprovalAction(BaseModel):
 class WatchCommandResponse(BaseModel):
     status: str
     message: str = ""
+
+
+class WatchReportInfo(BaseModel):
+    id: int | None = None
+    report_id: str
+    watch_id: str
+    watch_session_id: str | None = None
+    report_type: str
+    status: str
+    title: str
+    digest: str
+    report_json: str
+    created_at: str
+
+
+class WatchTimelineItem(BaseModel):
+    item_id: str
+    kind: str
+    watch_id: str | None = None
+    watch_session_id: str | None = None
+    cycle: int | None = None
+    created_at: str
+    status: str | None = None
+    incident_count: int | None = None
+    tool_count: int | None = None
+    blocked_count: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    payload_json: str | None = None
+
+
+class WatchRunSummary(BaseModel):
+    watch_id: str
+    started_at: str
+    stopped_at: str | None = None
+    status: str
+    session_count: int = 0
+    cycle_count: int = 0
+    report_count: int = 0
+    watch_report_id: str | None = None
+
+
+class WatchSessionSummary(BaseModel):
+    watch_session_id: str
+    watch_id: str
+    adk_session_id: str
+    started_at: str
+    stopped_at: str | None = None
+    status: str
+    cycle_count: int = 0
+    session_report_id: str | None = None
+    session_report_status: str | None = None
+    session_report_title: str | None = None
+
+
+class WatchCycleSummary(BaseModel):
+    cycle_id: str
+    watch_id: str
+    watch_session_id: str
+    cycle_number: int
+    started_at: str
+    ended_at: str | None = None
+    status: str
+    duration_seconds: float | None = None
+    tool_count: int = 0
+    blocked_count: int = 0
+    incident_count: int = 0
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    incident_key: str | None = None
 
 
 # --- Chat ---

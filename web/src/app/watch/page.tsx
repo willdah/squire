@@ -26,13 +26,17 @@ export default function WatchPage() {
     <div className="space-y-6 animate-fade-in-up">
       <h1 className="text-2xl">Watch</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <WatchStatusCard
-          status={status ?? null}
-          onConfigure={() => setConfigOpen(true)}
-          onRefresh={() => mutate()}
-        />
-        <WatchStatsCard status={status ?? null} />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
+        <div className="xl:col-span-2">
+          <WatchStatusCard
+            status={status ?? null}
+            onConfigure={() => setConfigOpen(true)}
+            onRefresh={() => mutate()}
+          />
+        </div>
+        <div className="xl:col-span-3">
+          <WatchStatsCard status={status ?? null} />
+        </div>
       </div>
 
       <Tabs defaultValue="stream">
@@ -44,7 +48,7 @@ export default function WatchPage() {
           <WatchLiveStream enabled={isRunning} />
         </TabsContent>
         <TabsContent value="history" className="mt-4">
-          <WatchCycleHistory />
+          <WatchCycleHistory watchId={status?.watch_id} watchSessionId={status?.watch_session_id} />
         </TabsContent>
       </Tabs>
 

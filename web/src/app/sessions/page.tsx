@@ -12,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Trash2, MessageSquare, History, Eraser } from "lucide-react";
+import { Trash2, MessageSquare, History, Eraser, FileSearch } from "lucide-react";
 import type { SessionInfo } from "@/lib/types";
 
 function relativeTime(dateStr: string): string {
@@ -99,6 +99,11 @@ export default function SessionsPage() {
                   <Link href={`/chat?session=${s.session_id}`}>
                     <Button variant="ghost" size="icon" title="Resume">
                       <MessageSquare className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                  <Link href={`/watch-explorer?chat_session_id=${encodeURIComponent(s.session_id)}`}>
+                    <Button variant="ghost" size="icon" title="Investigate in watch explorer">
+                      <FileSearch className="h-4 w-4" />
                     </Button>
                   </Link>
                   <Button

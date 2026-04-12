@@ -12,7 +12,7 @@ from squire.watch_emitter import WatchEventEmitter
 @pytest.mark.asyncio
 async def test_emit_cycle_start(db):
     emitter = WatchEventEmitter(db)
-    await emitter.emit_cycle_start(cycle=1, session_id="s1")
+    await emitter.emit_cycle_start(cycle=1, session_id="s1", cycle_id="cyc-1")
 
     events = await db.get_watch_events_since(0)
     assert len(events) == 1
@@ -91,3 +91,16 @@ async def test_emit_phase_and_incident(db):
     events = await db.get_watch_events_since(0)
     assert events[0]["type"] == "phase"
     assert events[1]["type"] == "incident"
+
+
+@pytest.mark.asyncio
+async def test_emitter_scope_persists_watch_identifiers(db):
+    emitter = WatchEventEmitter(db)
+    emitter.set_scope(watch_id="watch_scope", watch_session_id="wss_scope")
+    await emitter.emit_cycle_start(cycle=1, session_id="adk-session", cycle_id="cyc_scope")
+
+    events = await db.get_watch_events_since(0)
+    assert len(events) == 1
+    assert events[0]["watch_id"] == "watch_scope"
+    assert events[0]["watch_session_id"] == "wss_scope"
+    assert events[0]["cycle_id"] == "cyc_scope"

@@ -134,3 +134,51 @@ async def test_interruptible_sleep_responds_to_commands(db):
     asyncio.create_task(insert_stop())
     await _interruptible_sleep(db, shutdown, interval_seconds=60, poll_seconds=0.1, watch_config=None)
     assert shutdown.is_set()
+
+
+@pytest.mark.asyncio
+async def test_close_cancelled_cycle_marks_cycle_cancelled(db):
+    """Cancelling before cycle execution should close the cycle row."""
+    from datetime import UTC, datetime
+
+    from squire.watch import _close_cancelled_cycle
+
+    await db.create_watch_run("watch_cancel")
+    await db.create_watch_session("wss_cancel", watch_id="watch_cancel", adk_session_id="adk_cancel")
+    await db.create_watch_cycle(
+        "cyc_cancel",
+        watch_id="watch_cancel",
+        watch_session_id="wss_cancel",
+        cycle_number=1,
+    )
+
+    cycle_row = await _close_cancelled_cycle(
+        db,
+        cycle_id="cyc_cancel",
+        watch_session_id="wss_cancel",
+        cycle_started_at=datetime.now(UTC),
+    )
+    assert cycle_row["status"] == "cancelled"
+    assert cycle_row["cycle_id"] == "cyc_cancel"
+    assert cycle_row["watch_session_id"] == "wss_cancel"
+
+    cycles = await db.list_watch_cycles_for_session("watch_cancel", "wss_cancel", page=1, per_page=20)
+    assert len(cycles) == 1
+    assert cycles[0]["status"] == "cancelled"
+
+
+def test_build_watch_report_infers_session_count_from_cycles():
+    """Watch report should infer session count from cycle scope when session list is empty."""
+    from squire.watch import _build_watch_report
+
+    report = _build_watch_report(
+        watch_id="watch_report_scope",
+        sessions=[],
+        cycles=[
+            {"watch_session_id": "wss_a", "tool_count": 2, "status": "ok", "incident_count": 1, "total_tokens": 10},
+            {"watch_session_id": "wss_a", "tool_count": 1, "status": "ok", "incident_count": 0, "total_tokens": 5},
+            {"watch_session_id": "wss_b", "tool_count": 0, "status": "error", "incident_count": 1, "total_tokens": 7},
+        ],
+    )
+    assert "2 session(s) and 3 cycle(s)" in report["run_summary"]
+    assert report["major_actions"] == "3 actions executed."

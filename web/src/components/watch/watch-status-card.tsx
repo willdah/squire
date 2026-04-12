@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { apiGet, apiPost } from "@/lib/api";
 import type { WatchStatus } from "@/lib/types";
-import { Loader2, Play, Square, Settings } from "lucide-react";
+import { Loader2, Play, Square, Settings, Radar, Activity, CircleAlert, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 
 interface WatchStatusCardProps {
   status: WatchStatus | null;
@@ -17,18 +18,39 @@ interface WatchStatusCardProps {
 export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusCardProps) {
   const [loading, setLoading] = useState<"starting" | "stopping" | null>(null);
   const isRunning = status?.status === "running";
-  const cycle = status?.cycle ? parseInt(status.cycle) : 0;
   const interval = status?.interval_minutes ? parseInt(status.interval_minutes) : 5;
   const riskTolerance = status?.risk_tolerance || "—";
+  const watchId = status?.watch_id || "—";
+  const watchSessionId = status?.watch_session_id || "—";
+  const cycleId = status?.cycle_id || "—";
+  const totalErrors = Number(status?.total_errors || 0);
+  const totalEscalated = Number(status?.total_escalated || 0);
   let lastOutcomeText = "";
+  let missionState: "stable" | "attention" | "degraded" = "stable";
+  let missionIcon = ShieldCheck;
+  let missionLabel = "Stable";
   if (status?.last_outcome) {
     try {
       const parsed = JSON.parse(status.last_outcome) as { resolved?: boolean; escalated?: boolean; incident_count?: number };
       lastOutcomeText = `Last outcome: ${parsed.incident_count ?? 0} incidents, ${parsed.resolved ? "resolved" : parsed.escalated ? "escalated" : "monitoring"}`;
+      if (parsed.escalated) {
+        missionState = "degraded";
+      } else if ((parsed.incident_count ?? 0) > 0 && !parsed.resolved) {
+        missionState = "attention";
+      }
     } catch {
       lastOutcomeText = "";
     }
   }
+  if (totalErrors > 0 || totalEscalated > 0) missionState = "degraded";
+  if (missionState === "attention") {
+    missionLabel = "Attention needed";
+    missionIcon = CircleAlert;
+  } else if (missionState === "degraded") {
+    missionLabel = "Degraded";
+    missionIcon = Activity;
+  }
+  const MissionIcon = missionIcon;
 
   const pollUntilStatus = async (target: string, maxAttempts = 15) => {
     for (let i = 0; i < maxAttempts; i++) {
@@ -62,30 +84,56 @@ export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusC
   };
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-display font-semibold">Watch Mode</h2>
+    <Card className="relative h-full overflow-hidden border-border/70 bg-card/95">
+      <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(circle_at_20%_0%,oklch(0.72_0.14_303/.18),transparent_42%),linear-gradient(to_right,transparent_0%,oklch(0.85_0.02_303/.05)_100%)]" />
+      <CardContent className="relative space-y-4 pt-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Radar className="h-4 w-4 text-primary" />
+            <h2 className="text-base font-display font-semibold">Watch Control</h2>
+          </div>
           <Badge variant={isRunning ? "default" : "secondary"} className="gap-1.5">
             <span className={`inline-block h-1.5 w-1.5 rounded-full ${isRunning ? "bg-gauge-ok animate-pulse-dot" : "bg-muted-foreground"}`} />
             {loading === "starting" ? "Starting…" : loading === "stopping" ? "Stopping…" : isRunning ? "Running" : "Stopped"}
           </Badge>
         </div>
-        <div className="text-sm text-muted-foreground space-y-1">
-          {isRunning ? (
-            <>
-              <p>Cycle {cycle} · Every {interval} min · Risk tolerance: {riskTolerance}</p>
-              {status?.pid && <p className="text-xs">PID {status.pid}</p>}
-              {lastOutcomeText && <p className="text-xs">{lastOutcomeText}</p>}
-            </>
-          ) : (
-            <>
-              {status?.stopped_at && <p>Stopped at {new Date(status.stopped_at).toLocaleTimeString()}</p>}
-              {cycle > 0 && <p>Last ran: {cycle} cycles</p>}
-            </>
-          )}
+
+        <div className="grid grid-cols-2 gap-2 rounded-xl border border-border/60 bg-background/50 p-3 text-xs">
+          <div>
+            <p className="text-muted-foreground">Watch ID</p>
+            <p className="font-mono">{watchId.slice(0, 12)}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Cycle ID</p>
+            <p className="font-mono">{cycleId === "—" ? "—" : cycleId.slice(0, 10)}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Watch Session</p>
+            <p className="font-mono">{watchSessionId === "—" ? "—" : watchSessionId.slice(0, 10)}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Cycle cadence</p>
+            <p>Every {interval} min</p>
+          </div>
         </div>
-        <div className="flex gap-2 mt-4">
+
+        <div className="rounded-xl border border-border/60 bg-background/50 p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <MissionIcon className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">Operational health</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">{missionLabel}</span>
+            <Badge variant={missionState === "stable" ? "default" : "destructive"} className="text-[10px]">
+              risk {riskTolerance}
+            </Badge>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {lastOutcomeText || (isRunning ? "Collecting current watch telemetry and incident context." : "Watch is idle. Start to resume monitoring.")}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap justify-center gap-2">
           {isRunning ? (
             <Button variant="destructive" size="sm" onClick={handleStop} disabled={loading !== null}>
               {loading === "stopping" ? (
@@ -109,6 +157,11 @@ export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusC
             <Settings className="h-3 w-3 mr-1" />
             Configure
           </Button>
+          <Link href={`/watch-explorer?watch_id=${encodeURIComponent(status?.watch_id ?? "")}`}>
+            <Button variant="secondary" size="sm">
+              Open Watch Explorer
+            </Button>
+          </Link>
         </div>
       </CardContent>
     </Card>

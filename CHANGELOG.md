@@ -11,14 +11,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Token telemetry:** Provider-reported token usage is now captured per assistant response in chat/watch, aggregated per session/watch session, and exposed in watch cycle summaries (`input`, `output`, `total`)
 - **Web visibility:** Session History, chat message history, Watch stats, and Watch cycle history now display token usage metrics
+- **Watch hierarchy model:** Added persistent `watch_id`, `watch_session_id`, and `cycle_id` entities (`watch_runs`, `watch_sessions`, `watch_cycles`) plus watch/session report storage (`watch_reports`) for unambiguous long-running watch history
+- **Investigation APIs:** Added watch timeline and report retrieval endpoints (`/api/watch/timeline`, `/api/watch/reports`, `/api/watch/reports/{report_id}`) and mirrored timeline feed at `/api/events/timeline`
+- **Reports hierarchy APIs:** Added run/session/cycle hierarchy endpoints for reports exploration (`/api/watch/runs`, `/api/watch/runs/{watch_id}`, `/api/watch/runs/{watch_id}/sessions`, `/api/watch/runs/{watch_id}/sessions/{watch_session_id}/cycles`)
+- **Workbench UI:** Added Investigation Workbench route at `/reports` with timeline cards, tabbed report details (Summary/Evidence/Memory/Recommendations), and deep-link query state for watch/session/cycle/report navigation
 
 ### Changed
 
+- **Documentation:** Aligned [Usage Guide](docs/usage.md), [Architecture](docs/architecture.md), [Watch web integration](docs/design/watch-web-integration.md), and [README](README.md) with Watch Explorer, timeline APIs, watch persistence tables, and Activity query parameters
+- **Watch clear API:** `DELETE /api/watch/cycles` OpenAPI docs and response message now describe the full watch datastore reset (runs, sessions, cycles, reports, `watch_events`) and note that Activity `events` rows are untouched; Cycle History dialog copy matches
+- **Activity chat logging:** `tool_result` and streaming error rows persist at most 500 characters of detail, matching the live WebSocket `tool_result.output` cap
+- **Timeline APIs:** Documented when to use `GET /api/watch/timeline` vs `GET /api/events/timeline` (identical data; watch vs Activity entry points)
 - **API schemas:** Session/message/watch status and watch cycle payloads now include token usage fields for downstream clients
+- **Watch event scoping:** Watch event rows now store `watch_id`, `watch_session_id`, and `cycle_id`; websocket streaming and cycle history queries are now scoped to the active watch run
+- **Watch lifecycle:** `squire watch` now creates watch/session/cycle identifiers, persists cycle outcomes into canonical cycle rows, and emits session/watch completion reports for operator-readable summaries
+- **Navigation:** Sidebar Monitoring group now includes Reports; Session History and Watch Cycle History include deep links into the workbench
+- **Reports UX:** Reports page now defaults to hierarchy-first navigation (Watch Runs -> Sessions -> Cycles), shows explicit `Watch Report` vs `Session Report` labels, and keeps timeline as a secondary mode
+- **Routes/navigation:** Watch Explorer now lives at `/watch-explorer`; `/reports` redirects for backward compatibility
+- **Activity UX:** Activity now supports explicit time-window presets/custom start, session/watch filters, and clearer live-window labeling
+- **Activity drill-down:** Event rows now show context chips and deep links into Chat, Watch, and Watch Explorer
+- **Notification event persistence:** Notification router dispatches are now persisted to `events`, so Activity category filters (including watch.* categories) reflect real emitted notifications
 
 ### Fixed
 
 - **Token accounting:** Chat and watch now accumulate token usage across multiple ADK events per turn/cycle, and chat persists token-only assistant turns so session totals do not drop tool-only model usage
+- **Cycle history ambiguity:** Cycle listings and details no longer rely solely on recycled cycle numbers; watch/session/cycle identity prevents mixed-session cycle views after rotation
+- **Duplicate report confusion:** Reports are now grouped and labeled by report level/type so valid watch + session reports no longer look like duplicate artifacts
+- **Watch run persistence:** Starting a new watch no longer clears prior watch history; stop/start now appends a fresh watch run instead of overwriting previous runs
+- **Activity completeness:** Chat now logs `tool_result` and streaming error events so Activity better reflects real chat behavior
+- **Watch stop finalization:** Stopping watch now always finalizes active cycle/session/run artifacts and emits a watch completion report, including stale-PID cleanup paths where the process already exited
+- **Watch Explorer report visibility:** Explorer now uses supported report pagination, prefers report-bearing sessions by default, and resolves `chat_session_id` deep links to the correct watch/session context
+- **Watch Explorer maintenance:** Added a clear-history action in Watch Explorer to wipe persisted watch runs/sessions/cycles/reports and `watch_events` rows (Activity feed not cleared)
+- **Watch Explorer polish:** Repositioned and restyled the clear-history action so the destructive control is visually prominent and less awkward in the layout
+- **Watch Explorer consistency:** Updated the clear-history button to match Session History action styling (outline + eraser icon) with compact `Clear` copy
+- **Activity filters:** Added missing watch event categories (`watch.action`, `watch.error`, `watch.incident_detected`, `watch.remediation`, `watch.verification`, `watch.escalation`, `watch.digest`) so Activity filtering matches emitted notifications
+- **Watch session cycle counts:** Session summaries in Watch Explorer now include live cycle totals while a watch session is still running (instead of remaining at zero until session close)
+- **Watch Explorer reports:** Session report picker matches `report_type === "session"` only so future report types do not leak into the session slot
+- **Database:** Removed unused `reset_watch_history` helper (clear path is `delete_watch_cycles` only)
 ## [0.15.0] — 2026-04-11
 
 ### Added

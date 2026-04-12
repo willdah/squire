@@ -45,6 +45,73 @@ async def test_watch_stop(db):
 
 
 @pytest.mark.asyncio
+async def test_watch_stop_stale_process_finalizes_watch_artifacts(db, monkeypatch):
+    from squire.api.routers.watch import watch_stop
+
+    def _missing_process(_pid: int, _signal: int) -> None:
+        raise ProcessLookupError
+
+    monkeypatch.setattr("squire.api.routers.watch.os.kill", _missing_process)
+
+    await db.create_watch_run("watch_stale_stop")
+    await db.create_watch_session("wss_stale_stop", watch_id="watch_stale_stop", adk_session_id="adk_stale_stop")
+    await db.set_watch_state("status", "running")
+    await db.set_watch_state("pid", "999999")
+    await db.set_watch_state("watch_id", "watch_stale_stop")
+    await db.set_watch_state("watch_session_id", "wss_stale_stop")
+
+    result = await watch_stop(db=db)
+    assert result.status == "ok"
+
+    run = await db.get_watch_run("watch_stale_stop")
+    assert run is not None
+    assert run["status"] == "stopped"
+    assert run["stopped_at"]
+
+    watch_report = await db.get_watch_completion_report("watch_stale_stop")
+    assert watch_report is not None
+    assert watch_report["report_type"] == "watch"
+
+    sessions = await db.list_watch_sessions_for_run("watch_stale_stop", page=1, per_page=20)
+    assert len(sessions) == 1
+    assert sessions[0]["status"] == "stopped"
+    assert sessions[0]["session_report_id"] is not None
+
+
+@pytest.mark.asyncio
+async def test_watch_status_stale_process_finalizes_watch_artifacts(db, monkeypatch):
+    from squire.api.routers.watch import watch_status
+
+    def _missing_process(_pid: int, _signal: int) -> None:
+        raise ProcessLookupError
+
+    monkeypatch.setattr("squire.api.routers.watch.os.kill", _missing_process)
+
+    await db.create_watch_run("watch_stale_status")
+    await db.create_watch_session("wss_stale_status", watch_id="watch_stale_status", adk_session_id="adk_stale_status")
+    await db.set_watch_state("status", "running")
+    await db.set_watch_state("pid", "999999")
+    await db.set_watch_state("watch_id", "watch_stale_status")
+    await db.set_watch_state("watch_session_id", "wss_stale_status")
+
+    result = await watch_status(db=db)
+    assert result.status == "stopped"
+
+    run = await db.get_watch_run("watch_stale_status")
+    assert run is not None
+    assert run["status"] == "stopped"
+
+    watch_report = await db.get_watch_completion_report("watch_stale_status")
+    assert watch_report is not None
+    assert watch_report["report_type"] == "watch"
+
+    sessions = await db.list_watch_sessions_for_run("watch_stale_status", page=1, per_page=20)
+    assert len(sessions) == 1
+    assert sessions[0]["status"] == "stopped"
+    assert sessions[0]["session_report_id"] is not None
+
+
+@pytest.mark.asyncio
 async def test_watch_config_update(db):
     from squire.api.routers.watch import watch_config_update
     from squire.api.schemas import WatchConfigUpdate
@@ -96,7 +163,7 @@ async def test_watch_cycle_detail(db):
     await db.insert_watch_event(1, "token", "hello")
     await db.insert_watch_event(1, "cycle_end", "{}")
 
-    result = await watch_cycle_detail(cycle=1, db=db)
+    result = await watch_cycle_detail(cycle_id="1", watch_id=None, db=db)
     assert len(result) == 3
 
 
@@ -138,7 +205,139 @@ async def test_watch_delete_cycles(db):
 
     result = await watch_delete_cycles(db=db)
     assert result.status == "ok"
-    assert result.message == "Cycle history cleared"
+    assert result.message == "Watch datastore cleared (runs, sessions, cycles, reports, watch events)"
 
     cycles = await db.get_watch_cycles()
     assert cycles == []
+
+
+@pytest.mark.asyncio
+async def test_watch_reports_and_timeline(db):
+    from squire.api.routers.watch import watch_report_detail, watch_reports, watch_timeline
+
+    await db.create_watch_run("watch_1")
+    await db.create_watch_session("wss_1", watch_id="watch_1", adk_session_id="adk_1")
+    await db.create_watch_cycle("cyc_1", watch_id="watch_1", watch_session_id="wss_1", cycle_number=1)
+    await db.close_watch_cycle(
+        "cyc_1",
+        status="ok",
+        duration_seconds=2.0,
+        tool_count=1,
+        blocked_count=0,
+        remote_tool_count=0,
+        incident_count=1,
+        input_tokens=10,
+        output_tokens=5,
+        total_tokens=15,
+        incident_key="disk-pressure",
+        outcome={"resolved": True},
+    )
+    await db.create_watch_report(
+        "rep_1",
+        watch_id="watch_1",
+        watch_session_id="wss_1",
+        report_type="session",
+        status="ok",
+        title="Session report",
+        digest="All good",
+        report={"executive_summary": "All good"},
+    )
+
+    reports = await watch_reports(watch_id="watch_1", watch_session_id=None, page=1, per_page=20, db=db)
+    assert len(reports) == 1
+    assert reports[0].report_id == "rep_1"
+
+    detail = await watch_report_detail(report_id="rep_1", db=db)
+    assert detail.title == "Session report"
+
+    timeline = await watch_timeline(watch_id="watch_1", watch_session_id=None, page=1, per_page=20, db=db)
+    assert any(item.kind == "cycle" for item in timeline)
+    assert any(item.kind == "report" for item in timeline)
+
+
+@pytest.mark.asyncio
+async def test_watch_hierarchy_endpoints_and_report_labels(db):
+    from squire.api.routers.watch import (
+        watch_reports,
+        watch_run_detail,
+        watch_run_session_cycles,
+        watch_run_sessions,
+        watch_runs,
+    )
+
+    await db.create_watch_run("watch_x")
+    await db.create_watch_session("wss_x1", watch_id="watch_x", adk_session_id="adk_x1")
+    await db.create_watch_cycle("cyc_x1", watch_id="watch_x", watch_session_id="wss_x1", cycle_number=1)
+    await db.close_watch_cycle(
+        "cyc_x1",
+        status="ok",
+        duration_seconds=1.8,
+        tool_count=2,
+        blocked_count=0,
+        remote_tool_count=0,
+        incident_count=1,
+        input_tokens=15,
+        output_tokens=9,
+        total_tokens=24,
+        incident_key="disk-pressure",
+        outcome={"resolved": True},
+    )
+    await db.create_watch_report(
+        "rep_watch_x",
+        watch_id="watch_x",
+        watch_session_id=None,
+        report_type="watch",
+        status="ok",
+        title="Watch report",
+        digest="Run complete",
+        report={"run_summary": "Complete"},
+    )
+    await db.create_watch_report(
+        "rep_session_x",
+        watch_id="watch_x",
+        watch_session_id="wss_x1",
+        report_type="session",
+        status="ok",
+        title="Session report",
+        digest="Session complete",
+        report={"executive_summary": "Complete"},
+    )
+
+    runs = await watch_runs(page=1, per_page=20, db=db)
+    assert len(runs) == 1
+    assert runs[0].watch_id == "watch_x"
+    assert runs[0].session_count == 1
+    assert runs[0].cycle_count == 1
+    assert runs[0].report_count == 2
+    assert runs[0].watch_report_id == "rep_watch_x"
+
+    run_detail = await watch_run_detail(watch_id="watch_x", db=db)
+    assert run_detail.watch_id == "watch_x"
+    assert run_detail.report_count == 2
+
+    sessions = await watch_run_sessions(watch_id="watch_x", page=1, per_page=20, db=db)
+    assert len(sessions) == 1
+    assert sessions[0].watch_session_id == "wss_x1"
+    assert sessions[0].cycle_count == 1
+    assert sessions[0].session_report_id == "rep_session_x"
+    assert sessions[0].session_report_status == "ok"
+
+    cycles = await watch_run_session_cycles(watch_id="watch_x", watch_session_id="wss_x1", page=1, per_page=20, db=db)
+    assert len(cycles) == 1
+    assert cycles[0].cycle_id == "cyc_x1"
+    assert cycles[0].status == "ok"
+
+    reports = await watch_reports(watch_id="watch_x", watch_session_id=None, page=1, per_page=20, db=db)
+    assert {report.report_type for report in reports} == {"watch", "session"}
+
+
+@pytest.mark.asyncio
+async def test_watch_session_by_adk_id_lookup(db):
+    from squire.api.routers.watch import watch_session_by_adk_session_id
+
+    await db.create_watch_run("watch_lookup")
+    await db.create_watch_session("wss_lookup", watch_id="watch_lookup", adk_session_id="adk_lookup")
+
+    session = await watch_session_by_adk_session_id(adk_session_id="adk_lookup", db=db)
+    assert session.watch_id == "watch_lookup"
+    assert session.watch_session_id == "wss_lookup"

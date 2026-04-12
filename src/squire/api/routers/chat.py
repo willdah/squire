@@ -25,6 +25,10 @@ from ..schemas import ChatSessionResponse
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Cap persisted tool/error detail length to match WebSocket ``tool_result.output`` (500 chars)
+# so Activity does not retain more sensitive command output than live chat clients surface.
+_EVENT_LOG_DETAIL_MAX = 500
+
 _SKILL_COMPLETE_RE = re.compile(r"\[SKILL\s+COMPLETE\]", re.IGNORECASE)
 
 _RAW_TOOL_CALL_RE = re.compile(r'\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}')
@@ -475,8 +479,16 @@ async def _stream_response(
         raise
     except Exception as e:
         logger.exception("Error streaming response")
+        err_text = str(e)
+        if db:
+            await db.log_event(
+                category="error",
+                summary="Chat streaming error",
+                session_id=session.id,
+                details=err_text[:_EVENT_LOG_DETAIL_MAX],
+            )
         try:
-            await websocket.send_json({"type": "error", "message": str(e)})
+            await websocket.send_json({"type": "error", "message": err_text})
         except Exception:
             pass
 
@@ -555,14 +567,24 @@ async def _run_single_turn(
                 response_parts = []
                 if fr.name in ADK_INTERNAL_TOOLS:
                     continue
+                output_text = str(fr.response) if fr.response is not None else ""
+                clipped = output_text[:_EVENT_LOG_DETAIL_MAX]
                 await websocket.send_json(
                     {
                         "type": "tool_result",
                         "name": fr.name,
-                        "output": str(fr.response)[:500],
+                        "output": clipped,
                         "request_id": "",
                     }
                 )
+                if db:
+                    await db.log_event(
+                        category="tool_result",
+                        summary=f"Completed {fr.name or 'tool'}",
+                        session_id=session.id,
+                        tool_name=fr.name,
+                        details=clipped,
+                    )
 
             elif part.text and event.partial:
                 response_parts.append(part.text)
