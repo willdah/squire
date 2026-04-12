@@ -158,6 +158,9 @@ function ChatPageInner() {
             id: nextId(),
             role: m.role as "user" | "assistant",
             content: m.content!,
+            inputTokens: m.input_tokens,
+            outputTokens: m.output_tokens,
+            totalTokens: m.total_tokens,
           }));
         setMessages(prior);
       })

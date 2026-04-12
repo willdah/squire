@@ -21,9 +21,15 @@ async def test_watch_status(db):
 
     await db.set_watch_state("status", "running")
     await db.set_watch_state("cycle", "5")
+    await db.set_watch_state("total_input_tokens", "120")
+    await db.set_watch_state("total_output_tokens", "75")
+    await db.set_watch_state("total_tokens", "195")
     result = await watch_status(db=db)
     assert result.status == "running"
     assert result.cycle == "5"
+    assert result.total_input_tokens == "120"
+    assert result.total_output_tokens == "75"
+    assert result.total_tokens == "195"
 
 
 @pytest.mark.asyncio
@@ -59,11 +65,27 @@ async def test_watch_cycles(db):
     from squire.api.routers.watch import watch_cycles
 
     await db.insert_watch_event(1, "cycle_start", json.dumps({"session_id": "s1"}))
-    await db.insert_watch_event(1, "cycle_end", json.dumps({"status": "ok", "duration_seconds": 5, "tool_count": 2}))
+    await db.insert_watch_event(
+        1,
+        "cycle_end",
+        json.dumps(
+            {
+                "status": "ok",
+                "duration_seconds": 5,
+                "tool_count": 2,
+                "input_tokens": 50,
+                "output_tokens": 20,
+                "total_tokens": 70,
+            }
+        ),
+    )
 
     result = await watch_cycles(page=1, per_page=10, db=db)
     assert len(result) == 1
     assert result[0]["cycle"] == 1
+    assert result[0]["input_tokens"] == 50
+    assert result[0]["output_tokens"] == 20
+    assert result[0]["total_tokens"] == 70
 
 
 @pytest.mark.asyncio

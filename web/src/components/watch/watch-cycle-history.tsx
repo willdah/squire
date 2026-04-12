@@ -188,6 +188,9 @@ export function WatchCycleHistory() {
                 </span>
                 <span className="text-muted-foreground text-xs">{cycle.tool_count} tools</span>
                 <span className="text-muted-foreground text-xs">{cycle.blocked_count || 0} blocked</span>
+                <span className="text-muted-foreground text-xs">
+                  {cycle.input_tokens ?? "—"}/{cycle.output_tokens ?? "—"}/{cycle.total_tokens ?? "—"} tokens
+                </span>
                 <span className="text-muted-foreground text-xs">{cycle.incident_count || 0} incidents</span>
                 <Badge variant={statusColor} className="text-xs">{cycle.status}</Badge>
                 {cycle.resolved && <Badge variant="secondary" className="text-xs">resolved</Badge>}

@@ -22,6 +22,9 @@ export function WatchStatsCard({ status }: WatchStatsCardProps) {
   const totalBlocked = Number(status?.total_blocked || 0);
   const totalResolved = Number(status?.total_resolved || 0);
   const totalEscalated = Number(status?.total_escalated || 0);
+  const totalInputTokens = Number(status?.total_input_tokens || 0);
+  const totalOutputTokens = Number(status?.total_output_tokens || 0);
+  const totalTokens = Number(status?.total_tokens || 0);
 
   return (
     <Card>
@@ -59,6 +62,18 @@ export function WatchStatsCard({ status }: WatchStatsCardProps) {
           <div>
             <span className="text-muted-foreground">Escalated</span>
             <p>{totalEscalated}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Input Tokens</span>
+            <p>{totalInputTokens.toLocaleString()}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Output Tokens</span>
+            <p>{totalOutputTokens.toLocaleString()}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Total Tokens</span>
+            <p>{totalTokens.toLocaleString()}</p>
           </div>
         </div>
       </CardContent>

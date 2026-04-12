@@ -64,6 +64,9 @@ export interface SessionInfo {
   created_at: string;
   last_active: string;
   preview: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
 }
 
 export interface MessageInfo {
@@ -74,6 +77,9 @@ export interface MessageInfo {
   content?: string;
   tool_calls_json?: string;
   tool_call_id?: string;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  total_tokens?: number | null;
 }
 
 export interface AlertRule {
@@ -154,6 +160,9 @@ export interface WatchStatus {
   total_errors?: string | null;
   total_resolved?: string | null;
   total_escalated?: string | null;
+  total_input_tokens?: string | null;
+  total_output_tokens?: string | null;
+  total_tokens?: string | null;
   last_outcome?: string | null;
 }
 
@@ -175,6 +184,9 @@ export interface WatchCycle {
   duration_seconds: number | null;
   tool_count: number;
   blocked_count?: number;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  total_tokens?: number | null;
   incident_count?: number;
   resolved?: boolean;
   escalated?: boolean;

@@ -13,6 +13,9 @@ export interface ChatMessage {
   content: string;
   toolName?: string;
   isStreaming?: boolean;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  totalTokens?: number | null;
 }
 
 export type AgentState = "thinking" | "tool" | "streaming" | null;

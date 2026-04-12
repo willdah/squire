@@ -27,12 +27,22 @@ async def test_session_lifecycle(db):
 async def test_message_persistence(db):
     await db.create_session("sess-2")
     await db.save_message(session_id="sess-2", role="user", content="hello")
-    await db.save_message(session_id="sess-2", role="assistant", content="hi there")
+    await db.save_message(
+        session_id="sess-2",
+        role="assistant",
+        content="hi there",
+        input_tokens=12,
+        output_tokens=9,
+        total_tokens=21,
+    )
 
     msgs = await db.get_messages("sess-2")
     assert len(msgs) == 2
     assert msgs[0]["role"] == "user"
     assert msgs[1]["content"] == "hi there"
+    assert msgs[1]["input_tokens"] == 12
+    assert msgs[1]["output_tokens"] == 9
+    assert msgs[1]["total_tokens"] == 21
 
 
 @pytest.mark.asyncio
@@ -99,3 +109,46 @@ async def test_delete_all_sessions(db):
 async def test_delete_all_sessions_empty(db):
     count = await db.delete_all_sessions()
     assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_list_sessions_includes_token_totals(db):
+    await db.create_session("sess-tokens")
+    await db.save_message(
+        session_id="sess-tokens",
+        role="assistant",
+        content="first",
+        input_tokens=10,
+        output_tokens=8,
+        total_tokens=18,
+    )
+    await db.save_message(
+        session_id="sess-tokens",
+        role="assistant",
+        content="second",
+        input_tokens=5,
+        output_tokens=7,
+        total_tokens=12,
+    )
+
+    sessions = await db.list_sessions()
+    session = next(s for s in sessions if s["session_id"] == "sess-tokens")
+    assert session["input_tokens"] == 15
+    assert session["output_tokens"] == 15
+    assert session["total_tokens"] == 30
+
+
+@pytest.mark.asyncio
+async def test_watch_cycles_include_token_counts(db):
+    await db.insert_watch_event(1, "cycle_start", '{"session_id":"sess-w"}')
+    await db.insert_watch_event(
+        1,
+        "cycle_end",
+        '{"status":"ok","duration_seconds":2.5,"tool_count":1,"input_tokens":42,"output_tokens":17,"total_tokens":59}',
+    )
+
+    cycles = await db.get_watch_cycles(page=1, per_page=10)
+    assert len(cycles) == 1
+    assert cycles[0]["input_tokens"] == 42
+    assert cycles[0]["output_tokens"] == 17
+    assert cycles[0]["total_tokens"] == 59

@@ -71,6 +71,9 @@ export default function SessionsPage() {
               <TableHead>Created</TableHead>
               <TableHead>Last Active</TableHead>
               <TableHead>Preview</TableHead>
+              <TableHead className="text-right">Input Tokens</TableHead>
+              <TableHead className="text-right">Output Tokens</TableHead>
+              <TableHead className="text-right">Total Tokens</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -89,6 +92,9 @@ export default function SessionsPage() {
                 <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
                   {s.preview || "-"}
                 </TableCell>
+                <TableCell className="text-sm text-right">{s.input_tokens.toLocaleString()}</TableCell>
+                <TableCell className="text-sm text-right">{s.output_tokens.toLocaleString()}</TableCell>
+                <TableCell className="text-sm text-right">{s.total_tokens.toLocaleString()}</TableCell>
                 <TableCell className="flex gap-1">
                   <Link href={`/chat?session=${s.session_id}`}>
                     <Button variant="ghost" size="icon" title="Resume">

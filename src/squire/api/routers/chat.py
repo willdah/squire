@@ -47,6 +47,18 @@ def _strip_raw_tool_calls(text: str) -> str:
     return cleaned
 
 
+def _extract_token_usage_from_event(event: Any) -> tuple[int | None, int | None, int | None]:
+    """Extract provider-reported token usage from an ADK event."""
+    usage = getattr(event, "usage_metadata", None)
+    if not usage:
+        return None, None, None
+    return (
+        getattr(usage, "prompt_token_count", None),
+        getattr(usage, "candidates_token_count", None),
+        getattr(usage, "total_token_count", None),
+    )
+
+
 class WebApprovalBridge:
     """WebSocket-based approval provider for the risk gate.
 
@@ -391,7 +403,7 @@ async def _stream_response(
         prev_response = ""
 
         for turn in range(max_turns):
-            turn_response, tools_used = await _run_single_turn(
+            turn_response, tools_used, input_tokens, output_tokens, total_tokens = await _run_single_turn(
                 websocket=websocket,
                 runner=runner,
                 session=session,
@@ -403,7 +415,14 @@ async def _stream_response(
 
             # Persist assistant response
             if db and turn_response:
-                await db.save_message(session_id=session.id, role="assistant", content=turn_response)
+                await db.save_message(
+                    session_id=session.id,
+                    role="assistant",
+                    content=turn_response,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=total_tokens,
+                )
                 await db.update_session_active(session.id)
 
             # If this is not a skill session or we've exhausted turns, stop.
@@ -451,17 +470,20 @@ async def _run_single_turn(
     user_text: str,
     app_config,
     db,
-) -> tuple[str, bool]:
+) -> tuple[str, bool, int | None, int | None, int | None]:
     """Run one agent turn and stream events over the WebSocket.
 
     Returns:
-        A tuple of (response_text, tools_were_called).
+        A tuple of (response_text, tools_were_called, input_tokens, output_tokens, total_tokens).
     """
     message = types.Content(parts=[types.Part(text=user_text)])
     response_parts: list[str] = []
     run_config = RunConfig(streaming_mode=StreamingMode.SSE)
     final_text = ""
     tools_called = False
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
 
     async for event in runner.run_async(
         user_id=app_config.user_id,
@@ -469,6 +491,14 @@ async def _run_single_turn(
         new_message=message,
         run_config=run_config,
     ):
+        event_input_tokens, event_output_tokens, event_total_tokens = _extract_token_usage_from_event(event)
+        if event_input_tokens is not None:
+            input_tokens = event_input_tokens
+        if event_output_tokens is not None:
+            output_tokens = event_output_tokens
+        if event_total_tokens is not None:
+            total_tokens = event_total_tokens
+
         if not event.content or not event.content.parts:
             continue
 
@@ -532,4 +562,4 @@ async def _run_single_turn(
                         await websocket.send_json({"type": "token", "content": delta})
 
     raw = final_text or "".join(response_parts)
-    return _strip_raw_tool_calls(raw), tools_called
+    return _strip_raw_tool_calls(raw), tools_called, input_tokens, output_tokens, total_tokens

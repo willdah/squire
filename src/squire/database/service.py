@@ -58,7 +58,10 @@ CREATE TABLE IF NOT EXISTS conversations (
     role            TEXT NOT NULL,
     content         TEXT,
     tool_calls_json TEXT,
-    tool_call_id    TEXT
+    tool_call_id    TEXT,
+    input_tokens    INTEGER,
+    output_tokens   INTEGER,
+    total_tokens    INTEGER
 )
 """
 
@@ -208,7 +211,19 @@ class DatabaseService:
             _CREATE_MANAGED_HOSTS,
         ):
             await self._conn.execute(stmt)
+        await self._ensure_conversation_token_columns()
         await self._conn.commit()
+
+    async def _ensure_conversation_token_columns(self) -> None:
+        """Add conversation token columns for existing databases."""
+        if self._conn is None:
+            raise RuntimeError("Database connection not initialized")
+        cursor = await self._conn.execute("PRAGMA table_info(conversations)")
+        rows = await cursor.fetchall()
+        existing_columns = {row[1] for row in rows}
+        for column in ("input_tokens", "output_tokens", "total_tokens"):
+            if column not in existing_columns:
+                await self._conn.execute(f"ALTER TABLE conversations ADD COLUMN {column} INTEGER")
 
     # --- Snapshots ---
 
@@ -318,16 +333,29 @@ class DatabaseService:
         content: str | None = None,
         tool_calls_json: str | None = None,
         tool_call_id: str | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+        total_tokens: int | None = None,
     ) -> None:
         """Persist a single conversation message."""
         conn = await self._get_conn()
         now = datetime.now(UTC).isoformat()
         await conn.execute(
             """
-            INSERT INTO conversations (session_id, timestamp, role, content, tool_calls_json, tool_call_id)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO conversations (
+                session_id,
+                timestamp,
+                role,
+                content,
+                tool_calls_json,
+                tool_call_id,
+                input_tokens,
+                output_tokens,
+                total_tokens
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (session_id, now, role, content, tool_calls_json, tool_call_id),
+            (session_id, now, role, content, tool_calls_json, tool_call_id, input_tokens, output_tokens, total_tokens),
         )
         await conn.commit()
 
@@ -345,7 +373,18 @@ class DatabaseService:
         """List recent chat sessions."""
         conn = await self._get_conn()
         cursor = await conn.execute(
-            "SELECT * FROM sessions ORDER BY last_active DESC LIMIT ?",
+            """
+            SELECT
+                s.*,
+                COALESCE(SUM(c.input_tokens), 0) AS input_tokens,
+                COALESCE(SUM(c.output_tokens), 0) AS output_tokens,
+                COALESCE(SUM(c.total_tokens), 0) AS total_tokens
+            FROM sessions s
+            LEFT JOIN conversations c ON c.session_id = s.session_id
+            GROUP BY s.session_id
+            ORDER BY s.last_active DESC
+            LIMIT ?
+            """,
             (limit,),
         )
         rows = await cursor.fetchall()
@@ -557,6 +596,9 @@ class DatabaseService:
                     "duration_seconds": end_content.get("duration_seconds"),
                     "tool_count": end_content.get("tool_count", 0),
                     "blocked_count": end_content.get("blocked_count", 0),
+                    "input_tokens": end_content.get("input_tokens"),
+                    "output_tokens": end_content.get("output_tokens"),
+                    "total_tokens": end_content.get("total_tokens"),
                     "incident_count": ((end_content.get("outcome") or {}).get("incident_count", 0)),
                     "resolved": ((end_content.get("outcome") or {}).get("resolved", False)),
                     "escalated": ((end_content.get("outcome") or {}).get("escalated", False)),
