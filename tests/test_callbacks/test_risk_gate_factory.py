@@ -3,10 +3,11 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from agent_risk_engine import RiskEvaluator, RuleGate
+from agent_risk_engine import GateResult, RiskEvaluator, RuleGate
 
-from squire.approval import ApprovalProvider, DenyAllApproval
+from squire.approval import ApprovalProvider, AsyncApprovalProvider, DenyAllApproval
 from squire.callbacks.risk_gate import HOMELAB_PATTERNS, build_pattern_analyzer, create_risk_gate
+from squire.watch_autonomy import action_signature
 
 
 def _make_tool(name: str):
@@ -76,6 +77,21 @@ class TestBasicGating:
         result = await gate(_make_tool("run_command"), {"command": "ls"}, _make_context(threshold=2))
         assert result is not None
         assert "declined" in result["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_async_approval_provider_approves(self):
+        class _AsyncProvider:
+            async def request_approval_async(self, tool_name, args, risk_level):
+                return True
+
+        provider = _AsyncProvider()
+        assert isinstance(provider, AsyncApprovalProvider)
+        gate = create_risk_gate(
+            tool_risk_levels={"run_command": 5},
+            approval_provider=provider,
+        )
+        result = await gate(_make_tool("run_command"), {"command": "ls"}, _make_context(threshold=2))
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_deny_all_approval(self):
@@ -357,6 +373,27 @@ class TestRiskOverrides:
         )
         assert result is not None
 
+    @pytest.mark.asyncio
+    async def test_default_threshold_takes_precedence_over_state_threshold(self):
+        gate = create_risk_gate(
+            tool_risk_levels={"run_command": 4},
+            default_threshold=5,
+        )
+        result = await gate(_make_tool("run_command"), {"command": "ls"}, _make_context(threshold=1))
+        assert result is None
+
+
+class TestWatchCooldown:
+    @pytest.mark.asyncio
+    async def test_watch_blocked_action_signature_denies_repeated_action(self):
+        gate = create_risk_gate(tool_risk_levels={"docker_container:restart": 2})
+        ctx = _make_context(threshold=3)
+        args = {"action": "restart", "host": "local"}
+        ctx.state["watch_blocked_action_signatures"] = {action_signature("docker_container", args)}
+        result = await gate(_make_tool("docker_container"), args, ctx)
+        assert result is not None
+        assert "watch cooldown" in result["error"].lower()
+
 
 class TestPatternAnalyzerIntegration:
     """Tests for PatternAnalyzer replacing PassthroughAnalyzer in the risk pipeline."""
@@ -440,3 +477,32 @@ class TestPatternAnalyzerIntegration:
         result = await gate(_make_tool("run_command"), {"command": "rm -rf /data"}, ctx)
         assert result is not None
         assert "blocked" in result["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_analyzer_escalated_allowed_result_requests_approval(self, monkeypatch):
+        class _FakeScore:
+            level = 5
+
+        class _FakeResult:
+            decision = GateResult.ALLOWED
+            risk_score = _FakeScore()
+            reasoning = "escalated"
+
+        class _FakeEvaluator:
+            def __init__(self):
+                self.rule_gate = RuleGate(threshold=3)
+
+            async def evaluate(self, action):
+                return _FakeResult()
+
+        monkeypatch.setattr(
+            "squire.callbacks.risk_gate._build_evaluator_from_state",
+            lambda tool_context, default_threshold=None: _FakeEvaluator(),
+        )
+        gate = create_risk_gate(
+            tool_risk_levels={"run_command": 1},
+            approval_provider=DenyAllApproval(),
+        )
+        result = await gate(_make_tool("run_command"), {"command": "ls"}, _make_context(threshold=5))
+        assert result is not None
+        assert "declined" in result["error"].lower()

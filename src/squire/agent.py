@@ -36,9 +36,22 @@ _notif_config = NotificationsConfig()
 _notifier = WebhookDispatcher(_notif_config)
 set_notifier(_notifier)
 
-# Load managed hosts from DB into the registry (sync wrapper for module-level init)
+# Load managed hosts from DB into the registry.
 _host_store = HostStore(_db, _registry)
-asyncio.get_event_loop().run_until_complete(_host_store.load())
+
+
+async def _load_hosts() -> None:
+    await _host_store.load()
+
+
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    asyncio.run(_load_hosts())
+else:
+    # Some environments import this module inside an active event loop.
+    # Defer host loading rather than running nested loops at import time.
+    pass
 
 _app_config = AppConfig()
 _llm_config = LLMConfig()

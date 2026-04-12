@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -24,16 +25,11 @@ async def test_poll_commands_stop(db):
 @pytest.mark.asyncio
 async def test_poll_commands_update_config(db):
     """An 'update_config' command should apply overrides."""
-    from agent_risk_engine import RiskEvaluator, RuleGate
-
-    from squire.callbacks.risk_gate import build_pattern_analyzer
     from squire.config import WatchConfig
     from squire.watch import _poll_commands
 
     shutdown = asyncio.Event()
     config = WatchConfig()
-    rule_gate = RuleGate(threshold=2, strict=True, allowed=set(), denied=set())
-    risk_evaluator = RiskEvaluator(rule_gate=rule_gate, analyzer=build_pattern_analyzer())
     session_state = {"risk_tolerance": 2}
 
     class _FakeSession:
@@ -59,13 +55,11 @@ async def test_poll_commands_update_config(db):
         watch_config=config,
         session_ref=session_ref,
         session_state_template=session_state,
-        risk_evaluator=risk_evaluator,
     )
 
     assert config.interval_minutes == 1
     assert config.cycle_timeout_seconds == 120
     assert config.notify_on_action is False
-    assert risk_evaluator.rule_gate.threshold == 5
     assert session_ref[0].state["risk_tolerance"] == 5
     assert session_state["risk_tolerance"] == 5
     assert not shutdown.is_set()
@@ -182,3 +176,11 @@ def test_build_watch_report_infers_session_count_from_cycles():
     )
     assert "2 session(s) and 3 cycle(s)" in report["run_summary"]
     assert report["major_actions"] == "3 actions executed."
+
+
+def test_session_event_count_uses_public_events_attribute():
+    from squire.watch import _session_event_count
+
+    assert _session_event_count(SimpleNamespace(events=[1, 2, 3])) == 3
+    assert _session_event_count(SimpleNamespace(events=None)) == 0
+    assert _session_event_count(SimpleNamespace()) == 0

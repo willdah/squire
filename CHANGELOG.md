@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **ADK runtime:** Added a shared ADK runtime layer (`Runner` + `SqliteSessionService`) and serializable session-state builders for chat/watch flows
+- **Tests:** Added durable ADK runtime coverage (`tests/test_adk_runtime.py`) and new stop/cooldown/escalation regression checks across chat, watch, and risk-gate tests
+
+### Changed
+
+- **Chat sessions:** `POST /api/chat/sessions` now creates durable ADK sessions without temporary in-memory runners, and chat websocket execution now uses the shared SQLite-backed ADK runtime
+- **Risk gate state model:** Risk evaluation now derives from JSON-safe session state fields instead of relying on persisted `RiskEvaluator` Python objects
+- **Watch runtime:** Watch mode now uses durable ADK sessions and rotates sessions when context event count exceeds `max_context_events` rather than mutating private in-memory ADK storage
+- **Stop generation UX:** Chat stop handling now suppresses post-stop stream/tool emissions server-side and honors backend `stopped` completion semantics in the web client
+- **Token accounting:** Chat/watch token aggregation now tracks the latest non-null provider usage values from stream events instead of summing every event payload
+
+### Fixed
+
+- **Bootstrap safety:** Replaced module import-time event-loop `run_until_complete` usage in `squire.agent` with safer async initialization that avoids nested-loop failures
+- **Approval docs:** Updated approval protocol docs to reflect current async approval execution behavior
+- **ADK session storage:** Runtime now uses a dedicated ADK session SQLite file (`*.adk_sessions.db`) instead of reusing the main Squire app DB, avoiding schema conflicts at web/watch startup
+
 ## [0.16.0] — 2026-04-12
 
 ### Added

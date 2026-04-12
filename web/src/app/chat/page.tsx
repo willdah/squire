@@ -234,6 +234,12 @@ function ChatPageInner() {
         case "message_complete":
           setAgentState(null);
           setActiveToolName(undefined);
+          if (wsMsg.stopped) {
+            sr.id = "";
+            sr.text = "";
+            sr.finalized = true;
+            break;
+          }
           if (sr.id) {
             const finalId = sr.id;
             const finalText = sr.text;

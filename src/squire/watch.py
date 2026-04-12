@@ -15,15 +15,17 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from agent_risk_engine import RiskEvaluator, RuleGate
+from agent_risk_engine import RuleGate
 from dotenv import load_dotenv
 from google.adk.apps import App
 from google.adk.events.event import Event
-from google.adk.runners import InMemoryRunner
+from google.adk.runners import Runner
 from google.genai import types
 
+from .adk.runtime import AdkRuntime
+from .adk.session_state import build_watch_session_state
 from .agents.squire_agent import create_squire_agent
-from .callbacks.risk_gate import build_pattern_analyzer, create_risk_gate
+from .callbacks.risk_gate import create_risk_gate
 from .config import (
     AppConfig,
     DatabaseConfig,
@@ -42,6 +44,7 @@ from .notifications.router import NotificationRouter
 from .notifications.webhook import WebhookDispatcher
 from .skills import SkillService
 from .system.registry import BackendRegistry
+from .tokens import coalesce_token_count, extract_token_usage_from_event
 from .tools import TOOL_RISK_LEVELS, set_db, set_notifier, set_registry
 from .watch_autonomy import (
     action_signature,
@@ -82,23 +85,12 @@ _WATCH_ROUTING_LLM_TIMEOUT_SECONDS = 6.0
 
 def _extract_token_usage_from_event(event) -> tuple[int | None, int | None, int | None]:
     """Extract provider-reported token counts from a watch-cycle event."""
-    usage = getattr(event, "usage_metadata", None)
-    if not usage:
-        return None, None, None
-    return (
-        getattr(usage, "prompt_token_count", None),
-        getattr(usage, "candidates_token_count", None),
-        getattr(usage, "total_token_count", None),
-    )
+    return extract_token_usage_from_event(event)
 
 
 def _accumulate_token_count(current: int | None, event_value: int | None) -> int | None:
-    """Accumulate token usage across all events in a cycle."""
-    if event_value is None:
-        return current
-    if current is None:
-        return event_value
-    return current + event_value
+    """Track the latest non-null token usage in a cycle."""
+    return coalesce_token_count(current, event_value)
 
 
 def _short_uuid() -> str:
@@ -261,7 +253,6 @@ async def _poll_commands(
     *,
     session_ref: list | None = None,
     session_state_template: dict | None = None,
-    risk_evaluator: RiskEvaluator | None = None,
 ) -> None:
     """Process any pending watch commands from the database."""
     commands = await db.get_pending_watch_commands()
@@ -281,9 +272,8 @@ async def _poll_commands(
                 if "interval_minutes" in updates:
                     await db.set_watch_state("interval_minutes", str(updates["interval_minutes"]))
 
-                if risk_tolerance is not None and risk_evaluator is not None:
+                if risk_tolerance is not None:
                     threshold = risk_tolerance
-                    risk_evaluator.rule_gate.threshold = threshold
                     if session_state_template is not None:
                         session_state_template["risk_tolerance"] = threshold
                     sess = session_ref[0] if session_ref and session_ref[0] is not None else None
@@ -309,7 +299,6 @@ async def _interruptible_sleep(
     *,
     session_ref: list | None = None,
     session_state_template: dict | None = None,
-    risk_evaluator: RiskEvaluator | None = None,
 ) -> None:
     """Sleep in short increments, polling for commands between sleeps."""
     elapsed = 0.0
@@ -326,7 +315,6 @@ async def _interruptible_sleep(
                 watch_config,
                 session_ref=session_ref,
                 session_state_template=session_state_template,
-                risk_evaluator=risk_evaluator,
             )
 
 
@@ -387,14 +375,8 @@ async def start_watch() -> None:
     # Build the risk evaluation pipeline
     guardrails = GuardrailsConfig()
     watch_tolerance = guardrails.watch_tolerance or guardrails.risk_tolerance
-    rule_gate = RuleGate(
-        threshold=watch_tolerance,
-        strict=True,  # Always strict in watch mode — deny, don't prompt
-        allowed=set(guardrails.tools_allow) | set(guardrails.watch_tools_allow),
-        # approve intentionally omitted — watch mode has no approval provider
-        denied=set(guardrails.tools_deny) | set(guardrails.watch_tools_deny),
-    )
-    risk_evaluator = RiskEvaluator(rule_gate=rule_gate, analyzer=build_pattern_analyzer())
+    watch_allowed_tools = set(guardrails.tools_allow) | set(guardrails.watch_tools_allow)
+    watch_denied_tools = set(guardrails.tools_deny) | set(guardrails.watch_tools_deny)
 
     # Build the agent with headless risk gate
     block_notifier = notifier if watch_config.notify_on_blocked else None
@@ -438,8 +420,9 @@ async def start_watch() -> None:
         )
 
     # Create ADK runner
+    adk_runtime = AdkRuntime(app_name=app_config.app_name, db_path=db_config.path)
     adk_app = App(name=app_config.app_name, root_agent=agent)
-    runner = InMemoryRunner(app_name=app_config.app_name, app=adk_app)
+    runner = adk_runtime.create_runner(app=adk_app)
 
     # Collect initial snapshots
     snapshot = await _collect_all_snapshots(registry)
@@ -447,14 +430,14 @@ async def start_watch() -> None:
         await db.save_snapshot(snapshot["local"])
 
     # Create initial session
-    session_state = {
-        "risk_evaluator": risk_evaluator,
-        "risk_tolerance": rule_gate.threshold,
-        "latest_snapshot": snapshot,
-        "watch_mode": True,
-        "available_hosts": registry.host_names,
-        "host_configs": {name: cfg.model_dump() for name, cfg in registry.host_configs.items()},
-    }
+    session_state = build_watch_session_state(
+        latest_snapshot=snapshot,
+        available_hosts=registry.host_names,
+        host_configs={name: cfg.model_dump() for name, cfg in registry.host_configs.items()},
+        risk_tolerance=watch_tolerance,
+        risk_allowed_tools=watch_allowed_tools,
+        risk_denied_tools=watch_denied_tools,
+    )
 
     session = await runner.session_service.create_session(
         app_name=app_config.app_name,
@@ -535,7 +518,6 @@ async def start_watch() -> None:
         watch_config,
         session_ref=session_ref,
         session_state_template=session_state,
-        risk_evaluator=risk_evaluator,
     )
 
     cycle_count = 0
@@ -572,7 +554,6 @@ async def start_watch() -> None:
                 watch_config,
                 session_ref=session_ref,
                 session_state_template=session_state,
-                risk_evaluator=risk_evaluator,
             )
             if shutdown.is_set():
                 if active_cycle_id and active_cycle_started_at:
@@ -929,13 +910,15 @@ async def start_watch() -> None:
                     cycle_id=cycle_id,
                 )
 
-            # Prune session history to bound context size
-            pruned = _prune_session_history(runner, session, watch_config.max_context_events)
-            if pruned > 0:
-                logger.debug("Pruned %d old events from session history", pruned)
+            rotate_for_context = _session_event_count(session) > watch_config.max_context_events
+            if rotate_for_context:
+                logger.info(
+                    "Rotating session early: event count exceeded max_context_events (%d)",
+                    watch_config.max_context_events,
+                )
 
             # Session rotation
-            if cycle_count >= watch_config.cycles_per_session:
+            if cycle_count >= watch_config.cycles_per_session or rotate_for_context:
                 old_session_id = session.id
                 old_watch_session_id = watch_session_id
                 logger.info("Rotating session after %d cycles", cycle_count)
@@ -1016,7 +999,6 @@ async def start_watch() -> None:
                 watch_config=watch_config,
                 session_ref=session_ref,
                 session_state_template=session_state,
-                risk_evaluator=risk_evaluator,
             )
 
     finally:
@@ -1125,7 +1107,7 @@ async def start_watch() -> None:
 
 
 async def _run_cycle(
-    runner: InMemoryRunner,
+    runner: Runner,
     session,
     agent,
     prompt: str,
@@ -1251,27 +1233,12 @@ async def _run_cycle(
     )
 
 
-def _prune_session_history(runner: InMemoryRunner, session, max_events: int) -> int:
-    """Trim old events from the ADK session to bound context size.
-
-    Directly accesses the InMemorySessionService storage to truncate
-    the event list in-place, keeping only the most recent ``max_events``.
-
-    Returns the number of events pruned.
-    """
-    try:
-        storage = runner.session_service.sessions
-        stored = storage.get(session.app_name, {}).get(session.user_id, {}).get(session.id)
-        if stored is None or len(stored.events) <= max_events:
-            return 0
-
-        pruned = len(stored.events) - max_events
-        stored.events = stored.events[-max_events:]
-        session.events = session.events[-max_events:]
-        return pruned
-    except Exception:
-        logger.debug("Failed to prune session history", exc_info=True)
-        return 0
+def _session_event_count(session) -> int:
+    """Best-effort count of session events using public session attributes."""
+    events = getattr(session, "events", None)
+    if isinstance(events, list):
+        return len(events)
+    return 0
 
 
 async def _update_watch_state(db: DatabaseService, state: dict[str, str]) -> None:

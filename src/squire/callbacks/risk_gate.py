@@ -47,6 +47,44 @@ def build_pattern_analyzer() -> PatternAnalyzer:
     return PatternAnalyzer(extra_patterns=HOMELAB_PATTERNS)
 
 
+def is_adk_internal_tool(tool_name: str | None) -> bool:
+    """Return True when the tool is an ADK-injected framework primitive."""
+    if not tool_name:
+        return False
+    return tool_name in _ADK_INTERNAL_TOOLS
+
+
+def _set_from_state(value: Any) -> set[str]:
+    if not value:
+        return set()
+    if isinstance(value, set):
+        return {str(v) for v in value}
+    if isinstance(value, (list, tuple)):
+        return {str(v) for v in value}
+    return set()
+
+
+def _build_evaluator_from_state(tool_context: ToolContext, *, default_threshold: int | None) -> RiskEvaluator:
+    """Build a fresh evaluator from serializable session-state values."""
+    state = tool_context.state
+    threshold_input = default_threshold if default_threshold is not None else state.get("risk_tolerance", 3)
+    threshold = RuleGate(threshold=threshold_input).threshold
+    strict = bool(state.get("risk_strict", False))
+    allowed = _set_from_state(state.get("risk_allowed_tools"))
+    approve = _set_from_state(state.get("risk_approval_tools"))
+    denied = _set_from_state(state.get("risk_denied_tools"))
+    return RiskEvaluator(
+        rule_gate=RuleGate(
+            threshold=threshold,
+            strict=strict,
+            allowed=allowed,
+            approve=approve,
+            denied=denied,
+        ),
+        analyzer=build_pattern_analyzer(),
+    )
+
+
 def create_risk_gate(
     tool_risk_levels: dict[str, int] | None = None,
     risk_overrides: dict[str, int] | None = None,
@@ -85,7 +123,7 @@ def create_risk_gate(
         tool_name = tool.name
 
         # Allow ADK framework tools that are auto-injected (e.g., agent transfer)
-        if tool_name in _ADK_INTERNAL_TOOLS:
+        if is_adk_internal_tool(tool_name):
             return None
 
         # Resolve compound action name: "tool:action" for tools with an action param
@@ -132,19 +170,12 @@ def create_risk_gate(
         if args.get("force"):
             tool_risk = min(tool_risk + 1, 5)
 
-        # Load the risk evaluator from session state
-        evaluator = tool_context.state.get("risk_evaluator")
-        if not evaluator or not isinstance(evaluator, RiskEvaluator):
-            evaluator = RiskEvaluator(rule_gate=RuleGate(), analyzer=build_pattern_analyzer())
+        evaluator = _build_evaluator_from_state(tool_context, default_threshold=default_threshold)
 
         action = Action(kind="tool_call", name=compound_name, parameters=args, risk=tool_risk)
         result = await evaluator.evaluate(action)
 
-        # Use per-agent threshold when provided, otherwise fall back to session state.
-        if default_threshold is not None:
-            risk_threshold = default_threshold
-        else:
-            risk_threshold = tool_context.state.get("risk_tolerance", 3)
+        risk_threshold = evaluator.rule_gate.threshold
         analyzer_escalated = result.decision == GateResult.ALLOWED and result.risk_score.level > risk_threshold
 
         if result.decision == GateResult.DENIED:

@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from ..adk.runtime import AdkRuntime
 from ..config import (
     AppConfig,
     DatabaseConfig,
@@ -84,6 +85,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     deps.db = DatabaseService(deps.db_config.path)
     deps.notifier = build_notification_router(deps.notif_config, db=deps.db)
     deps.skills_service = SkillService(deps.skills_config.path)
+    deps.adk_runtime = AdkRuntime(app_name=deps.app_config.app_name, db_path=deps.db_config.path)
 
     # Load managed hosts from DB into the registry
     deps.host_store = HostStore(deps.db, deps.registry)
