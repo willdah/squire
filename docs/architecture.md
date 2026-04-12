@@ -209,7 +209,7 @@ flowchart TD
 
 
 
-Watch mode is started with `make watch` or `uv run squire watch`. The web UI's Watch page shows live stream events, cycle history, and current status. See [configuration.md](configuration.md) for `[watch]` and `[guardrails]` options.
+Watch mode is started with `make watch` or `uv run squire watch`. The web UI **Watch** page shows live stream events, scoped cycle history, and current status; **Watch Explorer** (`/watch-explorer`) surfaces persisted watch runs, sessions, cycles, and reports. See [configuration.md](configuration.md) for `[watch]` and `[guardrails]` options.
 
 ## Tech Stack
 
@@ -236,14 +236,18 @@ All state is stored in a single SQLite file (default: `~/.local/share/squire/squ
 | Table             | Purpose                                                                               |
 | ----------------- | ------------------------------------------------------------------------------------- |
 | `snapshots`       | Time-series system snapshots (CPU, memory, uptime, raw JSON)                          |
-| `events`          | Discrete events with category, tool name, and summary                                 |
-| `conversations`   | Chat messages keyed by session ID (role, content, tool calls)                         |
+| `events`          | Activity feed: category, summary, optional `session_id`, `watch_id`, `watch_session_id`, `cycle_id`, tool metadata |
+| `conversations`   | Chat messages keyed by session ID (role, content, optional token usage fields)        |
 | `sessions`        | Session registry with created/last-active timestamps and preview                      |
-| `watch_state`     | Key-value store for current watch mode status (cycle, PID, interval, etc.)            |
+| `watch_state`     | Key-value store for current watch mode status (cycle, PID, interval, supervisor counts, cumulative metrics, etc.) |
 | `alert_rules`     | Configured alert conditions with severity, cooldown, and last-fired timestamp         |
-| `watch_events`    | Fine-grained per-cycle events (cycle_start, tool_call, tool_result, token, cycle_end) |
-| `watch_commands`  | Commands posted to the running watch loop (stop, update_config)                       |
-| `watch_approvals` | Approval requests from watch mode (pending / approved / denied)                       |
+| `watch_runs`      | One row per watch invocation (`watch_id`), timestamps, status, link to watch-level report |
+| `watch_sessions`  | Agent sessions within a run (`watch_session_id`, `adk_session_id`, cycle counts, session report) |
+| `watch_cycles`    | Canonical per-cycle aggregates (tokens, tool/incident counts, status, timing) keyed by `cycle_id` |
+| `watch_reports`   | Structured completion reports (watch- and session-level JSON digests)                 |
+| `watch_events`    | Append-only stream per cycle (`cycle_id`, `watch_id`, `watch_session_id`): tokens, tool calls, phases, incidents, cycle boundaries |
+| `watch_commands`  | Commands from the API to the watch process (`start`, `stop`, `update_config`)         |
+| `watch_approvals` | Approval requests from watch mode (pending / approved / denied)                     |
 | `managed_hosts`   | Remote hosts registered via the Hosts page (address, SSH config, tags, services)      |
 
 
@@ -286,7 +290,7 @@ src/squire/              Main application
     notifications/       Notification and alert rule tools (Notifier sub-agent)
 
 web/                     Next.js frontend
-  src/app/               Pages: chat, watch, skills, sessions, hosts, notifications, config, activity
+  src/app/               Pages: chat, watch, watch-explorer, skills, tools, sessions, hosts, notifications, config, activity
   src/components/        UI components (sidebar, charts, dialogs, etc.)
   src/hooks/             Custom React hooks (SWR-based data fetching)
   src/lib/               API client, TypeScript types, utilities

@@ -55,7 +55,7 @@ See the [Usage Guide](docs/usage.md#docker-deployment) for Docker deployment.
 
 ## Interfaces
 
-**Web UI** — `squire web` opens a browser-based interface with chat, activity timeline, session management, skill editor, watch mode controls with live streaming, host registry, notification history, and configuration viewer. See [Usage Guide — Web UI](docs/usage.md#web-ui).
+**Web UI** — `squire web` opens a browser-based interface with chat, activity timeline, session management, skill editor, watch mode controls with live streaming, Watch Explorer for run/session/cycle history and reports, host registry, notification history, and configuration viewer. See [Usage Guide — Web UI](docs/usage.md#web-ui).
 
 **CLI** — All management commands are available via `squire <command>` without a running UI. See the [CLI Reference](docs/cli.md) for the full command list.
 

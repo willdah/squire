@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Documentation:** Aligned [Usage Guide](docs/usage.md), [Architecture](docs/architecture.md), [Watch web integration](docs/design/watch-web-integration.md), and [README](README.md) with Watch Explorer, timeline APIs, watch persistence tables, and Activity query parameters
 - **Watch clear API:** `DELETE /api/watch/cycles` OpenAPI docs and response message now describe the full watch datastore reset (runs, sessions, cycles, reports, `watch_events`) and note that Activity `events` rows are untouched; Cycle History dialog copy matches
 - **Activity chat logging:** `tool_result` and streaming error rows persist at most 500 characters of detail, matching the live WebSocket `tool_result.output` cap
 - **Timeline APIs:** Documented when to use `GET /api/watch/timeline` vs `GET /api/events/timeline` (identical data; watch vs Activity entry points)

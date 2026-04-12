@@ -2,33 +2,36 @@
 
 ## Context
 
-Watch mode is Squire's autonomous monitoring loop — it runs headless, collecting system snapshots and sending check-in prompts to the agent on a configurable interval. Today it's started via CLI (`squire watch`), outputs to stdout logs, and persists state to SQLite. The web UI has a minimal read-only status endpoint but no meaningful integration.
+Watch mode is Squire's autonomous monitoring loop — it runs headless, collecting system snapshots and sending check-in prompts to the agent on a configurable interval. It can be started from the CLI (`squire watch`) or spawned by the web API (`POST /api/watch/start`). State and telemetry live in SQLite so the web UI, Activity feed, and headless process all see the same truth.
 
-Users need to manage and observe watch mode through the web UI: start/stop the process, see live agent activity as cycles run,
-review historical cycles, adjust configuration on the fly, and monitor autonomy outcomes (incident detection, RCA, remediation,
-verification, escalation).
+Operators use the **Watch** page for live supervision (stream, scoped cycle list, config). **Watch Explorer** at `/watch-explorer` (the `/reports` path redirects there) is the home for hierarchy-first history: watch runs, sessions within a run, cycles, and completion reports, with query parameters for deep links from Activity and Sessions.
 
 ## Architecture
 
 ### Process Model
 
-Watch stays as a **separate OS process**, independent of the web server. Communication happens entirely through **SQLite** — the web API writes commands, the watch process writes events, and both read shared state. This preserves watch mode's ability to run standalone (headless, no web server required).
+Watch stays as a **separate OS process**, independent of the web server. Communication happens through **SQLite** — the web API writes commands, the watch process writes rows, and both read shared state. This preserves watch mode's ability to run standalone (no web server required).
 
-### IPC via SQLite
+### Persistence
 
-Three new tables support the bridge:
+**Identifiers:** Each invocation gets a `watch_id`. Within it, the agent uses `watch_session_id` rows tied to the ADK `adk_session_id` (chat session id). Each check-in cycle has a stable `cycle_id`. These keys scope `watch_events`, cycle listings, and the live WebSocket tail.
 
-**`watch_events`** — granular event stream emitted by the watch process:
+**`watch_events`** — append-only stream emitted during cycles:
 
 | Column | Type | Purpose |
 |--------|------|---------|
 | `id` | INTEGER PK AUTOINCREMENT | Monotonic ID for tailing |
-| `cycle` | INTEGER NOT NULL | Watch cycle number |
+| `cycle` | INTEGER NOT NULL | Cycle number within the current session (display) |
+| `cycle_id` | TEXT | Stable cycle identifier (joins to `watch_cycles`) |
+| `watch_id` | TEXT | Owning watch run |
+| `watch_session_id` | TEXT | Owning watch session |
 | `type` | TEXT NOT NULL | Event type (see below) |
 | `content` | TEXT | JSON payload, varies by type |
 | `created_at` | TEXT NOT NULL | ISO 8601 timestamp |
 
-Event types: `cycle_start`, `cycle_end`, `token`, `tool_call`, `tool_result`, `approval_request`, `approval_resolved`, `error`, `session_rotated`.
+Common event types include `cycle_start`, `cycle_end`, `token`, `tool_call`, `tool_result`, `approval_request`, `approval_resolved`, `error`, `session_rotated`, `phase`, and `incident`.
+
+**`watch_runs`**, **`watch_sessions`**, **`watch_cycles`**, **`watch_reports`** — structured history and operator-facing completion digests (see [architecture.md](../architecture.md#database-schema) for a concise map).
 
 **`watch_commands`** — control messages from web API to watch process:
 
@@ -41,7 +44,7 @@ Event types: `cycle_start`, `cycle_end`, `token`, `tool_call`, `tool_result`, `a
 | `error` | TEXT | Error message if failed |
 | `created_at` | TEXT NOT NULL | ISO 8601 timestamp |
 
-**`watch_approvals`** — interactive approval bridge:
+**`watch_approvals`** — when the headless pipeline surfaces an approval-shaped request, rows correlate with `approval_request` / `approval_resolved` events:
 
 | Column | Type | Purpose |
 |--------|------|---------|
@@ -54,157 +57,121 @@ Event types: `cycle_start`, `cycle_end`, `token`, `tool_call`, `tool_result`, `a
 | `responded_at` | TEXT | When user responded |
 | `created_at` | TEXT NOT NULL | ISO 8601 timestamp |
 
-The existing `watch_state` key-value table is unchanged.
+The **`watch_state`** key-value table holds live status (PID, interval, current `watch_id` / `watch_session_id` / `cycle_id`, supervisor connection counts, cumulative autonomy counters, token totals, etc.).
 
 ### Event Retention
 
-Events are cleaned up periodically — retain the last 24 hours or 500 cycles (whichever is greater). Cleanup runs at watch startup and every N cycles. Commands and approvals follow the same retention.
+`cleanup_watch_data` retains the most recent cycles (default cap: 500) and deletes older `watch_cycles` / associated `watch_events` rows; `watch_commands` and `watch_approvals` are also trimmed to bounded row counts. This is separate from **`DELETE /api/watch/cycles`**, which clears the entire watch datastore (runs, sessions, cycles, reports, `watch_events`) while leaving the Activity `events` table intact.
 
-## Watch Process Changes
+## Watch Process Behavior
 
 ### Event Emission
 
-A `WatchEventEmitter` class wraps `DatabaseService` with typed methods: `emit_cycle_start()`, `emit_token()`, `emit_tool_call()`, `emit_tool_result()`, `emit_cycle_end()`, etc. The existing `_run_cycle()` method streams ADK events and collects text — it gains event emission calls alongside its existing logic. Emission is fire-and-forget; failures are logged but never block the cycle.
+`WatchEventEmitter` wraps `DatabaseService` with typed emit methods. The watch loop streams ADK output and records phase/incident telemetry alongside tool and token events. Emission is best-effort — failures are logged and do not block the cycle.
 
-File: `src/squire/watch.py`
+File: `src/squire/watch_emitter.py`, `src/squire/watch.py`
 
 ### Command Polling
 
-At the top of each loop iteration (before snapshot collection), the watch process queries `watch_commands` for rows with `status='pending'`, ordered by `id`. Processing:
+The watch process polls `watch_commands` for `pending` rows (including between sleep intervals) so **stop** and **update_config** stay responsive.
 
-- **`stop`** → sets the `shutdown` asyncio.Event (existing graceful shutdown path)
-- **`update_config`** → applies JSON overrides to the in-memory `WatchConfig` (interval, risk tolerance, check-in prompt). Takes effect next cycle. Marks command as `completed`.
-- **`start`** → acknowledged on startup (the web server handles actually spawning the process)
-
-Also polls between cycle sleep intervals (not just at cycle boundaries) so that stop commands are responsive even during long intervals. This is done by replacing the single `asyncio.wait_for(shutdown.wait(), timeout=interval)` with a loop that sleeps in shorter increments (e.g., 5s) and checks for commands between sleeps.
+- **`stop`** → graceful shutdown path  
+- **`update_config`** → applies JSON overrides to in-memory config; effective next cycle  
+- **`start`** → acknowledged when the process starts (the web server spawns the process)
 
 ### Start Flow
 
-The web API's `POST /api/watch/start` endpoint:
-1. Checks if watch is already running (via `watch_state` PID + os.kill(pid, 0))
-2. Writes a `start` command to `watch_commands`
-3. Spawns `squire watch` as a detached subprocess
-4. Returns immediately — frontend polls status until it transitions to "running"
+`POST /api/watch/start`:
+
+1. If `watch_state` shows running and `os.kill(pid, 0)` succeeds → returns "already running"
+2. If PID is stale → finalizes orphaned run/session/cycle artifacts, then proceeds
+3. Inserts a `start` command and spawns `python -m squire watch` detached
+4. Returns immediately; clients poll `GET /api/watch/status`
 
 ### Strict-Autonomy Gate
 
-Watch mode runs with strict headless risk policy (`strict=True`, `headless=True`) and never waits for interactive approvals.
-Supervisor connections in the web UI provide observability only. High-risk actions are denied, deduplicated, and surfaced as
-autonomy telemetry and notifications.
+Watch mode uses a strict headless risk policy. High-risk work is blocked or deduplicated rather than blocking the loop on interactive approval; telemetry and notifications carry the outcome.
 
-File: `src/squire/watch.py`, `src/squire/callbacks/risk_gate.py`
+Files: `src/squire/watch.py`, `src/squire/callbacks/risk_gate.py`
 
 ## Backend API
 
-All endpoints under the existing `/api/watch` router.
-
-### REST Endpoints
+### Watch router (`/api/watch`)
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `GET` | `/api/watch/status` | Current watch state (existing, extended with richer stats) |
-| `POST` | `/api/watch/start` | Spawn watch process if not running |
-| `POST` | `/api/watch/stop` | Write stop command |
-| `GET` | `/api/watch/config` | Current watch + guardrails config |
-| `PUT` | `/api/watch/config` | Write `update_config` command with overrides |
-| `GET` | `/api/watch/cycles` | Paginated cycle list (aggregated from events) |
-| `GET` | `/api/watch/cycles/{cycle}` | Full event stream for a cycle |
-| `POST` | `/api/watch/approve/{request_id}` | Approve or deny a pending approval |
+| `GET` | `/api/watch/status` | Current watch state; corrects stale `running` if the PID is gone |
+| `POST` | `/api/watch/start` | Spawn watch if needed |
+| `POST` | `/api/watch/stop` | Queue stop; finalizes immediately if process already exited |
+| `GET` | `/api/watch/config` | Effective watch settings + numeric watch risk tolerance |
+| `PUT` | `/api/watch/config` | Queue `update_config` with partial payload |
+| `GET` | `/api/watch/cycles` | Paginated cycles; optional `watch_id`, `watch_session_id` |
+| `DELETE` | `/api/watch/cycles` | Full watch datastore reset (not Activity `events`) |
+| `GET` | `/api/watch/cycles/{cycle_id}` | Event stream for a cycle; accepts numeric or string `cycle_id`; optional `watch_id` |
+| `GET` | `/api/watch/timeline` | Paginated merged timeline (cycles + report markers) for Explorer / Activity |
+| `GET` | `/api/watch/reports` | Paginated reports |
+| `GET` | `/api/watch/reports/{report_id}` | One report by id |
+| `GET` | `/api/watch/reports/watch/{watch_id}` | Latest watch-completion report for a run |
+| `GET` | `/api/watch/reports/session/{watch_session_id}` | Latest session report (`watch_id` query required) |
+| `GET` | `/api/watch/runs` | Paginated watch runs |
+| `GET` | `/api/watch/runs/{watch_id}` | One run summary |
+| `GET` | `/api/watch/runs/{watch_id}/sessions` | Sessions in a run |
+| `GET` | `/api/watch/runs/{watch_id}/sessions/{watch_session_id}/cycles` | Cycles in a session |
+| `GET` | `/api/watch/sessions/by-adk/{adk_session_id}` | Resolve watch session from chat session id |
+| `POST` | `/api/watch/approve/{request_id}` | Approve or deny a pending approval row |
 
-### WebSocket Endpoint
+### Activity / events router
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/events` | Activity rows; query params include `since`, `category`, `session_id`, `watch_id`, `limit` (default window: last 24 hours if `since` omitted) |
+| `GET` | `/api/events/timeline` | Same payload as `GET /api/watch/timeline` — use this path when building Activity-centric or cross-surface deep links |
+
+### WebSocket
 
 `WS /api/watch/ws` — live watch event stream.
 
 **On connect:**
-- Increments `supervisor_count` in `watch_state` (integer, starts at 0)
-- Sets `supervisor_connected=true` in `watch_state` (derived: count > 0)
-- Begins tailing `watch_events` where `id > last_seen_id` at ~200ms poll interval
-- Sends initial burst of recent events from the current cycle (so you don't join a blank screen mid-cycle)
 
-**Event forwarding:**
-- Each new `watch_events` row is serialized as a WebSocket JSON message
-- Message types mirror the chat WebSocket where applicable: `token`, `tool_call`, `tool_result`, `approval_request`, plus watch-specific: `cycle_start`, `cycle_end`, `status_changed`
+- Increments `supervisor_count`, sets `supervisor_connected` when count > 0
+- Replays the current cycle's `watch_events` (by `cycle_id` or legacy numeric cycle), then tails new rows every ~200ms
+- New events are filtered to the **active `watch_id`** so reconnects do not mix runs
 
-**On disconnect:**
-- Decrements `supervisor_count` in `watch_state`
-- Sets `supervisor_connected=false` only when count reaches 0
+**Payload:** Each message is the JSON row from `watch_events` (including `type` and `content`).
 
-**Multiple connections:**
-- All see the same event stream
-- Any connection can respond to approvals (first response wins, others get an "already resolved" message)
+**On disconnect:** Decrements supervisor count; `supervisor_connected` false when count reaches zero.
 
 File: `src/squire/api/routers/watch.py`
 
 ## Frontend
 
-### New Page: `/watch`
+### `/watch` (Watch page)
 
-A dedicated top-level page in the sidebar navigation.
+- Status and stats cards; start/stop; configuration drawer (`PUT /api/watch/config`)
+- Live stream tab: WebSocket to `/api/watch/ws`
+- Cycle history tab: `GET /api/watch/cycles` with optional `watch_id` / `watch_session_id`, load-more pagination, expandable detail via `GET /api/watch/cycles/{cycle_id}`, links into Watch Explorer
 
-### Layout: Dashboard + Stream Split
+### `/watch-explorer` (Watch Explorer)
 
-**Top section — Status Card + Stats Card (side by side):**
+- Default **hierarchy** navigation: runs → sessions → cycles; report pickers and tabbed report JSON views
+- Optional **timeline** mode and query-driven state: `watch_id`, `watch_session_id`, `cycle_id`, `report_id`, `chat_session_id` (resolved through `GET /api/watch/sessions/by-adk/...`)
+- **Clear history** uses `DELETE /api/watch/cycles` (destructive; Activity untouched)
 
-Status card:
-- Watch status badge: Running (green) / Stopped (gray)
-- Current cycle number, interval, next-cycle countdown, risk tolerance, PID
-- Action buttons: Start/Stop (contextual) and Configure
+Files: `web/src/app/watch/page.tsx`, `web/src/app/watch-explorer/page.tsx`, `web/src/components/watch/*.tsx`
 
-Stats card:
-- Uptime, total tools called, actions taken, tools blocked, errors, session rotation count
+### Data fetching patterns
 
-**Bottom section — Tabbed view:**
-
-- **Live Stream tab** (default when running): Real-time scrolling log of the current cycle. Shows tool calls with truncated results, streaming agent response tokens, and inline approval cards. Auto-scrolls to bottom. When watch is stopped, shows a placeholder message.
-- **Cycle History tab** (default when stopped): Paginated accordion list of past cycles. Each row shows cycle number, timestamp, tool count, status indicator (OK/blocked/error), and duration. Click to expand and see the full event stream and agent response for that cycle. "Load more" pagination at the bottom.
-
-### Configuration Drawer
-
-A right-side sheet/drawer triggered by the "Configure" button. Fields:
-- **Interval** — number input (minutes)
-- **Risk tolerance** — segmented control (1: Read-only → 5: Full trust)
-- **Check-in prompt** — textarea
-
-"Apply" sends `PUT /api/watch/config`. "Cancel" closes without changes. Footer note: "Changes take effect next cycle."
-
-### Approval Flow
-
-When an `approval_request` event arrives on the WebSocket:
-- An inline card appears in the live stream with: warning icon, tool name, host, args (in a code block), risk level badge, countdown timer (60s)
-- Approve / Deny buttons send `POST /api/watch/approve/{request_id}`
-- On resolution, the card updates to show the outcome and the stream continues
-
-Reuses the existing `ApprovalDialog` component pattern from the chat page, adapted for inline stream display.
-
-### Data Fetching
-
-- **Status and config**: SWR with polling (every 5s when stopped, every 2s when running)
-- **Live stream**: WebSocket via the existing `useWebSocket` hook, connected to `/api/watch/ws`
-- **Cycle history**: SWR with pagination (`/api/watch/cycles?page=N&per_page=20`)
-- **Cycle detail**: Fetched on expand (`/api/watch/cycles/{cycle}`)
-
-### Components
-
-| Component | Purpose |
-|-----------|---------|
-| `WatchStatusCard` | Status badge, cycle info, action buttons |
-| `WatchStatsCard` | Session statistics |
-| `WatchLiveStream` | Real-time event log with auto-scroll |
-| `WatchCycleHistory` | Accordion list of past cycles |
-| `WatchCycleDetail` | Expanded view of a single cycle's events |
-| `WatchConfigDrawer` | Configuration sheet |
-| `WatchApprovalCard` | Inline approval prompt in stream |
-
-Files: `web/src/app/watch/page.tsx`, `web/src/components/watch/*.tsx`
+- SWR for REST; polling intervals on status-heavy views
+- Timeline: `GET /api/watch/timeline` or `GET /api/events/timeline` (identical data; pick route by surface)
 
 ## Verification
 
-1. **Start/stop via web UI**: Start watch from the web UI when stopped, verify process spawns and status transitions to "running". Stop it, verify graceful shutdown.
-2. **Live streaming**: With watch running, open `/watch` and verify tokens, tool calls, and cycle boundaries stream in real-time (~200ms latency).
-3. **Cycle history**: After several cycles, switch to History tab and verify cycles are listed with correct stats. Expand a cycle and verify full event stream is shown.
-4. **Configuration**: Open config drawer, change interval to 1 minute, apply. Verify next cycle runs after ~1 minute instead of default 5.
-5. **Strict-autonomy blocking**: Set risk tolerance low enough that a tool is blocked. Verify watch continues with fallback/escalation
-   and emits `watch.blocked` / `watch.escalation` telemetry without waiting for approval.
-6. **Headless fallback**: Stop the web server, run `squire watch` from CLI. Verify it still works independently — events are written to DB, strict risk gate auto-denies, no errors about missing web server.
-7. **Reconnection**: Disconnect and reconnect the WebSocket mid-cycle. Verify the stream catches up (initial burst of current cycle events).
-8. **Concurrent viewers**: Open `/watch` in two browser tabs. Verify both see the stream. Submit an approval from one tab, verify the other shows it as resolved.
+1. **Start/stop via web UI** — Status transitions; stale PID cleanup if you kill the watch process manually  
+2. **Live stream** — Tokens, tools, cycle boundaries on `/watch`  
+3. **Cycle history** — Pagination, expand detail, token columns when present  
+4. **Watch Explorer** — Hierarchy selection, report tabs, deep link from Sessions or Activity  
+5. **Configuration** — Drawer apply; changes on next cycle  
+6. **Strict-autonomy** — Low tolerance blocks tools; watch continues; Activity shows `watch.blocked` / related categories  
+7. **Headless** — `squire watch` without the web server still writes SQLite; UI catches up when online  
+8. **WebSocket reconnect** — Initial burst catches up for the current `watch_id`  
+9. **Clear history** — Watch datastore empty; Activity rows remain  
