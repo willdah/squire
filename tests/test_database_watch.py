@@ -143,3 +143,71 @@ async def test_cleanup_watch_data(db):
 
     remaining = await db.get_watch_events_since(0)
     assert all(e["cycle"] == 2 for e in remaining)
+
+
+@pytest.mark.asyncio
+async def test_finalize_stale_watch_run_creates_reports_and_closes_rows(db):
+    """Stale watch finalization should persist watch/session reports and close records."""
+    await db.create_watch_run("watch_stale_db")
+    await db.create_watch_session("wss_stale_db", watch_id="watch_stale_db", adk_session_id="adk_stale_db")
+    await db.create_watch_cycle(
+        "cyc_stale_1",
+        watch_id="watch_stale_db",
+        watch_session_id="wss_stale_db",
+        cycle_number=1,
+    )
+    await db.close_watch_cycle(
+        "cyc_stale_1",
+        status="ok",
+        duration_seconds=1.2,
+        tool_count=2,
+        blocked_count=0,
+        remote_tool_count=0,
+        incident_count=1,
+        input_tokens=10,
+        output_tokens=4,
+        total_tokens=14,
+        incident_key="disk",
+        outcome={"resolved": True},
+    )
+    await db.create_watch_cycle(
+        "cyc_stale_2",
+        watch_id="watch_stale_db",
+        watch_session_id="wss_stale_db",
+        cycle_number=2,
+    )
+    await db.close_watch_cycle(
+        "cyc_stale_2",
+        status="error",
+        duration_seconds=0.7,
+        tool_count=1,
+        blocked_count=0,
+        remote_tool_count=0,
+        incident_count=1,
+        input_tokens=6,
+        output_tokens=3,
+        total_tokens=9,
+        incident_key="service",
+        outcome={"resolved": False},
+        error_reason="timeout",
+    )
+
+    result = await db.finalize_stale_watch_run("watch_stale_db", watch_session_id="wss_stale_db")
+    assert result["watch_report_id"] is not None
+    assert result["session_report_id"] is not None
+
+    run = await db.get_watch_run("watch_stale_db")
+    assert run is not None
+    assert run["status"] == "stopped"
+
+    sessions = await db.list_watch_sessions_for_run("watch_stale_db", page=1, per_page=20)
+    assert len(sessions) == 1
+    assert sessions[0]["status"] == "stopped"
+    assert sessions[0]["session_report_id"] is not None
+
+    watch_report = await db.get_watch_completion_report("watch_stale_db")
+    assert watch_report is not None
+    assert watch_report["report_type"] == "watch"
+    payload = json.loads(watch_report["report_json"])
+    assert "1 session(s) and 2 cycle(s)" in payload["run_summary"]
+    assert payload["major_actions"] == "3 actions executed."

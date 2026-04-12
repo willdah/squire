@@ -138,6 +138,9 @@ export interface EventInfo {
   id?: number;
   timestamp: string;
   session_id?: string;
+  watch_id?: string;
+  watch_session_id?: string;
+  cycle_id?: string;
   category: string;
   tool_name?: string;
   summary: string;

@@ -208,6 +208,9 @@ class EventInfo(BaseModel):
     id: int | None = None
     timestamp: str
     session_id: str | None = None
+    watch_id: str | None = None
+    watch_session_id: str | None = None
+    cycle_id: str | None = None
     category: str
     tool_name: str | None = None
     summary: str

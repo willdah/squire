@@ -65,6 +65,29 @@ async def test_event_category_filter(db):
 
 
 @pytest.mark.asyncio
+async def test_event_filters_by_session_and_watch(db):
+    await db.log_event(category="tool_call", summary="chat-a", session_id="sess-a")
+    await db.log_event(category="tool_call", summary="chat-b", session_id="sess-b")
+    await db.log_event(category="watch.start", summary="watch-a", watch_id="watch-a")
+    await db.log_event(
+        category="watch.alert",
+        summary="watch-a-cycle",
+        watch_id="watch-a",
+        watch_session_id="wss-a",
+        cycle_id="cyc-a",
+    )
+
+    sess_a = await db.get_events(since="2020-01-01", session_id="sess-a")
+    assert len(sess_a) == 1
+    assert sess_a[0]["summary"] == "chat-a"
+
+    watch_a = await db.get_events(since="2020-01-01", watch_id="watch-a")
+    assert len(watch_a) == 2
+    assert all(event["watch_id"] == "watch-a" for event in watch_a)
+    assert any(event["cycle_id"] == "cyc-a" for event in watch_a)
+
+
+@pytest.mark.asyncio
 async def test_empty_queries(db):
     assert await db.get_snapshots(since="2020-01-01") == []
     assert await db.get_messages("nonexistent") == []

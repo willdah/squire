@@ -212,7 +212,7 @@ export function WatchCycleHistory({ watchId, watchSessionId }: WatchCycleHistory
                 )}
                 {(cycle.watch_id || watchId) && (
                   <Link
-                    href={`/reports?watch_id=${encodeURIComponent(cycle.watch_id ?? watchId ?? "")}&watch_session_id=${encodeURIComponent(
+                    href={`/watch-explorer?watch_id=${encodeURIComponent(cycle.watch_id ?? watchId ?? "")}&watch_session_id=${encodeURIComponent(
                       cycle.watch_session_id ?? watchSessionId ?? ""
                     )}&cycle_id=${encodeURIComponent(cycle.cycle_id ?? String(cycle.cycle))}`}
                     className="text-xs text-primary underline-offset-2 hover:underline"

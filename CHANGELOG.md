@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Watch lifecycle:** `squire watch` now creates watch/session/cycle identifiers, persists cycle outcomes into canonical cycle rows, and emits session/watch completion reports for operator-readable summaries
 - **Navigation:** Sidebar Monitoring group now includes Reports; Session History and Watch Cycle History include deep links into the workbench
 - **Reports UX:** Reports page now defaults to hierarchy-first navigation (Watch Runs -> Sessions -> Cycles), shows explicit `Watch Report` vs `Session Report` labels, and keeps timeline as a secondary mode
+- **Routes/navigation:** Watch Explorer now lives at `/watch-explorer`; `/reports` redirects for backward compatibility
+- **Activity UX:** Activity now supports explicit time-window presets/custom start, session/watch filters, and clearer live-window labeling
+- **Activity drill-down:** Event rows now show context chips and deep links into Chat, Watch, and Watch Explorer
+- **Notification event persistence:** Notification router dispatches are now persisted to `events`, so Activity category filters (including watch.* categories) reflect real emitted notifications
 
 ### Fixed
 
@@ -30,6 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cycle history ambiguity:** Cycle listings and details no longer rely solely on recycled cycle numbers; watch/session/cycle identity prevents mixed-session cycle views after rotation
 - **Duplicate report confusion:** Reports are now grouped and labeled by report level/type so valid watch + session reports no longer look like duplicate artifacts
 - **Watch run persistence:** Starting a new watch no longer clears prior watch history; stop/start now appends a fresh watch run instead of overwriting previous runs
+- **Activity completeness:** Chat now logs `tool_result` and streaming error events so Activity better reflects real chat behavior
+- **Watch stop finalization:** Stopping watch now always finalizes active cycle/session/run artifacts and emits a watch completion report, including stale-PID cleanup paths where the process already exited
+- **Watch Explorer report visibility:** Explorer now uses supported report pagination, prefers report-bearing sessions by default, and resolves `chat_session_id` deep links to the correct watch/session context
+- **Watch Explorer maintenance:** Added a clear-history action in Watch Explorer to wipe persisted watch runs/sessions/cycles/reports/events from the UI
+- **Watch Explorer polish:** Repositioned and restyled the clear-history action so the destructive control is visually prominent and less awkward in the layout
+- **Watch Explorer consistency:** Updated the clear-history button to match Session History action styling (outline + eraser icon) with compact `Clear` copy
+- **Activity filters:** Added missing watch event categories (`watch.action`, `watch.error`, `watch.incident_detected`, `watch.remediation`, `watch.verification`, `watch.escalation`, `watch.digest`) so Activity filtering matches emitted notifications
 ## [0.15.0] — 2026-04-11
 
 ### Added

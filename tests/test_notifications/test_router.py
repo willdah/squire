@@ -17,6 +17,11 @@ def mock_email():
     return AsyncMock()
 
 
+@pytest.fixture
+def mock_db():
+    return AsyncMock()
+
+
 class TestNotificationRouter:
     @pytest.mark.asyncio
     async def test_dispatches_to_webhook(self, mock_webhook):
@@ -35,6 +40,49 @@ class TestNotificationRouter:
         router = NotificationRouter(webhook=mock_webhook, email=mock_email)
         await router.dispatch(category="test", summary="hello")
         mock_email.dispatch.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_logs_event_when_db_present(self, mock_webhook, mock_db):
+        router = NotificationRouter(webhook=mock_webhook, db=mock_db)
+        await router.dispatch(category="watch.alert", summary="CPU high", details="host=local")
+        mock_db.log_event.assert_called_once_with(
+            category="watch.alert",
+            summary="CPU high",
+            session_id=None,
+            watch_id=None,
+            watch_session_id=None,
+            cycle_id=None,
+            tool_name=None,
+            details="host=local",
+        )
+
+    @pytest.mark.asyncio
+    async def test_db_log_error_does_not_block_channels(self, mock_webhook, mock_db):
+        mock_db.log_event.side_effect = Exception("db down")
+        router = NotificationRouter(webhook=mock_webhook, db=mock_db)
+        await router.dispatch(category="watch.alert", summary="CPU high")
+        mock_webhook.dispatch.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_logs_watch_context(self, mock_webhook, mock_db):
+        router = NotificationRouter(webhook=mock_webhook, db=mock_db)
+        await router.dispatch(
+            category="watch.error",
+            summary="Cycle timeout",
+            watch_id="watch_1",
+            watch_session_id="wss_1",
+            cycle_id="cyc_1",
+        )
+        mock_db.log_event.assert_called_once_with(
+            category="watch.error",
+            summary="Cycle timeout",
+            session_id=None,
+            watch_id="watch_1",
+            watch_session_id="wss_1",
+            cycle_id="cyc_1",
+            tool_name=None,
+            details=None,
+        )
 
     @pytest.mark.asyncio
     async def test_no_email_is_fine(self, mock_webhook):

@@ -294,7 +294,7 @@ async def patch_config(
     # Recreate notifier if notifications changed (webhook + email, same as lifespan)
     if section == "notifications":
         old_notifier = deps.notifier
-        deps.notifier = build_notification_router(new_config)
+        deps.notifier = build_notification_router(new_config, db=deps.db)
         tools_set_notifier(deps.notifier)
         if old_notifier is not None:
             await old_notifier.close()

@@ -28,7 +28,7 @@ const chatNav = [
 
 const monitorNav = [
   { href: "/watch", label: "Watch", icon: Eye },
-  { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/watch-explorer", label: "Watch Explorer", icon: FileText },
   { href: "/activity", label: "Activity", icon: Activity },
 ];
 

@@ -45,6 +45,73 @@ async def test_watch_stop(db):
 
 
 @pytest.mark.asyncio
+async def test_watch_stop_stale_process_finalizes_watch_artifacts(db, monkeypatch):
+    from squire.api.routers.watch import watch_stop
+
+    def _missing_process(_pid: int, _signal: int) -> None:
+        raise ProcessLookupError
+
+    monkeypatch.setattr("squire.api.routers.watch.os.kill", _missing_process)
+
+    await db.create_watch_run("watch_stale_stop")
+    await db.create_watch_session("wss_stale_stop", watch_id="watch_stale_stop", adk_session_id="adk_stale_stop")
+    await db.set_watch_state("status", "running")
+    await db.set_watch_state("pid", "999999")
+    await db.set_watch_state("watch_id", "watch_stale_stop")
+    await db.set_watch_state("watch_session_id", "wss_stale_stop")
+
+    result = await watch_stop(db=db)
+    assert result.status == "ok"
+
+    run = await db.get_watch_run("watch_stale_stop")
+    assert run is not None
+    assert run["status"] == "stopped"
+    assert run["stopped_at"]
+
+    watch_report = await db.get_watch_completion_report("watch_stale_stop")
+    assert watch_report is not None
+    assert watch_report["report_type"] == "watch"
+
+    sessions = await db.list_watch_sessions_for_run("watch_stale_stop", page=1, per_page=20)
+    assert len(sessions) == 1
+    assert sessions[0]["status"] == "stopped"
+    assert sessions[0]["session_report_id"] is not None
+
+
+@pytest.mark.asyncio
+async def test_watch_status_stale_process_finalizes_watch_artifacts(db, monkeypatch):
+    from squire.api.routers.watch import watch_status
+
+    def _missing_process(_pid: int, _signal: int) -> None:
+        raise ProcessLookupError
+
+    monkeypatch.setattr("squire.api.routers.watch.os.kill", _missing_process)
+
+    await db.create_watch_run("watch_stale_status")
+    await db.create_watch_session("wss_stale_status", watch_id="watch_stale_status", adk_session_id="adk_stale_status")
+    await db.set_watch_state("status", "running")
+    await db.set_watch_state("pid", "999999")
+    await db.set_watch_state("watch_id", "watch_stale_status")
+    await db.set_watch_state("watch_session_id", "wss_stale_status")
+
+    result = await watch_status(db=db)
+    assert result.status == "stopped"
+
+    run = await db.get_watch_run("watch_stale_status")
+    assert run is not None
+    assert run["status"] == "stopped"
+
+    watch_report = await db.get_watch_completion_report("watch_stale_status")
+    assert watch_report is not None
+    assert watch_report["report_type"] == "watch"
+
+    sessions = await db.list_watch_sessions_for_run("watch_stale_status", page=1, per_page=20)
+    assert len(sessions) == 1
+    assert sessions[0]["status"] == "stopped"
+    assert sessions[0]["session_report_id"] is not None
+
+
+@pytest.mark.asyncio
 async def test_watch_config_update(db):
     from squire.api.routers.watch import watch_config_update
     from squire.api.schemas import WatchConfigUpdate
@@ -261,3 +328,15 @@ async def test_watch_hierarchy_endpoints_and_report_labels(db):
 
     reports = await watch_reports(watch_id="watch_x", watch_session_id=None, page=1, per_page=20, db=db)
     assert {report.report_type for report in reports} == {"watch", "session"}
+
+
+@pytest.mark.asyncio
+async def test_watch_session_by_adk_id_lookup(db):
+    from squire.api.routers.watch import watch_session_by_adk_session_id
+
+    await db.create_watch_run("watch_lookup")
+    await db.create_watch_session("wss_lookup", watch_id="watch_lookup", adk_session_id="adk_lookup")
+
+    session = await watch_session_by_adk_session_id(adk_session_id="adk_lookup", db=db)
+    assert session.watch_id == "watch_lookup"
+    assert session.watch_session_id == "wss_lookup"

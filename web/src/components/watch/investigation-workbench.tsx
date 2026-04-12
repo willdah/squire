@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import useSWR from "swr";
-import { apiGet } from "@/lib/api";
+import useSWR, { useSWRConfig } from "swr";
+import { apiDelete, apiGet } from "@/lib/api";
 import type {
   WatchCycleSummary,
   WatchEvent,
@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Eraser } from "lucide-react";
 
 function parseJson(value: string | null | undefined): Record<string, unknown> {
   if (!value) return {};
@@ -35,6 +36,7 @@ function useWorkbenchQuery() {
 
   const watchId = searchParams.get("watch_id");
   const watchSessionId = searchParams.get("watch_session_id");
+  const chatSessionId = searchParams.get("chat_session_id");
   const cycleId = searchParams.get("cycle_id");
   const reportId = searchParams.get("report_id");
   const view = searchParams.get("view") || "hierarchy";
@@ -48,16 +50,24 @@ function useWorkbenchQuery() {
     router.replace(`${pathname}?${next.toString()}`);
   };
 
-  return { watchId, watchSessionId, cycleId, reportId, view, setQuery };
+  return { watchId, watchSessionId, chatSessionId, cycleId, reportId, view, setQuery };
 }
 
 export function WatchExplorer() {
-  const { watchId, watchSessionId, cycleId, reportId, view, setQuery } = useWorkbenchQuery();
+  const { watchId, watchSessionId, chatSessionId, cycleId, reportId, view, setQuery } = useWorkbenchQuery();
   const [activeDetailTab, setActiveDetailTab] = useState("summary");
+  const [isClearingHistory, setIsClearingHistory] = useState(false);
+  const { mutate } = useSWRConfig();
+  const sessionLookupKey = chatSessionId ? `/api/watch/sessions/by-adk/${encodeURIComponent(chatSessionId)}` : null;
+  const { data: lookedUpSession } = useSWR(
+    sessionLookupKey,
+    (key: string) => apiGet<WatchSessionSummary>(key),
+    { revalidateOnFocus: false },
+  );
   const { data: runs } = useSWR("/api/watch/runs?per_page=50", () => apiGet<WatchRunSummary[]>("/api/watch/runs?per_page=50"), {
     refreshInterval: 5000,
   });
-  const selectedWatchId = watchId || runs?.[0]?.watch_id || null;
+  const selectedWatchId = watchId || lookedUpSession?.watch_id || runs?.[0]?.watch_id || null;
   const sessionsKey = selectedWatchId
     ? `/api/watch/runs/${encodeURIComponent(selectedWatchId)}/sessions?per_page=200`
     : null;
@@ -66,7 +76,16 @@ export function WatchExplorer() {
     (key: string) => apiGet<WatchSessionSummary[]>(key),
     { refreshInterval: 5000 },
   );
-  const selectedWatchSessionId = watchSessionId || sessions?.[0]?.watch_session_id || null;
+  const reportedSessions = useMemo(
+    () => (sessions ?? []).filter((session) => Boolean(session.session_report_id)),
+    [sessions],
+  );
+  const selectedWatchSessionId =
+    watchSessionId
+    || lookedUpSession?.watch_session_id
+    || reportedSessions[0]?.watch_session_id
+    || sessions?.[0]?.watch_session_id
+    || null;
   const cyclesKey =
     selectedWatchId && selectedWatchSessionId
       ? `/api/watch/runs/${encodeURIComponent(selectedWatchId)}/sessions/${encodeURIComponent(selectedWatchSessionId)}/cycles?per_page=500`
@@ -79,7 +98,7 @@ export function WatchExplorer() {
     () => (selectedCycleId ? (cycles ?? []).find((cycle) => cycle.cycle_id === selectedCycleId) ?? null : null),
     [cycles, selectedCycleId],
   );
-  const reportsQuery = new URLSearchParams({ per_page: "200" });
+  const reportsQuery = new URLSearchParams({ per_page: "100" });
   if (selectedWatchId) reportsQuery.set("watch_id", selectedWatchId);
   const reportsKey = `/api/watch/reports?${reportsQuery.toString()}`;
   const { data: reports } = useSWR(reportsKey, () => apiGet<WatchReportInfo[]>(reportsKey), {
@@ -123,6 +142,15 @@ export function WatchExplorer() {
   }, [runs, selectedWatchId, setQuery, watchId]);
 
   useEffect(() => {
+    if (!chatSessionId || !lookedUpSession) return;
+    if (watchId && watchSessionId) return;
+    setQuery({
+      watch_id: lookedUpSession.watch_id,
+      watch_session_id: lookedUpSession.watch_session_id,
+    });
+  }, [chatSessionId, lookedUpSession, setQuery, watchId, watchSessionId]);
+
+  useEffect(() => {
     if (!selectedWatchSessionId || !sessions?.length || watchSessionId) return;
     setQuery({ watch_session_id: selectedWatchSessionId });
   }, [selectedWatchSessionId, sessions, setQuery, watchSessionId]);
@@ -148,11 +176,44 @@ export function WatchExplorer() {
     { refreshInterval: 5000 },
   );
 
+  const clearWatchHistory = async () => {
+    if (isClearingHistory) return;
+    if (!confirm("Clear all watch history? This removes runs, sessions, cycles, reports, and watch events.")) return;
+    setIsClearingHistory(true);
+    try {
+      await apiDelete("/api/watch/cycles");
+      setQuery({
+        watch_id: null,
+        watch_session_id: null,
+        cycle_id: null,
+        report_id: null,
+        chat_session_id: null,
+      });
+      await mutate((key) => typeof key === "string" && key.startsWith("/api/watch/"), undefined, {
+        revalidate: true,
+      });
+    } finally {
+      setIsClearingHistory(false);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[260px_1fr_1.2fr]">
       <Card className="min-w-0 xl:h-[calc(100vh-11rem)]">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Watch Runs</CardTitle>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-base">Watch Runs</CardTitle>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={clearWatchHistory}
+              disabled={isClearingHistory}
+            >
+              <Eraser className="mr-2 h-4 w-4" />
+              {isClearingHistory ? "Clearing..." : "Clear"}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
           <Tabs value={view} onValueChange={(value) => setQuery({ view: value })}>

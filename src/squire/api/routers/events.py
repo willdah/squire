@@ -14,6 +14,8 @@ router = APIRouter()
 async def list_events(
     since: str | None = Query(None, description="ISO 8601 start timestamp"),
     category: str | None = Query(None, description="Filter by category"),
+    session_id: str | None = Query(None, description="Filter by chat session ID"),
+    watch_id: str | None = Query(None, description="Filter by watch ID"),
     limit: int = Query(100, ge=1, le=1000),
     db=Depends(get_db),
 ):
@@ -21,7 +23,13 @@ async def list_events(
     if since is None:
         since = (datetime.now(UTC) - timedelta(hours=24)).isoformat()
 
-    rows = await db.get_events(since, category=category, limit=limit)
+    rows = await db.get_events(
+        since,
+        category=category,
+        session_id=session_id,
+        watch_id=watch_id,
+        limit=limit,
+    )
     return [EventInfo(**r) for r in rows]
 
 

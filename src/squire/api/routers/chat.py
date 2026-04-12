@@ -475,6 +475,13 @@ async def _stream_response(
         raise
     except Exception as e:
         logger.exception("Error streaming response")
+        if db:
+            await db.log_event(
+                category="error",
+                summary="Chat streaming error",
+                session_id=session.id,
+                details=str(e),
+            )
         try:
             await websocket.send_json({"type": "error", "message": str(e)})
         except Exception:
@@ -555,14 +562,23 @@ async def _run_single_turn(
                 response_parts = []
                 if fr.name in ADK_INTERNAL_TOOLS:
                     continue
+                output_text = str(fr.response) if fr.response is not None else ""
                 await websocket.send_json(
                     {
                         "type": "tool_result",
                         "name": fr.name,
-                        "output": str(fr.response)[:500],
+                        "output": output_text[:500],
                         "request_id": "",
                     }
                 )
+                if db:
+                    await db.log_event(
+                        category="tool_result",
+                        summary=f"Completed {fr.name or 'tool'}",
+                        session_id=session.id,
+                        tool_name=fr.name,
+                        details=output_text[:4000],
+                    )
 
             elif part.text and event.partial:
                 response_parts.append(part.text)

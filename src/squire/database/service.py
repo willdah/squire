@@ -10,6 +10,7 @@ import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 import aiosqlite
 
@@ -35,6 +36,9 @@ CREATE TABLE IF NOT EXISTS events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp   TEXT NOT NULL,
     session_id  TEXT,
+    watch_id    TEXT,
+    watch_session_id TEXT,
+    cycle_id    TEXT,
     category    TEXT NOT NULL,
     tool_name   TEXT,
     summary     TEXT NOT NULL,
@@ -48,6 +52,14 @@ CREATE INDEX IF NOT EXISTS idx_events_ts ON events(timestamp)
 
 _CREATE_EVENTS_INDEX_CAT = """
 CREATE INDEX IF NOT EXISTS idx_events_cat ON events(category)
+"""
+
+_CREATE_EVENTS_INDEX_SESSION = """
+CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id)
+"""
+
+_CREATE_EVENTS_INDEX_WATCH = """
+CREATE INDEX IF NOT EXISTS idx_events_watch ON events(watch_id)
 """
 
 _CREATE_CONVERSATIONS = """
@@ -341,7 +353,10 @@ class DatabaseService:
             await self._conn.execute(stmt)
         await self._ensure_conversation_token_columns()
         await self._ensure_watch_event_columns()
+        await self._ensure_event_context_columns()
         for stmt in (
+            _CREATE_EVENTS_INDEX_SESSION,
+            _CREATE_EVENTS_INDEX_WATCH,
             _CREATE_WATCH_EVENTS_IDX_WATCH,
             _CREATE_WATCH_EVENTS_IDX_SESSION,
             _CREATE_WATCH_EVENTS_IDX_CYCLE_ID,
@@ -374,6 +389,21 @@ class DatabaseService:
         ):
             if column not in existing_columns:
                 await self._conn.execute(f"ALTER TABLE watch_events ADD COLUMN {column} {kind}")
+
+    async def _ensure_event_context_columns(self) -> None:
+        """Add event context columns for existing databases."""
+        if self._conn is None:
+            raise RuntimeError("Database connection not initialized")
+        cursor = await self._conn.execute("PRAGMA table_info(events)")
+        rows = await cursor.fetchall()
+        existing_columns = {row[1] for row in rows}
+        for column, kind in (
+            ("watch_id", "TEXT"),
+            ("watch_session_id", "TEXT"),
+            ("cycle_id", "TEXT"),
+        ):
+            if column not in existing_columns:
+                await self._conn.execute(f"ALTER TABLE events ADD COLUMN {column} {kind}")
 
     # --- Snapshots ---
 
@@ -422,6 +452,9 @@ class DatabaseService:
         category: str,
         summary: str,
         session_id: str | None = None,
+        watch_id: str | None = None,
+        watch_session_id: str | None = None,
+        cycle_id: str | None = None,
         tool_name: str | None = None,
         details: str | None = None,
     ) -> None:
@@ -430,26 +463,42 @@ class DatabaseService:
         now = datetime.now(UTC).isoformat()
         await conn.execute(
             """
-            INSERT INTO events (timestamp, session_id, category, tool_name, summary, details)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO events (
+                timestamp, session_id, watch_id, watch_session_id, cycle_id, category, tool_name, summary, details
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (now, session_id, category, tool_name, summary, details),
+            (now, session_id, watch_id, watch_session_id, cycle_id, category, tool_name, summary, details),
         )
         await conn.commit()
 
-    async def get_events(self, since: str, category: str | None = None, limit: int = 100) -> list[dict]:
+    async def get_events(
+        self,
+        since: str,
+        *,
+        category: str | None = None,
+        session_id: str | None = None,
+        watch_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
         """Retrieve events since a timestamp, optionally filtered by category."""
         conn = await self._get_conn()
+        clauses = ["timestamp >= ?"]
+        params: list[object] = [since]
         if category:
-            cursor = await conn.execute(
-                "SELECT * FROM events WHERE timestamp >= ? AND category = ? ORDER BY timestamp DESC LIMIT ?",
-                (since, category, limit),
-            )
-        else:
-            cursor = await conn.execute(
-                "SELECT * FROM events WHERE timestamp >= ? ORDER BY timestamp DESC LIMIT ?",
-                (since, limit),
-            )
+            clauses.append("category = ?")
+            params.append(category)
+        if session_id:
+            clauses.append("session_id = ?")
+            params.append(session_id)
+        if watch_id:
+            clauses.append("watch_id = ?")
+            params.append(watch_id)
+        where = " AND ".join(clauses)
+        cursor = await conn.execute(
+            f"SELECT * FROM events WHERE {where} ORDER BY timestamp DESC LIMIT ?",
+            [*params, limit],
+        )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
@@ -928,6 +977,135 @@ class DatabaseService:
         )
         await conn.commit()
 
+    async def finalize_stale_watch_run(
+        self,
+        watch_id: str,
+        *,
+        watch_session_id: str | None = None,
+        reason: str = "Watch process exited unexpectedly before normal shutdown finalization.",
+    ) -> dict[str, object]:
+        """Finalize run/session/report artifacts when a watch process is already gone."""
+        conn = await self._get_conn()
+
+        if not watch_session_id:
+            cursor = await conn.execute(
+                """
+                SELECT watch_session_id
+                FROM watch_sessions
+                WHERE watch_id = ? AND status = 'running'
+                ORDER BY started_at DESC
+                LIMIT 1
+                """,
+                (watch_id,),
+            )
+            row = await cursor.fetchone()
+            watch_session_id = row["watch_session_id"] if row else None
+
+        session_report_pk: int | None = None
+        if watch_session_id:
+            cursor = await conn.execute(
+                "SELECT status, cycle_count FROM watch_sessions WHERE watch_session_id = ?",
+                (watch_session_id,),
+            )
+            session_row = await cursor.fetchone()
+            if session_row and session_row["status"] == "running":
+                cycle_count = int(session_row["cycle_count"] or 0)
+                session_outcome = {
+                    "status": "error",
+                    "goal_summary": reason,
+                    "key_decisions": "",
+                    "persistent_risks": reason,
+                    "open_actions": "Review watch process health and restart if needed.",
+                    "memories_to_carry_forward": "",
+                    "parse_status": "ok",
+                    "failure_reason": "stale_watch_process",
+                }
+                session_report = {
+                    "executive_summary": reason,
+                    "incidents_seen": f"{cycle_count} completed cycle(s) were recorded before the process exit.",
+                    "actions_taken": "No additional actions executed after process exit.",
+                    "blocked_or_denied_actions": "0 blocked/denied action(s).",
+                    "verification_results": "Finalized from stale state cleanup.",
+                    "open_risks": reason,
+                    "recommended_follow_ups": "Inspect host logs and restart watch mode if needed.",
+                    "cost_usage": {"total_tokens": 0, "cycle_count": cycle_count},
+                    "meta": {"watch_id": watch_id, "watch_session_id": watch_session_id},
+                }
+                session_report_id = f"wsr_{uuid4().hex[:12]}"
+                session_report_pk = await self.create_watch_report(
+                    session_report_id,
+                    watch_id=watch_id,
+                    watch_session_id=watch_session_id,
+                    report_type="session",
+                    status="error",
+                    title=f"Session report {watch_session_id}",
+                    digest=reason,
+                    report=session_report,
+                )
+                await self.close_watch_session(
+                    watch_session_id,
+                    status="stopped",
+                    cycle_count=cycle_count,
+                    session_carryforward=session_outcome,
+                    session_outcome=session_outcome,
+                    session_report_id=session_report_pk,
+                )
+
+        existing_watch_report = await self.get_watch_completion_report(watch_id)
+        watch_report_pk: int | None = existing_watch_report["id"] if existing_watch_report else None
+        if watch_report_pk is None:
+            session_cursor = await conn.execute(
+                "SELECT COUNT(*) AS count FROM watch_sessions WHERE watch_id = ?",
+                (watch_id,),
+            )
+            session_count_row = await session_cursor.fetchone()
+            session_count = int(session_count_row["count"] if session_count_row else 0)
+
+            cycle_cursor = await conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS cycle_count,
+                    COALESCE(SUM(tool_count), 0) AS action_count,
+                    COALESCE(SUM(CASE WHEN status != 'ok' THEN 1 ELSE 0 END), 0) AS error_count
+                FROM watch_cycles
+                WHERE watch_id = ?
+                """,
+                (watch_id,),
+            )
+            cycle_count_row = await cycle_cursor.fetchone()
+            cycle_count = int(cycle_count_row["cycle_count"] if cycle_count_row else 0)
+            action_count = int(cycle_count_row["action_count"] if cycle_count_row else 0)
+            error_count = int(cycle_count_row["error_count"] if cycle_count_row else 0)
+            run_summary = f"Watch {watch_id} completed with {session_count} session(s) and {cycle_count} cycle(s)."
+
+            watch_report_id = f"wrp_{uuid4().hex[:12]}"
+            watch_report = {
+                "run_summary": run_summary,
+                "session_rollup": f"{session_count} session(s); {error_count} error cycle(s).",
+                "major_actions": f"{action_count} actions executed.",
+                "error_and_timeout_analysis": reason,
+                "learning_memory_rollup": "Stale-process recovery artifact.",
+                "next_watch_recommendations": "Restart watch mode and verify host health.",
+                "cost_usage": {"total_tokens": 0},
+            }
+            watch_report_pk = await self.create_watch_report(
+                watch_report_id,
+                watch_id=watch_id,
+                report_type="watch",
+                status="error",
+                title=f"Watch completion report {watch_id}",
+                digest=reason,
+                report=watch_report,
+            )
+
+        await self.close_watch_run(watch_id, status="stopped", watch_completion_report_id=watch_report_pk)
+        return {
+            "watch_id": watch_id,
+            "watch_session_id": watch_session_id,
+            "session_report_id": session_report_pk,
+            "watch_report_id": watch_report_pk,
+        }
+
     async def create_watch_session(self, watch_session_id: str, *, watch_id: str, adk_session_id: str) -> None:
         """Create a watch session row."""
         conn = await self._get_conn()
@@ -1219,6 +1397,41 @@ class DatabaseService:
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+    async def get_watch_session_by_adk_session_id(self, adk_session_id: str) -> dict | None:
+        """Resolve a watch session by ADK session identifier."""
+        conn = await self._get_conn()
+        cursor = await conn.execute(
+            """
+            SELECT
+                ws.watch_session_id,
+                ws.watch_id,
+                ws.adk_session_id,
+                ws.started_at,
+                ws.stopped_at,
+                ws.status,
+                ws.cycle_count,
+                wr.report_id AS session_report_id,
+                wr.status AS session_report_status,
+                wr.title AS session_report_title
+            FROM watch_sessions ws
+            LEFT JOIN watch_reports wr
+              ON wr.id = (
+                SELECT id
+                FROM watch_reports
+                WHERE watch_session_id = ws.watch_session_id
+                  AND report_type = 'session'
+                ORDER BY created_at DESC
+                LIMIT 1
+              )
+            WHERE ws.adk_session_id = ?
+            ORDER BY ws.started_at DESC
+            LIMIT 1
+            """,
+            (adk_session_id,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
 
     async def list_watch_cycles_for_session(
         self,

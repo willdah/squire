@@ -116,6 +116,51 @@ def _build_cycle_carryforward(outcome: dict) -> dict:
     }
 
 
+async def _close_cancelled_cycle(
+    db: DatabaseService,
+    *,
+    cycle_id: str,
+    watch_session_id: str,
+    cycle_started_at: datetime,
+) -> dict:
+    """Close a pre-execution cycle when watch is stopped mid-loop."""
+    duration_seconds = max((datetime.now(UTC) - cycle_started_at).total_seconds(), 0.0)
+    outcome = {
+        "cycle_status": "cancelled",
+        "verification": "Cycle cancelled before execution because watch was stopped.",
+        "incident_count": 0,
+        "resolved": False,
+        "escalated": False,
+    }
+    await db.close_watch_cycle(
+        cycle_id,
+        status="cancelled",
+        duration_seconds=duration_seconds,
+        tool_count=0,
+        blocked_count=0,
+        remote_tool_count=0,
+        incident_count=0,
+        input_tokens=None,
+        output_tokens=None,
+        total_tokens=None,
+        incident_key=None,
+        outcome=outcome,
+        error_reason="watch_stopped",
+        cycle_carryforward=_build_cycle_carryforward(outcome),
+    )
+    return {
+        "cycle_id": cycle_id,
+        "watch_session_id": watch_session_id,
+        "status": "cancelled",
+        "tool_count": 0,
+        "blocked_count": 0,
+        "incident_count": 0,
+        "resolved": False,
+        "escalated": False,
+        "total_tokens": 0,
+    }
+
+
 def _build_session_outcome(cycles: list[dict]) -> dict:
     """Deterministic session rollup with strict core fields."""
     if not cycles:
@@ -166,14 +211,18 @@ def _build_session_report(*, watch_id: str, watch_session_id: str, cycles: list[
 
 def _build_watch_report(*, watch_id: str, sessions: list[dict], cycles: list[dict]) -> dict:
     """Create watch-completion rollup for operators."""
+    session_ids = {str(session_id) for session_id in [s.get("watch_session_id") for s in sessions] if session_id}
+    session_ids.update(str(session_id) for session_id in [c.get("watch_session_id") for c in cycles] if session_id)
+    session_count = len(session_ids) if session_ids else len(sessions)
     total_tokens = sum(int(c.get("total_tokens", 0) or 0) for c in cycles)
     errors = sum(1 for c in cycles if c.get("status") != "ok")
     escalated = sum(1 for c in cycles if c.get("escalated"))
     incidents = sum(int(c.get("incident_count", 0) or 0) for c in cycles)
+    action_count = sum(int(c.get("tool_count", 0)) for c in cycles)
     return {
-        "run_summary": f"Watch {watch_id} completed with {len(sessions)} session(s) and {len(cycles)} cycle(s).",
-        "session_rollup": f"{len(sessions)} session(s); {errors} error cycle(s).",
-        "major_actions": f"{sum(int(c.get('tool_count', 0)) for c in cycles)} actions executed.",
+        "run_summary": f"Watch {watch_id} completed with {session_count} session(s) and {len(cycles)} cycle(s).",
+        "session_rollup": f"{session_count} session(s); {errors} error cycle(s).",
+        "major_actions": f"{action_count} actions executed.",
         "error_and_timeout_analysis": f"{errors} cycles ended in error state.",
         "learning_memory_rollup": "Session carry-forward summaries generated for downstream sessions.",
         "next_watch_recommendations": (
@@ -324,7 +373,7 @@ async def start_watch() -> None:
     email_notifier = None
     if notif_config.email and notif_config.email.enabled:
         email_notifier = EmailNotifier(notif_config.email)
-    notifier = NotificationRouter(webhook=webhook_dispatcher, email=email_notifier)
+    notifier = NotificationRouter(webhook=webhook_dispatcher, email=email_notifier, db=db)
     set_db(db)
     set_notifier(notifier)
 
@@ -464,7 +513,13 @@ async def start_watch() -> None:
     )
 
     # Dispatch lifecycle notification
-    await _dispatch(notifier, "watch.start", "Squire watch mode started.")
+    await _dispatch(
+        notifier,
+        "watch.start",
+        "Squire watch mode started.",
+        watch_id=watch_id,
+        watch_session_id=watch_session_id,
+    )
     logger.info(
         "Watch mode started — interval=%dm, threshold=%s, cycles_per_session=%d",
         watch_config.interval_minutes,
@@ -488,12 +543,17 @@ async def start_watch() -> None:
     action_cooldowns: dict[str, int] = defaultdict(int)
     session_cycle_records: list[dict] = []
     all_cycle_records: list[dict] = []
+    active_cycle_id: str | None = None
+    active_cycle_started_at: datetime | None = None
 
     try:
         while not shutdown.is_set():
             cycle_count += 1
-            cycle_start = datetime.now(UTC).isoformat()
+            cycle_started_at = datetime.now(UTC)
+            cycle_start = cycle_started_at.isoformat()
             cycle_id = f"cyc_{_short_uuid()}"
+            active_cycle_id = cycle_id
+            active_cycle_started_at = cycle_started_at
             await db.create_watch_cycle(
                 cycle_id,
                 watch_id=watch_id,
@@ -515,6 +575,17 @@ async def start_watch() -> None:
                 risk_evaluator=risk_evaluator,
             )
             if shutdown.is_set():
+                if active_cycle_id and active_cycle_started_at:
+                    cancelled_cycle = await _close_cancelled_cycle(
+                        db,
+                        cycle_id=active_cycle_id,
+                        watch_session_id=watch_session_id,
+                        cycle_started_at=active_cycle_started_at,
+                    )
+                    session_cycle_records.append(cancelled_cycle)
+                    all_cycle_records.append(cancelled_cycle)
+                active_cycle_id = None
+                active_cycle_started_at = None
                 break
 
             # Collect fresh snapshots
@@ -736,7 +807,14 @@ async def start_watch() -> None:
                 last_cycle_error = f"Cycle timed out after {watch_config.cycle_timeout_seconds}s"
                 logger.warning("Cycle %d timed out after %ds", cycle_count, watch_config.cycle_timeout_seconds)
                 await db.set_watch_state("last_response", f"[timeout after {watch_config.cycle_timeout_seconds}s]")
-                await _dispatch(notifier, "watch.error", f"Watch cycle {cycle_count} timed out.")
+                await _dispatch(
+                    notifier,
+                    "watch.error",
+                    f"Watch cycle {cycle_count} timed out.",
+                    watch_id=watch_id,
+                    watch_session_id=watch_session_id,
+                    cycle_id=cycle_id,
+                )
                 blocked_count = 0
                 cycle_tool_count = 0
                 cycle_input_tokens = None
@@ -757,7 +835,14 @@ async def start_watch() -> None:
                 last_cycle_error = f"{type(e).__name__}: {e}"
                 logger.error("Cycle %d failed: %s", cycle_count, e, exc_info=True)
                 await db.set_watch_state("last_response", f"[error: {e}]")
-                await _dispatch(notifier, "watch.error", f"Watch cycle {cycle_count} failed.")
+                await _dispatch(
+                    notifier,
+                    "watch.error",
+                    f"Watch cycle {cycle_count} failed.",
+                    watch_id=watch_id,
+                    watch_session_id=watch_session_id,
+                    cycle_id=cycle_id,
+                )
                 blocked_count = 0
                 cycle_tool_count = 0
                 cycle_input_tokens = None
@@ -788,7 +873,7 @@ async def start_watch() -> None:
                 input_tokens=cycle_input_tokens,
                 output_tokens=cycle_output_tokens,
                 total_tokens=cycle_total_tokens,
-                    cycle_id=cycle_id,
+                cycle_id=cycle_id,
             )
             error_reason = None if cycle_status == "ok" else (last_cycle_error or "cycle_error")
             cycle_carryforward = _build_cycle_carryforward(outcome)
@@ -808,8 +893,11 @@ async def start_watch() -> None:
                 error_reason=error_reason,
                 cycle_carryforward=cycle_carryforward,
             )
+            active_cycle_id = None
+            active_cycle_started_at = None
             cycle_row = {
                 "cycle_id": cycle_id,
+                "watch_session_id": watch_session_id,
                 "status": cycle_status,
                 "tool_count": cycle_tool_count,
                 "blocked_count": blocked_count,
@@ -821,13 +909,24 @@ async def start_watch() -> None:
             session_cycle_records.append(cycle_row)
             all_cycle_records.append(cycle_row)
             await _persist_watch_metrics(db, outcome)
-            await _dispatch_outcome_notifications(db, notifier, cycle_count, outcome)
+            await _dispatch_outcome_notifications(
+                db,
+                notifier,
+                cycle_count,
+                outcome,
+                watch_id=watch_id,
+                watch_session_id=watch_session_id,
+                cycle_id=cycle_id,
+            )
 
             if watch_config.notify_on_action and cycle_tool_count > 0 and last_cycle_error is None:
                 await _dispatch(
                     notifier,
                     "watch.action",
                     f"Watch cycle {cycle_count} executed {cycle_tool_count} tool call(s).",
+                    watch_id=watch_id,
+                    watch_session_id=watch_session_id,
+                    cycle_id=cycle_id,
                 )
 
             # Prune session history to bound context size
@@ -921,56 +1020,107 @@ async def start_watch() -> None:
             )
 
     finally:
-        if session_cycle_records:
-            session_outcome = _build_session_outcome(session_cycle_records)
-            session_report = _build_session_report(
-                watch_id=watch_id,
-                watch_session_id=watch_session_id,
-                cycles=session_cycle_records,
-                outcome=session_outcome,
-            )
+        session_outcome = _build_session_outcome(session_cycle_records)
+        session_report = _build_session_report(
+            watch_id=watch_id,
+            watch_session_id=watch_session_id,
+            cycles=session_cycle_records,
+            outcome=session_outcome,
+        )
+        session_status = str(session_outcome.get("status", "error"))
+        session_report_pk: int | None = None
+        try:
             session_report_id = f"wsr_{_short_uuid()}"
             session_report_pk = await db.create_watch_report(
                 session_report_id,
                 watch_id=watch_id,
                 watch_session_id=watch_session_id,
                 report_type="session",
-                status=session_outcome["status"],
+                status=session_status,
                 title=f"Session report {watch_session_id}",
                 digest=session_report["executive_summary"],
                 report=session_report,
             )
+        except Exception:
+            logger.exception("Failed to persist final session report for %s", watch_session_id)
+            session_status = "error"
+            session_outcome = {
+                **session_outcome,
+                "status": "error",
+                "failure_reason": "session_report_persist_failed",
+            }
+        try:
             await db.close_watch_session(
                 watch_session_id,
-                status=session_outcome["status"],
+                status="stopped" if session_status == "empty" else session_status,
                 cycle_count=len(session_cycle_records),
                 session_carryforward=session_outcome,
                 session_outcome=session_outcome,
                 session_report_id=session_report_pk,
             )
+        except Exception:
+            logger.exception("Failed to close watch session %s during shutdown", watch_session_id)
+            session_status = "error"
 
-        watch_report = _build_watch_report(watch_id=watch_id, sessions=[], cycles=all_cycle_records)
-        watch_report_id = f"wrp_{_short_uuid()}"
-        watch_report_pk = await db.create_watch_report(
-            watch_report_id,
+        try:
+            sessions_for_report = await db.list_watch_sessions_for_run(watch_id, page=1, per_page=1000)
+        except Exception:
+            logger.exception("Failed to list watch sessions for %s while building watch report", watch_id)
+            sessions_for_report = [{"watch_session_id": watch_session_id, "status": session_status}]
+
+        watch_report = _build_watch_report(
             watch_id=watch_id,
-            report_type="watch",
-            status="ok" if not any(c.get("status") != "ok" for c in all_cycle_records) else "error",
-            title=f"Watch completion report {watch_id}",
-            digest=watch_report["run_summary"],
-            report=watch_report,
+            sessions=sessions_for_report,
+            cycles=all_cycle_records,
         )
-        await db.close_watch_run(
-            watch_id,
-            status="stopped",
-            watch_completion_report_id=watch_report_pk,
-        )
-        await db.set_watch_state("status", "stopped")
-        await db.set_watch_state("stopped_at", datetime.now(UTC).isoformat())
-        await _dispatch(notifier, "watch.stop", "Squire watch mode stopped.")
+        watch_report_id = f"wrp_{_short_uuid()}"
+        watch_report_pk: int | None = None
+        try:
+            watch_status = "error" if any(c.get("status") == "error" for c in all_cycle_records) else "ok"
+            if session_status == "error":
+                watch_status = "error"
+            watch_report_pk = await db.create_watch_report(
+                watch_report_id,
+                watch_id=watch_id,
+                report_type="watch",
+                status=watch_status,
+                title=f"Watch completion report {watch_id}",
+                digest=watch_report["run_summary"],
+                report=watch_report,
+            )
+        except Exception:
+            logger.exception("Failed to persist watch completion report for %s", watch_id)
+
+        try:
+            await db.close_watch_run(
+                watch_id,
+                status="stopped",
+                watch_completion_report_id=watch_report_pk,
+            )
+        except Exception:
+            logger.exception("Failed to close watch run %s during shutdown", watch_id)
+
+        stopped_at = datetime.now(UTC).isoformat()
+        try:
+            await db.set_watch_state("status", "stopped")
+            await db.set_watch_state("stopped_at", stopped_at)
+        except Exception:
+            logger.exception("Failed to update watch state during shutdown")
+
+        try:
+            await _dispatch(notifier, "watch.stop", "Squire watch mode stopped.", watch_id=watch_id)
+        except Exception:
+            logger.exception("Failed to dispatch watch.stop notification")
         logger.info("Watch mode stopped.")
-        await registry.close_all()
-        await notifier.close()
+
+        try:
+            await registry.close_all()
+        except Exception:
+            logger.exception("Failed to close backend registry during watch shutdown")
+        try:
+            await notifier.close()
+        except Exception:
+            logger.exception("Failed to close notifier during watch shutdown")
         await db.close()
 
 
@@ -1130,10 +1280,24 @@ async def _update_watch_state(db: DatabaseService, state: dict[str, str]) -> Non
         await db.set_watch_state(key, value)
 
 
-async def _dispatch(notifier: NotificationRouter, category: str, summary: str) -> None:
+async def _dispatch(
+    notifier: NotificationRouter,
+    category: str,
+    summary: str,
+    *,
+    watch_id: str | None = None,
+    watch_session_id: str | None = None,
+    cycle_id: str | None = None,
+) -> None:
     """Best-effort notification dispatch."""
     try:
-        await notifier.dispatch(category=category, summary=summary)
+        await notifier.dispatch(
+            category=category,
+            summary=summary,
+            watch_id=watch_id,
+            watch_session_id=watch_session_id,
+            cycle_id=cycle_id,
+        )
     except Exception:
         logger.debug("Failed to dispatch %s notification", category, exc_info=True)
 
@@ -1176,6 +1340,10 @@ async def _dispatch_outcome_notifications(
     notifier: NotificationRouter,
     cycle: int,
     outcome: dict,
+    *,
+    watch_id: str | None = None,
+    watch_session_id: str | None = None,
+    cycle_id: str | None = None,
 ) -> None:
     incident_count = int(outcome.get("incident_count", 0))
     if incident_count > 0:
@@ -1186,6 +1354,9 @@ async def _dispatch_outcome_notifications(
                 notifier,
                 "watch.incident_detected",
                 f"Cycle {cycle}: detected {incident_count} incident(s) ({incident_fingerprint}).",
+                watch_id=watch_id,
+                watch_session_id=watch_session_id,
+                cycle_id=cycle_id,
             )
             await db.set_watch_state("last_notified_incident", incident_fingerprint)
     if int(outcome.get("tool_count", 0)) > 0:
@@ -1193,11 +1364,28 @@ async def _dispatch_outcome_notifications(
             notifier,
             "watch.remediation",
             f"Cycle {cycle}: executed {outcome.get('tool_count', 0)} remediation action(s).",
+            watch_id=watch_id,
+            watch_session_id=watch_session_id,
+            cycle_id=cycle_id,
         )
     if outcome.get("resolved"):
-        await _dispatch(notifier, "watch.verification", f"Cycle {cycle}: remediation verified as resolved.")
+        await _dispatch(
+            notifier,
+            "watch.verification",
+            f"Cycle {cycle}: remediation verified as resolved.",
+            watch_id=watch_id,
+            watch_session_id=watch_session_id,
+            cycle_id=cycle_id,
+        )
     if outcome.get("escalated"):
-        await _dispatch(notifier, "watch.escalation", f"Cycle {cycle}: escalation required for unresolved issue.")
+        await _dispatch(
+            notifier,
+            "watch.escalation",
+            f"Cycle {cycle}: escalation required for unresolved issue.",
+            watch_id=watch_id,
+            watch_session_id=watch_session_id,
+            cycle_id=cycle_id,
+        )
     if cycle % 6 == 0:
         summary = (
             f"Cycle {cycle} digest: actions={await db.get_watch_state('total_actions') or '0'}, "
@@ -1205,7 +1393,14 @@ async def _dispatch_outcome_notifications(
             f"resolved={await db.get_watch_state('total_resolved') or '0'}, "
             f"escalated={await db.get_watch_state('total_escalated') or '0'}."
         )
-        await _dispatch(notifier, "watch.digest", summary)
+        await _dispatch(
+            notifier,
+            "watch.digest",
+            summary,
+            watch_id=watch_id,
+            watch_session_id=watch_session_id,
+            cycle_id=cycle_id,
+        )
 
 
 async def get_watch_status() -> dict[str, str] | None:

@@ -101,8 +101,8 @@ export default function SessionsPage() {
                       <MessageSquare className="h-4 w-4" />
                     </Button>
                   </Link>
-                  <Link href={`/reports?chat_session_id=${encodeURIComponent(s.session_id)}`}>
-                    <Button variant="ghost" size="icon" title="Investigate in reports">
+                  <Link href={`/watch-explorer?chat_session_id=${encodeURIComponent(s.session_id)}`}>
+                    <Button variant="ghost" size="icon" title="Investigate in watch explorer">
                       <FileSearch className="h-4 w-4" />
                     </Button>
                   </Link>

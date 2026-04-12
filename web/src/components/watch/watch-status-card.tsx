@@ -157,9 +157,9 @@ export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusC
             <Settings className="h-3 w-3 mr-1" />
             Configure
           </Button>
-          <Link href={`/reports?watch_id=${encodeURIComponent(status?.watch_id ?? "")}`}>
+          <Link href={`/watch-explorer?watch_id=${encodeURIComponent(status?.watch_id ?? "")}`}>
             <Button variant="secondary" size="sm">
-              View Reports
+              Open Watch Explorer
             </Button>
           </Link>
         </div>

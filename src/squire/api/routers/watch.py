@@ -24,6 +24,20 @@ from ..schemas import (
 router = APIRouter()
 
 
+async def _finalize_stale_watch_process(db, state: dict[str, str], *, reason: str) -> str:
+    """Finalize watch artifacts when the process is no longer running."""
+    from datetime import UTC, datetime
+
+    stopped_at = datetime.now(UTC).isoformat()
+    watch_id = state.get("watch_id")
+    watch_session_id = state.get("watch_session_id")
+    if watch_id:
+        await db.finalize_stale_watch_run(watch_id, watch_session_id=watch_session_id, reason=reason)
+    await db.set_watch_state("status", "stopped")
+    await db.set_watch_state("stopped_at", stopped_at)
+    return stopped_at
+
+
 def _effective_watch_risk_level(guardrails) -> int:
     """Numeric risk threshold (1–5) used in watch mode UI and live updates."""
     wt = guardrails.watch_tolerance or guardrails.risk_tolerance
@@ -62,12 +76,13 @@ async def watch_status(db=Depends(get_db)):
         try:
             os.kill(int(pid), 0)
         except (ProcessLookupError, ValueError):
-            from datetime import UTC, datetime
-
-            await db.set_watch_state("status", "stopped")
-            await db.set_watch_state("stopped_at", datetime.now(UTC).isoformat())
+            stopped_at = await _finalize_stale_watch_process(
+                db,
+                state,
+                reason="Watch process exited unexpectedly before stop finalization.",
+            )
             state["status"] = "stopped"
-            state["stopped_at"] = datetime.now(UTC).isoformat()
+            state["stopped_at"] = stopped_at
 
     return WatchStatusResponse(**state)
 
@@ -114,11 +129,12 @@ async def watch_stop(db=Depends(get_db)):
         try:
             os.kill(int(pid), 0)
         except (ProcessLookupError, ValueError):
-            from datetime import UTC, datetime
-
-            await db.set_watch_state("status", "stopped")
-            await db.set_watch_state("stopped_at", datetime.now(UTC).isoformat())
-            return WatchCommandResponse(status="ok", message="Watch process already exited; state cleaned up")
+            await _finalize_stale_watch_process(
+                db,
+                state,
+                reason="Watch process already exited; finalized stale run artifacts.",
+            )
+            return WatchCommandResponse(status="ok", message="Watch process already exited; finalized watch artifacts")
 
     await db.insert_watch_command("stop")
     return WatchCommandResponse(status="ok", message="Stop command sent")
@@ -305,6 +321,15 @@ async def watch_run_session_cycles(
         per_page=per_page,
     )
     return [WatchCycleSummary(**row) for row in rows]
+
+
+@router.get("/sessions/by-adk/{adk_session_id}", response_model=WatchSessionSummary)
+async def watch_session_by_adk_session_id(adk_session_id: str, db=Depends(get_db)):
+    """Resolve a watch session by ADK session id (chat session id)."""
+    row = await db.get_watch_session_by_adk_session_id(adk_session_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Watch session not found for adk_session_id")
+    return WatchSessionSummary(**row)
 
 
 @router.post("/approve/{request_id}", response_model=WatchCommandResponse)
