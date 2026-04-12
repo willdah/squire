@@ -7,7 +7,7 @@ import pytest_asyncio
 from google.genai import types
 
 from squire.database.service import DatabaseService
-from squire.watch import _extract_token_usage_from_event, _persist_watch_metrics
+from squire.watch import _accumulate_token_count, _extract_token_usage_from_event, _persist_watch_metrics
 
 
 @pytest_asyncio.fixture
@@ -30,6 +30,12 @@ def test_extract_token_usage_from_event_with_usage_metadata():
     assert input_tokens == 14
     assert output_tokens == 6
     assert total_tokens == 20
+
+
+def test_accumulate_token_count_sums_across_cycle_events():
+    assert _accumulate_token_count(None, 8) == 8
+    assert _accumulate_token_count(8, 12) == 20
+    assert _accumulate_token_count(20, None) == 20
 
 
 @pytest.mark.asyncio

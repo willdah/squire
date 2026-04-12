@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **API schemas:** Session/message/watch status and watch cycle payloads now include token usage fields for downstream clients
 
+### Fixed
+
+- **Token accounting:** Chat and watch now accumulate token usage across multiple ADK events per turn/cycle, and chat persists token-only assistant turns so session totals do not drop tool-only model usage
+
 ## [0.15.0] — 2026-04-11
 
 ### Added

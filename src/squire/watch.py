@@ -91,6 +91,15 @@ def _extract_token_usage_from_event(event) -> tuple[int | None, int | None, int 
     )
 
 
+def _accumulate_token_count(current: int | None, event_value: int | None) -> int | None:
+    """Accumulate token usage across all events in a cycle."""
+    if event_value is None:
+        return current
+    if current is None:
+        return event_value
+    return current + event_value
+
+
 def _validated_live_watch_updates(
     payload: dict,
     watch_config: WatchConfig,
@@ -792,12 +801,9 @@ async def _run_cycle(
         new_message=message,
     ):
         event_input_tokens, event_output_tokens, event_total_tokens = _extract_token_usage_from_event(event)
-        if event_input_tokens is not None:
-            input_tokens = event_input_tokens
-        if event_output_tokens is not None:
-            output_tokens = event_output_tokens
-        if event_total_tokens is not None:
-            total_tokens = event_total_tokens
+        input_tokens = _accumulate_token_count(input_tokens, event_input_tokens)
+        output_tokens = _accumulate_token_count(output_tokens, event_output_tokens)
+        total_tokens = _accumulate_token_count(total_tokens, event_total_tokens)
 
         if not event.content or not event.content.parts:
             continue
