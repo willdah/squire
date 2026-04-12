@@ -76,8 +76,6 @@ def _should_persist_assistant_turn(
 ) -> bool:
     """Persist assistant messages when there is visible content or token usage."""
     return bool(content) or any(value is not None for value in (input_tokens, output_tokens, total_tokens))
-
-
 class WebApprovalBridge:
     """WebSocket-based approval provider for the risk gate.
 
