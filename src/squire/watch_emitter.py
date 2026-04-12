@@ -17,15 +17,34 @@ class WatchEventEmitter:
 
     def __init__(self, db: DatabaseService) -> None:
         self._db = db
+        self._watch_id: str | None = None
+        self._watch_session_id: str | None = None
 
-    async def _emit(self, cycle: int, type: str, content: str | None = None) -> None:
+    def set_scope(self, *, watch_id: str, watch_session_id: str) -> None:
+        """Set active watch/session identifiers for emitted events."""
+        self._watch_id = watch_id
+        self._watch_session_id = watch_session_id
+
+    async def _emit(self, cycle: int, type: str, content: str | None = None, *, cycle_id: str | None = None) -> None:
         try:
-            await self._db.insert_watch_event(cycle=cycle, type=type, content=content)
+            await self._db.insert_watch_event(
+                cycle=cycle,
+                type=type,
+                content=content,
+                watch_id=self._watch_id,
+                watch_session_id=self._watch_session_id,
+                cycle_id=cycle_id,
+            )
         except Exception:
             logger.debug("Failed to emit watch event type=%s", type, exc_info=True)
 
-    async def emit_cycle_start(self, cycle: int, session_id: str) -> None:
-        await self._emit(cycle, "cycle_start", json.dumps({"session_id": session_id}))
+    async def emit_cycle_start(self, cycle: int, session_id: str, *, cycle_id: str) -> None:
+        await self._emit(
+            cycle,
+            "cycle_start",
+            json.dumps({"session_id": session_id, "watch_session_id": self._watch_session_id, "cycle_id": cycle_id}),
+            cycle_id=cycle_id,
+        )
 
     async def emit_cycle_end(
         self,
@@ -38,6 +57,7 @@ class WatchEventEmitter:
         input_tokens: int | None = None,
         output_tokens: int | None = None,
         total_tokens: int | None = None,
+        cycle_id: str | None = None,
     ) -> None:
         await self._emit(
             cycle,
@@ -54,16 +74,22 @@ class WatchEventEmitter:
                     "total_tokens": total_tokens,
                 }
             ),
+            cycle_id=cycle_id,
         )
 
-    async def emit_token(self, cycle: int, content: str) -> None:
-        await self._emit(cycle, "token", content)
+    async def emit_token(self, cycle: int, content: str, *, cycle_id: str | None = None) -> None:
+        await self._emit(cycle, "token", content, cycle_id=cycle_id)
 
-    async def emit_tool_call(self, cycle: int, tool_name: str, args: dict) -> None:
-        await self._emit(cycle, "tool_call", json.dumps({"name": tool_name, "args": args}))
+    async def emit_tool_call(self, cycle: int, tool_name: str, args: dict, *, cycle_id: str | None = None) -> None:
+        await self._emit(cycle, "tool_call", json.dumps({"name": tool_name, "args": args}), cycle_id=cycle_id)
 
-    async def emit_tool_result(self, cycle: int, tool_name: str, output: str) -> None:
-        await self._emit(cycle, "tool_result", json.dumps({"name": tool_name, "output": output[:500]}))
+    async def emit_tool_result(self, cycle: int, tool_name: str, output: str, *, cycle_id: str | None = None) -> None:
+        await self._emit(
+            cycle,
+            "tool_result",
+            json.dumps({"name": tool_name, "output": output[:500]}),
+            cycle_id=cycle_id,
+        )
 
     async def emit_approval_request(
         self,
@@ -89,8 +115,8 @@ class WatchEventEmitter:
     async def emit_approval_resolved(self, cycle: int, request_id: str, status: str) -> None:
         await self._emit(cycle, "approval_resolved", json.dumps({"request_id": request_id, "status": status}))
 
-    async def emit_error(self, cycle: int, message: str) -> None:
-        await self._emit(cycle, "error", json.dumps({"message": message}))
+    async def emit_error(self, cycle: int, message: str, *, cycle_id: str | None = None) -> None:
+        await self._emit(cycle, "error", json.dumps({"message": message}), cycle_id=cycle_id)
 
     async def emit_session_rotated(self, cycle: int, old_session_id: str, new_session_id: str) -> None:
         await self._emit(
@@ -117,7 +143,17 @@ class WatchEventEmitter:
             ),
         )
 
-    async def emit_incident(self, cycle: int, key: str, severity: str, title: str, detail: str, host: str) -> None:
+    async def emit_incident(
+        self,
+        cycle: int,
+        key: str,
+        severity: str,
+        title: str,
+        detail: str,
+        host: str,
+        *,
+        cycle_id: str | None = None,
+    ) -> None:
         await self._emit(
             cycle,
             "incident",
@@ -130,4 +166,5 @@ class WatchEventEmitter:
                     "host": host,
                 }
             ),
+            cycle_id=cycle_id,
         )

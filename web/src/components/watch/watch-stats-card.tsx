@@ -18,6 +18,7 @@ function formatUptime(startedAt: string | null | undefined): string {
 
 export function WatchStatsCard({ status }: WatchStatsCardProps) {
   const isRunning = status?.status === "running";
+  const cycleCount = Number(status?.cycle || 0);
   const totalActions = Number(status?.total_actions || 0);
   const totalBlocked = Number(status?.total_blocked || 0);
   const totalResolved = Number(status?.total_resolved || 0);
@@ -25,55 +26,48 @@ export function WatchStatsCard({ status }: WatchStatsCardProps) {
   const totalInputTokens = Number(status?.total_input_tokens || 0);
   const totalOutputTokens = Number(status?.total_output_tokens || 0);
   const totalTokens = Number(status?.total_tokens || 0);
+  const pace = `${status?.interval_minutes || "5"}m`;
+
+  const renderMetric = (label: string, value: string | number, mono = false) => (
+    <div className="rounded-lg border border-border/60 bg-background/50 p-2">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={mono ? "font-mono text-xs truncate" : "text-sm font-semibold"}>{value}</p>
+    </div>
+  );
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <h2 className="text-lg font-semibold mb-3">Session Stats</h2>
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div>
-            <span className="text-muted-foreground">Uptime</span>
-            <p>{isRunning ? formatUptime(status?.started_at) : "—"}</p>
+    <Card className="relative h-full overflow-hidden border-border/70 bg-card/95">
+      <div className="pointer-events-none absolute inset-0 opacity-35 [background-image:radial-gradient(circle_at_100%_0%,oklch(0.78_0.12_45/.18),transparent_45%)]" />
+      <CardContent className="relative space-y-4 pt-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-display font-semibold">Status</h2>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Pace</p>
+          <div className="grid grid-cols-3 gap-2">
+            {renderMetric("Uptime", isRunning ? formatUptime(status?.started_at) : "—")}
+            {renderMetric("Cycle count", cycleCount)}
+            {renderMetric("Interval", pace)}
           </div>
-          <div>
-            <span className="text-muted-foreground">Cycles</span>
-            <p>{status?.cycle || "0"}</p>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Events</p>
+          <div className="grid grid-cols-4 gap-2">
+            {renderMetric("Actions", totalActions)}
+            {renderMetric("Blocked", totalBlocked)}
+            {renderMetric("Resolved", totalResolved)}
+            {renderMetric("Escalated", totalEscalated)}
           </div>
-          <div>
-            <span className="text-muted-foreground">Session</span>
-            <p className="font-mono text-xs truncate">{status?.session_id?.slice(0, 8) || "—"}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Interval</span>
-            <p>{status?.interval_minutes || "5"}m</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Actions</span>
-            <p>{totalActions}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Blocked</span>
-            <p>{totalBlocked}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Resolved</span>
-            <p>{totalResolved}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Escalated</span>
-            <p>{totalEscalated}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Input Tokens</span>
-            <p>{totalInputTokens.toLocaleString()}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Output Tokens</span>
-            <p>{totalOutputTokens.toLocaleString()}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Total Tokens</span>
-            <p>{totalTokens.toLocaleString()}</p>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Tokens</p>
+          <div className="grid grid-cols-3 gap-2">
+            {renderMetric("Input", totalInputTokens.toLocaleString())}
+            {renderMetric("Output", totalOutputTokens.toLocaleString())}
+            {renderMetric("Total", totalTokens.toLocaleString())}
           </div>
         </div>
       </CardContent>

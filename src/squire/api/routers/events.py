@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, Depends, Query
 
 from ..dependencies import get_db
-from ..schemas import EventInfo
+from ..schemas import EventInfo, WatchTimelineItem
 
 router = APIRouter()
 
@@ -23,3 +23,21 @@ async def list_events(
 
     rows = await db.get_events(since, category=category, limit=limit)
     return [EventInfo(**r) for r in rows]
+
+
+@router.get("/timeline", response_model=list[WatchTimelineItem])
+async def watch_timeline_events(
+    watch_id: str | None = Query(None, description="Filter by watch ID"),
+    watch_session_id: str | None = Query(None, description="Filter by watch session ID"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(30, ge=1, le=200),
+    db=Depends(get_db),
+):
+    """Unified timeline cards for investigation workbench."""
+    rows = await db.get_watch_activity_timeline(
+        watch_id=watch_id,
+        watch_session_id=watch_session_id,
+        page=page,
+        per_page=per_page,
+    )
+    return [WatchTimelineItem(**r) for r in rows]

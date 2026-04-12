@@ -152,3 +152,109 @@ async def test_watch_cycles_include_token_counts(db):
     assert cycles[0]["input_tokens"] == 42
     assert cycles[0]["output_tokens"] == 17
     assert cycles[0]["total_tokens"] == 59
+
+
+@pytest.mark.asyncio
+async def test_watch_cycles_scoped_by_watch_and_session(db):
+    await db.create_watch_run("watch_a")
+    await db.create_watch_run("watch_b")
+    await db.create_watch_session("wss_a1", watch_id="watch_a", adk_session_id="adk_a1")
+    await db.create_watch_session("wss_b1", watch_id="watch_b", adk_session_id="adk_b1")
+    await db.create_watch_cycle("cyc_a1", watch_id="watch_a", watch_session_id="wss_a1", cycle_number=1)
+    await db.create_watch_cycle("cyc_b1", watch_id="watch_b", watch_session_id="wss_b1", cycle_number=1)
+    await db.close_watch_cycle(
+        "cyc_a1",
+        status="ok",
+        duration_seconds=1.0,
+        tool_count=1,
+        blocked_count=0,
+        remote_tool_count=0,
+        incident_count=1,
+        input_tokens=7,
+        output_tokens=3,
+        total_tokens=10,
+        incident_key="inc-a",
+        outcome={"resolved": True},
+    )
+    await db.close_watch_cycle(
+        "cyc_b1",
+        status="error",
+        duration_seconds=2.0,
+        tool_count=0,
+        blocked_count=0,
+        remote_tool_count=0,
+        incident_count=1,
+        input_tokens=None,
+        output_tokens=None,
+        total_tokens=None,
+        incident_key="inc-b",
+        outcome={"resolved": False},
+        error_reason="timeout",
+    )
+
+    watch_a_cycles = await db.get_watch_cycles(watch_id="watch_a")
+    watch_b_cycles = await db.get_watch_cycles(watch_id="watch_b")
+    assert len(watch_a_cycles) == 1
+    assert len(watch_b_cycles) == 1
+    assert watch_a_cycles[0]["cycle_id"] == "cyc_a1"
+    assert watch_b_cycles[0]["cycle_id"] == "cyc_b1"
+
+
+@pytest.mark.asyncio
+async def test_watch_hierarchy_queries(db):
+    await db.create_watch_run("watch_h1")
+    await db.create_watch_session("wss_h1", watch_id="watch_h1", adk_session_id="adk_h1")
+    await db.create_watch_cycle("cyc_h1", watch_id="watch_h1", watch_session_id="wss_h1", cycle_number=1)
+    await db.close_watch_cycle(
+        "cyc_h1",
+        status="ok",
+        duration_seconds=2.2,
+        tool_count=1,
+        blocked_count=0,
+        remote_tool_count=0,
+        incident_count=1,
+        input_tokens=4,
+        output_tokens=3,
+        total_tokens=7,
+        incident_key="inc-h",
+        outcome={"resolved": True},
+    )
+    await db.create_watch_report(
+        "rep_wh1",
+        watch_id="watch_h1",
+        watch_session_id=None,
+        report_type="watch",
+        status="ok",
+        title="Watch report",
+        digest="Done",
+        report={"run_summary": "done"},
+    )
+    await db.create_watch_report(
+        "rep_sh1",
+        watch_id="watch_h1",
+        watch_session_id="wss_h1",
+        report_type="session",
+        status="ok",
+        title="Session report",
+        digest="Done",
+        report={"executive_summary": "done"},
+    )
+
+    runs = await db.list_watch_runs(page=1, per_page=10)
+    assert len(runs) == 1
+    assert runs[0]["watch_id"] == "watch_h1"
+    assert runs[0]["report_count"] == 2
+    assert runs[0]["watch_report_id"] == "rep_wh1"
+
+    run = await db.get_watch_run("watch_h1")
+    assert run is not None
+    assert run["session_count"] == 1
+
+    sessions = await db.list_watch_sessions_for_run("watch_h1")
+    assert len(sessions) == 1
+    assert sessions[0]["session_report_id"] == "rep_sh1"
+    assert sessions[0]["session_report_title"] == "Session report"
+
+    cycles = await db.list_watch_cycles_for_session("watch_h1", "wss_h1")
+    assert len(cycles) == 1
+    assert cycles[0]["cycle_id"] == "cyc_h1"

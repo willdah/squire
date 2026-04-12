@@ -96,7 +96,7 @@ async def test_watch_cycle_detail(db):
     await db.insert_watch_event(1, "token", "hello")
     await db.insert_watch_event(1, "cycle_end", "{}")
 
-    result = await watch_cycle_detail(cycle=1, db=db)
+    result = await watch_cycle_detail(cycle_id="1", watch_id=None, db=db)
     assert len(result) == 3
 
 
@@ -142,3 +142,122 @@ async def test_watch_delete_cycles(db):
 
     cycles = await db.get_watch_cycles()
     assert cycles == []
+
+
+@pytest.mark.asyncio
+async def test_watch_reports_and_timeline(db):
+    from squire.api.routers.watch import watch_report_detail, watch_reports, watch_timeline
+
+    await db.create_watch_run("watch_1")
+    await db.create_watch_session("wss_1", watch_id="watch_1", adk_session_id="adk_1")
+    await db.create_watch_cycle("cyc_1", watch_id="watch_1", watch_session_id="wss_1", cycle_number=1)
+    await db.close_watch_cycle(
+        "cyc_1",
+        status="ok",
+        duration_seconds=2.0,
+        tool_count=1,
+        blocked_count=0,
+        remote_tool_count=0,
+        incident_count=1,
+        input_tokens=10,
+        output_tokens=5,
+        total_tokens=15,
+        incident_key="disk-pressure",
+        outcome={"resolved": True},
+    )
+    await db.create_watch_report(
+        "rep_1",
+        watch_id="watch_1",
+        watch_session_id="wss_1",
+        report_type="session",
+        status="ok",
+        title="Session report",
+        digest="All good",
+        report={"executive_summary": "All good"},
+    )
+
+    reports = await watch_reports(watch_id="watch_1", watch_session_id=None, page=1, per_page=20, db=db)
+    assert len(reports) == 1
+    assert reports[0].report_id == "rep_1"
+
+    detail = await watch_report_detail(report_id="rep_1", db=db)
+    assert detail.title == "Session report"
+
+    timeline = await watch_timeline(watch_id="watch_1", watch_session_id=None, page=1, per_page=20, db=db)
+    assert any(item.kind == "cycle" for item in timeline)
+    assert any(item.kind == "report" for item in timeline)
+
+
+@pytest.mark.asyncio
+async def test_watch_hierarchy_endpoints_and_report_labels(db):
+    from squire.api.routers.watch import (
+        watch_reports,
+        watch_run_detail,
+        watch_run_session_cycles,
+        watch_run_sessions,
+        watch_runs,
+    )
+
+    await db.create_watch_run("watch_x")
+    await db.create_watch_session("wss_x1", watch_id="watch_x", adk_session_id="adk_x1")
+    await db.create_watch_cycle("cyc_x1", watch_id="watch_x", watch_session_id="wss_x1", cycle_number=1)
+    await db.close_watch_cycle(
+        "cyc_x1",
+        status="ok",
+        duration_seconds=1.8,
+        tool_count=2,
+        blocked_count=0,
+        remote_tool_count=0,
+        incident_count=1,
+        input_tokens=15,
+        output_tokens=9,
+        total_tokens=24,
+        incident_key="disk-pressure",
+        outcome={"resolved": True},
+    )
+    await db.create_watch_report(
+        "rep_watch_x",
+        watch_id="watch_x",
+        watch_session_id=None,
+        report_type="watch",
+        status="ok",
+        title="Watch report",
+        digest="Run complete",
+        report={"run_summary": "Complete"},
+    )
+    await db.create_watch_report(
+        "rep_session_x",
+        watch_id="watch_x",
+        watch_session_id="wss_x1",
+        report_type="session",
+        status="ok",
+        title="Session report",
+        digest="Session complete",
+        report={"executive_summary": "Complete"},
+    )
+
+    runs = await watch_runs(page=1, per_page=20, db=db)
+    assert len(runs) == 1
+    assert runs[0].watch_id == "watch_x"
+    assert runs[0].session_count == 1
+    assert runs[0].cycle_count == 1
+    assert runs[0].report_count == 2
+    assert runs[0].watch_report_id == "rep_watch_x"
+
+    run_detail = await watch_run_detail(watch_id="watch_x", db=db)
+    assert run_detail.watch_id == "watch_x"
+    assert run_detail.report_count == 2
+
+    sessions = await watch_run_sessions(watch_id="watch_x", page=1, per_page=20, db=db)
+    assert len(sessions) == 1
+    assert sessions[0].watch_session_id == "wss_x1"
+    assert sessions[0].session_report_id == "rep_session_x"
+    assert sessions[0].session_report_status == "ok"
+
+    cycles = await watch_run_session_cycles(watch_id="watch_x", watch_session_id="wss_x1", page=1, per_page=20, db=db)
+    assert len(cycles) == 1
+    assert cycles[0].cycle_id == "cyc_x1"
+    assert cycles[0].status == "ok"
+
+    reports = await watch_reports(watch_id="watch_x", watch_session_id=None, page=1, per_page=20, db=db)
+    assert {report.report_type for report in reports} == {"watch", "session"}

@@ -11,14 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Token telemetry:** Provider-reported token usage is now captured per assistant response in chat/watch, aggregated per session/watch session, and exposed in watch cycle summaries (`input`, `output`, `total`)
 - **Web visibility:** Session History, chat message history, Watch stats, and Watch cycle history now display token usage metrics
+- **Watch hierarchy model:** Added persistent `watch_id`, `watch_session_id`, and `cycle_id` entities (`watch_runs`, `watch_sessions`, `watch_cycles`) plus watch/session report storage (`watch_reports`) for unambiguous long-running watch history
+- **Investigation APIs:** Added watch timeline and report retrieval endpoints (`/api/watch/timeline`, `/api/watch/reports`, `/api/watch/reports/{report_id}`) and mirrored timeline feed at `/api/events/timeline`
+- **Reports hierarchy APIs:** Added run/session/cycle hierarchy endpoints for reports exploration (`/api/watch/runs`, `/api/watch/runs/{watch_id}`, `/api/watch/runs/{watch_id}/sessions`, `/api/watch/runs/{watch_id}/sessions/{watch_session_id}/cycles`)
+- **Workbench UI:** Added Investigation Workbench route at `/reports` with timeline cards, tabbed report details (Summary/Evidence/Memory/Recommendations), and deep-link query state for watch/session/cycle/report navigation
 
 ### Changed
 
 - **API schemas:** Session/message/watch status and watch cycle payloads now include token usage fields for downstream clients
+- **Watch event scoping:** Watch event rows now store `watch_id`, `watch_session_id`, and `cycle_id`; websocket streaming and cycle history queries are now scoped to the active watch run
+- **Watch lifecycle:** `squire watch` now creates watch/session/cycle identifiers, persists cycle outcomes into canonical cycle rows, and emits session/watch completion reports for operator-readable summaries
+- **Navigation:** Sidebar Monitoring group now includes Reports; Session History and Watch Cycle History include deep links into the workbench
+- **Reports UX:** Reports page now defaults to hierarchy-first navigation (Watch Runs -> Sessions -> Cycles), shows explicit `Watch Report` vs `Session Report` labels, and keeps timeline as a secondary mode
 
 ### Fixed
 
 - **Token accounting:** Chat and watch now accumulate token usage across multiple ADK events per turn/cycle, and chat persists token-only assistant turns so session totals do not drop tool-only model usage
+- **Cycle history ambiguity:** Cycle listings and details no longer rely solely on recycled cycle numbers; watch/session/cycle identity prevents mixed-session cycle views after rotation
+- **Duplicate report confusion:** Reports are now grouped and labeled by report level/type so valid watch + session reports no longer look like duplicate artifacts
+- **Watch run persistence:** Starting a new watch no longer clears prior watch history; stop/start now appends a fresh watch run instead of overwriting previous runs
 ## [0.15.0] — 2026-04-11
 
 ### Added

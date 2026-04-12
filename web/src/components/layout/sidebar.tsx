@@ -16,6 +16,7 @@ import {
   Eye,
   Wrench,
   Shield,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ConfigDetailResponse } from "@/lib/types";
@@ -27,6 +28,7 @@ const chatNav = [
 
 const monitorNav = [
   { href: "/watch", label: "Watch", icon: Eye },
+  { href: "/reports", label: "Reports", icon: FileText },
   { href: "/activity", label: "Activity", icon: Activity },
 ];
 
