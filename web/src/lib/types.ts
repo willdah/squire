@@ -268,6 +268,13 @@ export interface ConfigDetailResponse {
   toml_path: string | null;
 }
 
+export interface LLMModelsResponse {
+  provider: string;
+  current_model: string;
+  models: string[];
+  error?: string | null;
+}
+
 // WebSocket message types
 export interface WsToken {
   type: "token";

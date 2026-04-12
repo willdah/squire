@@ -281,6 +281,13 @@ class LLMConfigUpdate(BaseModel):
     max_tokens: int | None = None
 
 
+class LLMModelsResponse(BaseModel):
+    provider: str
+    current_model: str
+    models: list[str]
+    error: str | None = None
+
+
 class WatchConfigPatch(BaseModel):
     interval_minutes: int | None = Field(default=None, ge=1)
     max_tool_calls_per_cycle: int | None = Field(default=None, ge=1)

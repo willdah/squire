@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { Lock, Loader2, RotateCcw, Save } from "lucide-react";
-import { apiPatch } from "@/lib/api";
+import { apiGet, apiPatch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Tooltip,
   TooltipContent,
@@ -13,6 +14,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import type { LLMModelsResponse } from "@/lib/types";
 import { ConfigHint, ConfigIntro } from "./config-help";
 
 interface LLMConfigFormProps {
@@ -47,6 +49,10 @@ function apiBaseFromValues(v: unknown): string {
 
 export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMConfigFormProps) {
   const [model, setModel] = useState(String(values.model ?? ""));
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
+  const [modelProvider, setModelProvider] = useState<string>("");
+  const [modelsLoading, setModelsLoading] = useState(true);
+  const [modelLookupError, setModelLookupError] = useState<string | null>(null);
   const [temperature, setTemperature] = useState(Number(values.temperature ?? 0.2));
   const [maxTokens, setMaxTokens] = useState(Number(values.max_tokens ?? 4096));
   const [apiBase, setApiBase] = useState(() => apiBaseFromValues(values.api_base));
@@ -59,6 +65,33 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
     setTemperature(Number(values.temperature ?? 0.2));
     setMaxTokens(Number(values.max_tokens ?? 4096));
     setApiBase(apiBaseFromValues(values.api_base));
+  }, [values.api_base, values.max_tokens, values.model, values.temperature]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setModelsLoading(true);
+    setModelLookupError(null);
+    apiGet<LLMModelsResponse>("/api/config/llm/models")
+      .then((result) => {
+        if (cancelled) return;
+        setModelProvider(result.provider ?? "");
+        const current = String(values.model ?? "");
+        setModelOptions(Array.from(new Set([...(result.models ?? []), current])).filter(Boolean).sort());
+        if (result.error) {
+          setModelLookupError(`Provider model lookup failed: ${result.error}`);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setModelLookupError(err instanceof Error ? err.message : "Failed to load provider models.");
+        setModelOptions([String(values.model ?? "")].filter(Boolean));
+      })
+      .finally(() => {
+        if (!cancelled) setModelsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [values]);
 
   const isLocked = (field: string) => envOverrides.includes(field);
@@ -117,19 +150,33 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
         </ConfigIntro>
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
-            <Label>Model</Label>
+            <Label>Model{modelProvider ? ` (${modelProvider})` : ""}</Label>
             {isLocked("model") && <EnvLock field="model" prefix="SQUIRE_LLM_" />}
           </div>
-          <Input
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            disabled={isLocked("model")}
-            placeholder="e.g. ollama_chat/llama3.1:8b"
-          />
+          {modelsLoading ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading provider models...
+            </div>
+          ) : (
+            <Select value={model} onValueChange={(value) => setModel(value ?? "")}>
+              <SelectTrigger className="w-full font-mono text-xs" disabled={isLocked("model") || modelOptions.length === 0}>
+                <SelectValue placeholder="No models available" />
+              </SelectTrigger>
+              <SelectContent>
+                {modelOptions.map((option) => (
+                  <SelectItem key={option} value={option} className="font-mono text-xs">
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <ConfigHint>
-            LiteLLM string such as <code>ollama_chat/...</code> or <code>gemini/...</code>. Must match a provider you
-            have credentials or local runtime for.
+            Models are loaded from the active provider. Selecting one saves the LiteLLM id (for example{" "}
+            <code>ollama_chat/...</code> or <code>gemini/...</code>).
           </ConfigHint>
+          {modelLookupError && <p className="text-xs text-muted-foreground">{modelLookupError}</p>}
         </div>
 
         <div className="space-y-2">

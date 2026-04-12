@@ -3,15 +3,16 @@
 /* eslint-disable @next/next/no-img-element */
 import { Suspense, startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet, apiPatch, apiPost } from "@/lib/api";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { MessageList, type ChatMessage, type AgentState } from "@/components/chat/message-list";
 import { ChatInput, type ChatInputHandle } from "@/components/chat/chat-input";
 import { ApprovalDialog } from "@/components/chat/approval-dialog";
-import type { MessageInfo, WsApprovalRequest } from "@/lib/types";
+import type { ConfigDetailResponse, LLMModelsResponse, MessageInfo, WsApprovalRequest } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { SquarePen } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Check, Loader2, SquarePen } from "lucide-react";
 
 const SESSION_KEY = "squire_chat_session";
 
@@ -20,6 +21,18 @@ const suggestions = [
   "Check containers",
   "List alerts",
 ];
+
+function configErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) return "Failed to update model.";
+  const body = error.message.match(/^API error \d+: (.*)$/)?.[1];
+  if (!body) return error.message;
+  try {
+    const parsed = JSON.parse(body) as { detail?: string };
+    return parsed.detail ?? error.message;
+  } catch {
+    return error.message;
+  }
+}
 
 export default function ChatPage() {
   return (
@@ -108,6 +121,13 @@ function ChatPageInner() {
     useState<WsApprovalRequest | null>(null);
   const [agentState, setAgentState] = useState<AgentState>(null);
   const [activeToolName, setActiveToolName] = useState<string | undefined>();
+  const [activeModel, setActiveModel] = useState("");
+  const [selectedModel, setSelectedModel] = useState("");
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
+  const [modelProvider, setModelProvider] = useState<string>("");
+  const [modelLoading, setModelLoading] = useState(true);
+  const [modelSaving, setModelSaving] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
 
   // Track streaming state with a ref to avoid closure staleness
   const chatInputRef = useRef<ChatInputHandle>(null);
@@ -147,7 +167,37 @@ function ChatPageInner() {
   }, [sessionId]);
 
   const wsQueryParams = skillName ? { skill: skillName } : undefined;
-  const { status, send, setOnMessage } = useWebSocket(sessionId, wsQueryParams);
+  const { status, send, setOnMessage, reconnect } = useWebSocket(sessionId, wsQueryParams);
+
+  useEffect(() => {
+    let cancelled = false;
+    setModelLoading(true);
+    Promise.all([
+      apiGet<ConfigDetailResponse>("/api/config"),
+      apiGet<LLMModelsResponse>("/api/config/llm/models"),
+    ])
+      .then(([config, modelsResponse]) => {
+        if (cancelled) return;
+        const model = String(config.llm?.values?.model ?? modelsResponse.current_model ?? "");
+        setActiveModel(model);
+        setSelectedModel(model);
+        setModelProvider(modelsResponse.provider);
+        setModelOptions(Array.from(new Set([...(modelsResponse.models ?? []), model])).sort());
+        if (modelsResponse.error) {
+          setModelError(`Model provider lookup failed: ${modelsResponse.error}`);
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setModelError(configErrorMessage(error));
+      })
+      .finally(() => {
+        if (!cancelled) setModelLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Handle incoming WS messages
   useEffect(() => {
@@ -342,6 +392,44 @@ function ChatPageInner() {
     requestAnimationFrame(() => chatInputRef.current?.focus());
   }, [router]);
 
+  const handleSaveModel = useCallback(async () => {
+    const candidate = selectedModel.trim();
+    if (!candidate) {
+      setModelError("Model cannot be empty.");
+      return;
+    }
+    if (candidate === activeModel) {
+      setModelError(null);
+      return;
+    }
+
+    setModelSaving(true);
+    setModelError(null);
+    try {
+      await apiPatch("/api/config/llm?persist=true", { model: candidate });
+      setActiveModel(candidate);
+      setSelectedModel(candidate);
+      reconnect();
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: nextId(),
+          role: "system",
+          content: `Model switched to ${candidate}. Reconnected this chat to use the new model.`,
+        },
+      ]);
+    } catch (error) {
+      const message = configErrorMessage(error);
+      if (message.includes("Cannot update env-var-overridden fields")) {
+        setModelError("Model is locked by SQUIRE_LLM_MODEL. Update the environment variable to change it.");
+      } else {
+        setModelError(message);
+      }
+    } finally {
+      setModelSaving(false);
+    }
+  }, [activeModel, reconnect, selectedModel]);
+
   if (!sessionId) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -357,10 +445,51 @@ function ChatPageInner() {
       <div className="flex items-center gap-2 px-4 py-2 border-b border-border/60 shrink-0 bg-card/80">
         <h1 className="text-base font-display font-semibold">Chat</h1>
         <ConnectionDot status={status} />
+        <div className="ml-3 flex items-center gap-2 min-w-0">
+          <span className="text-xs text-muted-foreground">
+            Model{modelProvider ? ` (${modelProvider})` : ""}
+          </span>
+          {modelLoading ? (
+            <Skeleton className="h-6 w-40" />
+          ) : (
+            <>
+              <Select value={selectedModel} onValueChange={(value) => setSelectedModel(value ?? "")}>
+                <SelectTrigger
+                  className="h-8 w-[20rem] min-w-40 text-xs font-mono"
+                  aria-label="Active model"
+                  disabled={modelSaving || modelOptions.length === 0}
+                >
+                  <SelectValue placeholder="No models available" />
+                </SelectTrigger>
+                <SelectContent>
+                  {modelOptions.map((model) => (
+                    <SelectItem key={model} value={model} className="font-mono text-xs">
+                      {model}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleSaveModel}
+                disabled={modelSaving || !selectedModel || selectedModel === activeModel}
+                aria-label="Save model"
+              >
+                {modelSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              </Button>
+            </>
+          )}
+        </div>
         <Button variant="ghost" size="icon" onClick={handleNewChat} className="ml-auto">
           <SquarePen className="h-4 w-4" />
         </Button>
       </div>
+      {modelError && (
+        <div className="px-4 py-1 border-b border-border/40 text-xs text-destructive bg-destructive/5">
+          {modelError}
+        </div>
+      )}
 
       {hasMessages ? (
         <MessageList messages={messages} agentState={agentState} activeToolName={activeToolName} onStop={handleStop} />
