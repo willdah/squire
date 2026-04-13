@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "squire"
-version = "0.16.0"
+version = "0.17.0"
 description = "An AI agent that monitors and manages your homelab."
 authors = [{name = "Will Ahern"}]
 readme = "README.md"
