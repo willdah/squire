@@ -4,6 +4,7 @@ These are set during the app lifespan and retrieved via FastAPI's dependency
 injection. Tools also receive these via the global tool registry.
 """
 
+from squire.adk.runtime import AdkRuntime
 from squire.config import AppConfig, DatabaseConfig, GuardrailsConfig, LLMConfig, NotificationsConfig, WatchConfig
 from squire.config.skills import SkillsConfig
 from squire.database.service import DatabaseService
@@ -17,6 +18,7 @@ db: DatabaseService | None = None
 registry: BackendRegistry | None = None
 notifier: NotificationRouter | None = None
 skills_service: SkillService | None = None
+adk_runtime: AdkRuntime | None = None
 
 # Configs — loaded once at startup
 app_config: AppConfig | None = None
@@ -57,6 +59,12 @@ def get_app_config() -> AppConfig:
     if app_config is None:
         raise RuntimeError("AppConfig not loaded")
     return app_config
+
+
+def get_adk_runtime() -> AdkRuntime:
+    if adk_runtime is None:
+        raise RuntimeError("AdkRuntime not initialized")
+    return adk_runtime
 
 
 def get_llm_config() -> LLMConfig:

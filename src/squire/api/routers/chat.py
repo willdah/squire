@@ -7,19 +7,20 @@ import re
 import uuid
 from typing import Any
 
-from agent_risk_engine import RiskEvaluator, RuleGate
+from agent_risk_engine import RuleGate
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from google.adk.agents.run_config import RunConfig, StreamingMode
-from google.adk.apps import App
-from google.adk.runners import InMemoryRunner
+from google.adk.runners import Runner
 from google.genai import types
 
+from ...adk.session_state import build_chat_session_state
 from ...agents import create_squire_agent
-from ...callbacks.risk_gate import ADK_INTERNAL_TOOLS, build_pattern_analyzer, create_risk_gate
+from ...callbacks.risk_gate import create_risk_gate, is_adk_internal_tool
+from ...tokens import coalesce_token_count, extract_token_usage_from_event
 from ...tools import TOOL_RISK_LEVELS
 from ...types import RiskGateFactory
 from .. import dependencies as deps
-from ..dependencies import get_app_config, get_db, get_llm_config, get_registry
+from ..dependencies import get_adk_runtime, get_app_config, get_db
 from ..schemas import ChatSessionResponse
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ router = APIRouter()
 _EVENT_LOG_DETAIL_MAX = 500
 
 _SKILL_COMPLETE_RE = re.compile(r"\[SKILL\s+COMPLETE\]", re.IGNORECASE)
+_SQL_BACKFILL_MARKER = "sql_history_backfilled_v1"
 
 _RAW_TOOL_CALL_RE = re.compile(r'\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}')
 
@@ -53,23 +55,12 @@ def _strip_raw_tool_calls(text: str) -> str:
 
 def _extract_token_usage_from_event(event: Any) -> tuple[int | None, int | None, int | None]:
     """Extract provider-reported token usage from an ADK event."""
-    usage = getattr(event, "usage_metadata", None)
-    if not usage:
-        return None, None, None
-    return (
-        getattr(usage, "prompt_token_count", None),
-        getattr(usage, "candidates_token_count", None),
-        getattr(usage, "total_token_count", None),
-    )
+    return extract_token_usage_from_event(event)
 
 
 def _accumulate_token_count(current: int | None, event_value: int | None) -> int | None:
-    """Accumulate token usage across all events in a single turn."""
-    if event_value is None:
-        return current
-    if current is None:
-        return event_value
-    return current + event_value
+    """Track the latest non-null token usage from streaming events."""
+    return coalesce_token_count(current, event_value)
 
 
 def _should_persist_assistant_turn(
@@ -80,6 +71,59 @@ def _should_persist_assistant_turn(
 ) -> bool:
     """Persist assistant messages when there is visible content or token usage."""
     return bool(content) or any(value is not None for value in (input_tokens, output_tokens, total_tokens))
+
+
+def _session_event_count(session: Any) -> int:
+    """Best-effort count of events present on an ADK session object."""
+    events = getattr(session, "events", None)
+    if isinstance(events, list):
+        return len(events)
+    return 0
+
+
+async def _maybe_backfill_history_from_db(
+    *,
+    session: Any,
+    runner: Runner,
+    db: Any,
+    agent_name: str,
+) -> None:
+    """Replay DB messages into ADK session when durable history is missing."""
+    if not db:
+        return
+    state = getattr(session, "state", {})
+    if state.get(_SQL_BACKFILL_MARKER):
+        return
+    if _session_event_count(session) > 0:
+        state[_SQL_BACKFILL_MARKER] = True
+        return
+
+    prior = await db.get_messages(session.id, limit=5000)
+    if not prior:
+        state[_SQL_BACKFILL_MARKER] = True
+        return
+
+    from google.adk.events.event import Event
+
+    replayed = 0
+    for msg in prior:
+        content_text = msg.get("content", "")
+        if not content_text:
+            continue
+        role = msg.get("role", "user")
+        event = Event(
+            author="user" if role == "user" else agent_name,
+            invocation_id=Event.new_id(),
+            content=types.Content(
+                role=role,
+                parts=[types.Part(text=content_text)],
+            ),
+        )
+        await runner.session_service.append_event(session, event)
+        replayed += 1
+
+    state[_SQL_BACKFILL_MARKER] = True
+    logger.info("Backfilled %d conversation events into ADK session %s", replayed, session.id)
 
 
 class WebApprovalBridge:
@@ -129,62 +173,19 @@ class WebApprovalBridge:
 @router.post("/sessions", response_model=ChatSessionResponse, status_code=201)
 async def create_chat_session(
     app_config=Depends(get_app_config),
-    llm_config=Depends(get_llm_config),
     db=Depends(get_db),
-    registry=Depends(get_registry),
+    runtime=Depends(get_adk_runtime),
 ):
     """Create a new chat session, returning a session_id for the WebSocket."""
-    from ..app import get_latest_snapshot
-
-    # Build a temporary agent and runner for this session.
-    # No approval bridge yet — it's wired in when the WebSocket connects.
-    # For multi-agent mode, provide a no-op risk gate factory.
-    def _placeholder_risk_gate(tool_risk_levels: dict[str, int]):
-        return create_risk_gate(tool_risk_levels=tool_risk_levels)
-
-    if app_config.multi_agent:
-        agent = create_squire_agent(
-            app_config=app_config,
-            llm_config=llm_config,
-            risk_gate_factory=_placeholder_risk_gate,
-        )
-    else:
-        agent = create_squire_agent(
-            app_config=app_config,
-            llm_config=llm_config,
-            before_tool_callback=create_risk_gate(tool_risk_levels=TOOL_RISK_LEVELS),
-        )
-    adk_app = App(name=app_config.app_name, root_agent=agent)
-    runner = InMemoryRunner(app_name=app_config.app_name, app=adk_app)
-
-    # Build risk evaluation pipeline
-    guardrails = deps.guardrails
-    rule_gate = RuleGate(
-        threshold=guardrails.risk_tolerance,
-        strict=guardrails.risk_strict,
-        allowed=set(guardrails.tools_allow),
-        approve=set(guardrails.tools_require_approval),
-        denied=set(guardrails.tools_deny),
-    )
-    risk_evaluator = RiskEvaluator(rule_gate=rule_gate, analyzer=build_pattern_analyzer())
-
-    snapshot = await get_latest_snapshot()
-    session_state = {
-        "risk_evaluator": risk_evaluator,
-        "risk_tolerance": rule_gate.threshold,
-        "latest_snapshot": snapshot,
-        "available_hosts": registry.host_names,
-        "host_configs": {name: cfg.model_dump() for name, cfg in registry.host_configs.items()},
-    }
-
-    session = await runner.session_service.create_session(
+    session_id = str(uuid.uuid4())
+    await runtime.session_service.create_session(
         app_name=app_config.app_name,
         user_id=app_config.user_id,
-        state=session_state,
+        state={},
+        session_id=session_id,
     )
-    await db.create_session(session.id)
-
-    return ChatSessionResponse(session_id=session.id)
+    await db.create_session(session_id)
+    return ChatSessionResponse(session_id=session_id)
 
 
 @router.websocket("/ws/{session_id}")
@@ -204,6 +205,7 @@ async def chat_websocket(
     app_config = deps.get_app_config()
     llm_config = deps.get_llm_config()
     registry = deps.get_registry()
+    runtime = deps.get_adk_runtime()
     db = deps.db
     notifier = deps.notifier
 
@@ -237,7 +239,7 @@ async def chat_websocket(
 
         def _resolve_threshold(name: str) -> int | None:
             tol = agent_tolerances.get(name)
-            return RuleGate(threshold=tol).threshold if tol else None
+            return RuleGate(threshold=tol).threshold if tol is not None else None
 
         def _per_agent_factory(agent_name: str) -> RiskGateFactory:
             threshold = _resolve_threshold(agent_name)
@@ -267,8 +269,10 @@ async def chat_websocket(
             before_tool_callback=risk_gate_callback,
         )
 
+    from google.adk.apps import App
+
     adk_app = App(name=app_config.app_name, root_agent=agent)
-    runner = InMemoryRunner(app_name=app_config.app_name, app=adk_app)
+    runner = runtime.create_runner(app=adk_app)
 
     # Build session state
     guardrails = deps.guardrails
@@ -279,20 +283,20 @@ async def chat_websocket(
         approve=set(guardrails.tools_require_approval),
         denied=set(guardrails.tools_deny),
     )
-    risk_evaluator = RiskEvaluator(rule_gate=rule_gate, analyzer=build_pattern_analyzer())
     snapshot = await get_latest_snapshot()
 
-    session_state = {
-        "risk_evaluator": risk_evaluator,
-        "risk_tolerance": rule_gate.threshold,
-        "latest_snapshot": snapshot,
-        "available_hosts": registry.host_names,
-        "host_configs": {name: cfg.model_dump() for name, cfg in registry.host_configs.items()},
-    }
+    session_state = build_chat_session_state(
+        latest_snapshot=snapshot,
+        available_hosts=registry.host_names,
+        host_configs={name: cfg.model_dump() for name, cfg in registry.host_configs.items()},
+        risk_tolerance=rule_gate.threshold,
+        risk_strict=guardrails.risk_strict,
+        risk_allowed_tools=set(guardrails.tools_allow),
+        risk_approval_tools=set(guardrails.tools_require_approval),
+        risk_denied_tools=set(guardrails.tools_deny),
+    )
 
     # Load skill context into session state if a skill name was provided.
-    # This MUST happen before create_session because InMemorySessionService
-    # deep-copies the state dict — later mutations won't be visible.
     skill_active = False
     if skill_name and deps.skills_service:
         skill_data = deps.skills_service.get_skill(skill_name)
@@ -307,35 +311,26 @@ async def chat_websocket(
         else:
             logger.warning("Skill '%s' not found or has no instructions", skill_name)
 
-    session = await runner.session_service.create_session(
+    session = await runtime.get_or_create_session(
         app_name=app_config.app_name,
         user_id=app_config.user_id,
-        state=session_state,
         session_id=session_id,
+        state=session_state,
     )
-
-    # Replay prior messages so the LLM has context
+    session.state.update(session_state)
+    if not skill_active:
+        session.state.pop("active_skill", None)
     if db:
-        prior = await db.get_messages(session_id)
-        if prior:
-            for msg in prior:
-                content_text = msg.get("content", "")
-                if not content_text:
-                    continue
-                role = msg.get("role", "user")
-                from google.adk.events.event import Event
-
-                event = Event(
-                    author="user" if role == "user" else agent.name,
-                    invocation_id=Event.new_id(),
-                    content=types.Content(
-                        role=role,
-                        parts=[types.Part(text=content_text)],
-                    ),
-                )
-                await runner.session_service.append_event(session, event)
+        await db.update_session_active(session_id)
+        await _maybe_backfill_history_from_db(
+            session=session,
+            runner=runner,
+            db=db,
+            agent_name=agent.name,
+        )
 
     streaming_task: asyncio.Task | None = None
+    stream_stop_event: asyncio.Event | None = None
 
     try:
         while True:
@@ -353,6 +348,8 @@ async def chat_websocket(
                 continue
 
             if msg_type == "stop_generation":
+                if stream_stop_event is not None:
+                    stream_stop_event.set()
                 if streaming_task and not streaming_task.done():
                     streaming_task.cancel()
                 continue
@@ -372,6 +369,7 @@ async def chat_websocket(
 
                 # Stream the agent response as a background task so the
                 # receive loop stays active for approval_response messages.
+                stream_stop_event = asyncio.Event()
                 streaming_task = asyncio.create_task(
                     _stream_response(
                         websocket=websocket,
@@ -383,6 +381,7 @@ async def chat_websocket(
                         db=db,
                         notifier=notifier,
                         skill_active=skill_active,
+                        stop_requested=stream_stop_event,
                     )
                 )
                 # Only auto-continue for the first message (skill execution).
@@ -403,7 +402,7 @@ async def chat_websocket(
 
 async def _stream_response(
     websocket: WebSocket,
-    runner: InMemoryRunner,
+    runner: Runner,
     session,
     agent,
     user_text: str,
@@ -411,6 +410,7 @@ async def _stream_response(
     db,
     notifier,
     skill_active: bool = False,
+    stop_requested: asyncio.Event | None = None,
 ) -> None:
     """Run the agent and stream response tokens over WebSocket.
 
@@ -424,6 +424,7 @@ async def _stream_response(
     try:
         all_response_text = ""
         prev_response = ""
+        completion_sent = False
 
         for turn in range(max_turns):
             turn_response, tools_used, input_tokens, output_tokens, total_tokens = await _run_single_turn(
@@ -434,7 +435,13 @@ async def _stream_response(
                 user_text=current_text,
                 app_config=app_config,
                 db=db,
+                stop_requested=stop_requested,
             )
+            if stop_requested is not None and stop_requested.is_set():
+                if not completion_sent:
+                    await websocket.send_json({"type": "message_complete", "content": "", "stopped": True})
+                    completion_sent = True
+                break
 
             # Persist assistant response
             if db and _should_persist_assistant_turn(turn_response, input_tokens, output_tokens, total_tokens):
@@ -451,9 +458,11 @@ async def _stream_response(
             # If this is not a skill session or we've exhausted turns, stop.
             if not skill_active or turn >= max_turns - 1:
                 await websocket.send_json({"type": "message_complete", "content": turn_response})
+                completion_sent = True
                 break
 
             await websocket.send_json({"type": "message_complete", "content": turn_response})
+            completion_sent = True
 
             all_response_text += "\n" + turn_response
 
@@ -495,12 +504,13 @@ async def _stream_response(
 
 async def _run_single_turn(
     websocket: WebSocket,
-    runner: InMemoryRunner,
+    runner: Runner,
     session,
     agent,
     user_text: str,
     app_config,
     db,
+    stop_requested: asyncio.Event | None = None,
 ) -> tuple[str, bool, int | None, int | None, int | None]:
     """Run one agent turn and stream events over the WebSocket.
 
@@ -522,6 +532,8 @@ async def _run_single_turn(
         new_message=message,
         run_config=run_config,
     ):
+        if stop_requested is not None and stop_requested.is_set():
+            break
         event_input_tokens, event_output_tokens, event_total_tokens = _extract_token_usage_from_event(event)
         input_tokens = _accumulate_token_count(input_tokens, event_input_tokens)
         output_tokens = _accumulate_token_count(output_tokens, event_output_tokens)
@@ -541,7 +553,9 @@ async def _run_single_turn(
                 # concatenating prior sub-agent text into
                 # message_complete).
                 response_parts = []
-                if fc.name in ADK_INTERNAL_TOOLS:
+                if is_adk_internal_tool(fc.name):
+                    continue
+                if stop_requested is not None and stop_requested.is_set():
                     continue
                 tools_called = True
                 request_id = str(uuid.uuid4())
@@ -565,7 +579,9 @@ async def _run_single_turn(
             elif part.function_response:
                 fr = part.function_response
                 response_parts = []
-                if fr.name in ADK_INTERNAL_TOOLS:
+                if is_adk_internal_tool(fr.name):
+                    continue
+                if stop_requested is not None and stop_requested.is_set():
                     continue
                 output_text = str(fr.response) if fr.response is not None else ""
                 clipped = output_text[:_EVENT_LOG_DETAIL_MAX]
@@ -587,10 +603,14 @@ async def _run_single_turn(
                     )
 
             elif part.text and event.partial:
+                if stop_requested is not None and stop_requested.is_set():
+                    continue
                 response_parts.append(part.text)
                 await websocket.send_json({"type": "token", "content": part.text})
 
             elif part.text and event.is_final_response():
+                if stop_requested is not None and stop_requested.is_set():
+                    continue
                 final_text = part.text
                 streamed = "".join(response_parts)
                 if final_text and final_text != streamed:

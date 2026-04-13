@@ -11,8 +11,8 @@ from typing import Any, Protocol, runtime_checkable
 class ApprovalProvider(Protocol):
     """Protocol for requesting user approval of a tool execution.
 
-    Implementations must be thread-safe — the risk gate callback runs
-    inside an ADK worker thread, not the main event loop.
+    Synchronous implementations should avoid blocking for long periods.
+    Event-loop-based frontends should implement ``AsyncApprovalProvider``.
     """
 
     def request_approval(self, tool_name: str, args: dict[str, Any], risk_level: int) -> bool:

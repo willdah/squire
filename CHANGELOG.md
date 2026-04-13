@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **ADK runtime:** Added a shared ADK runtime layer (`Runner` + `SqliteSessionService`) and serializable session-state builders for chat/watch flows
+- **Tests:** Added durable ADK runtime coverage (`tests/test_adk_runtime.py`) and new stop/cooldown/escalation regression checks across chat, watch, and risk-gate tests
+
+### Changed
+
+- **Chat sessions:** `POST /api/chat/sessions` now creates durable ADK sessions without temporary in-memory runners, and chat websocket execution now uses the shared SQLite-backed ADK runtime
+- **Risk gate state model:** Risk evaluation now derives from JSON-safe session state fields instead of relying on persisted `RiskEvaluator` Python objects
+- **Watch runtime:** Watch mode now uses durable ADK sessions and rotates sessions when context event count exceeds `max_context_events` rather than mutating private in-memory ADK storage
+- **Stop generation UX:** Chat stop handling now suppresses post-stop stream/tool emissions server-side and honors backend `stopped` completion semantics in the web client
+- **Token accounting:** Chat/watch token aggregation now tracks the latest non-null provider usage values from stream events instead of summing every event payload
+
+### Fixed
+
+- **Bootstrap safety:** Replaced module import-time event-loop `run_until_complete` usage in `squire.agent` with safer async initialization that avoids nested-loop failures
+- **Approval docs:** Updated approval protocol docs to reflect current async approval execution behavior
+- **ADK session storage:** Runtime now uses a dedicated ADK session SQLite file (`*.adk_sessions.db`) instead of reusing the main Squire app DB, avoiding schema conflicts at web/watch startup
+- **ADK bootstrap hosts:** `squire.agent` now guarantees managed-host loading even when imported from an already-running event loop
+- **Watch context rotation:** `max_context_events` checks now re-fetch session state from ADK session storage before counting events, improving reliability with durable SQLite-backed sessions
+- **Session clear/delete parity:** Session API/CLI deletion now purges durable ADK session records alongside SQL conversation rows
+
+## [0.16.0] — 2026-04-12
+
+### Added
+
 - **Token telemetry:** Provider-reported token usage is now captured per assistant response in chat/watch, aggregated per session/watch session, and exposed in watch cycle summaries (`input`, `output`, `total`)
 - **Web visibility:** Session History, chat message history, Watch stats, and Watch cycle history now display token usage metrics
 - **Watch hierarchy model:** Added persistent `watch_id`, `watch_session_id`, and `cycle_id` entities (`watch_runs`, `watch_sessions`, `watch_cycles`) plus watch/session report storage (`watch_reports`) for unambiguous long-running watch history

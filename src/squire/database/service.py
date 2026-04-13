@@ -589,6 +589,13 @@ class DatabaseService:
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
+    async def list_all_session_ids(self) -> list[str]:
+        """List all chat session IDs without applying a limit."""
+        conn = await self._get_conn()
+        cursor = await conn.execute("SELECT session_id FROM sessions")
+        rows = await cursor.fetchall()
+        return [str(row["session_id"]) for row in rows if row["session_id"]]
+
     async def delete_session(self, session_id: str) -> bool:
         """Delete a session and its messages. Returns True if a session was deleted."""
         conn = await self._get_conn()

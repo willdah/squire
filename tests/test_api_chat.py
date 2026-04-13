@@ -1,12 +1,16 @@
 """Tests for chat token usage extraction and persistence guards."""
 
+import asyncio
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 from google.genai import types
 
 from squire.api.routers.chat import (
     _accumulate_token_count,
     _extract_token_usage_from_event,
+    _maybe_backfill_history_from_db,
+    _run_single_turn,
     _should_persist_assistant_turn,
 )
 
@@ -36,9 +40,9 @@ def test_extract_token_usage_from_event_without_usage_metadata():
     assert total_tokens is None
 
 
-def test_accumulate_token_count_sums_across_events():
+def test_accumulate_token_count_uses_latest_non_null_value():
     assert _accumulate_token_count(None, 10) == 10
-    assert _accumulate_token_count(10, 5) == 15
+    assert _accumulate_token_count(10, 5) == 5
     assert _accumulate_token_count(15, None) == 15
 
 
@@ -54,3 +58,111 @@ def test_should_persist_assistant_turn_for_token_only_usage():
 
 def test_should_not_persist_empty_turn_without_tokens():
     assert _should_persist_assistant_turn("", None, None, None) is False
+
+
+class _FakeRunner:
+    def __init__(self, events):
+        self._events = events
+
+    async def run_async(self, **kwargs):
+        for event in self._events:
+            yield event
+
+
+def _text_event(text: str, *, partial: bool, final: bool):
+    part = SimpleNamespace(
+        thought=False,
+        function_call=None,
+        function_response=None,
+        text=text,
+    )
+    return SimpleNamespace(
+        usage_metadata=None,
+        partial=partial,
+        content=SimpleNamespace(parts=[part]),
+        is_final_response=lambda: final,
+    )
+
+
+def test_run_single_turn_honors_stop_requested():
+    stop_requested = asyncio.Event()
+    stop_requested.set()
+    runner = _FakeRunner([_text_event("hello", partial=True, final=False)])
+    websocket = AsyncMock()
+    session = SimpleNamespace(id="sid")
+    app_config = SimpleNamespace(user_id="uid")
+
+    response, tools_called, *_ = asyncio.run(
+        _run_single_turn(
+            websocket=websocket,
+            runner=runner,
+            session=session,
+            agent=SimpleNamespace(name="Squire"),
+            user_text="hi",
+            app_config=app_config,
+            db=None,
+            stop_requested=stop_requested,
+        )
+    )
+    assert response == ""
+    assert tools_called is False
+    websocket.send_json.assert_not_called()
+
+
+def test_backfill_replays_db_messages_when_session_has_no_events():
+    class _Db:
+        async def get_messages(self, session_id: str, limit: int = 100):
+            return [
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi"},
+            ]
+
+    class _SessionService:
+        def __init__(self):
+            self.appended = []
+
+        async def append_event(self, session, event):
+            self.appended.append(event)
+
+    session_service = _SessionService()
+    runner = SimpleNamespace(session_service=session_service)
+    session = SimpleNamespace(id="sid", state={}, events=[])
+
+    asyncio.run(
+        _maybe_backfill_history_from_db(
+            session=session,
+            runner=runner,
+            db=_Db(),
+            agent_name="Squire",
+        )
+    )
+    assert len(session_service.appended) == 2
+    assert session.state.get("sql_history_backfilled_v1") is True
+
+
+def test_backfill_skips_when_session_already_has_events():
+    class _Db:
+        async def get_messages(self, session_id: str, limit: int = 100):
+            return [{"role": "user", "content": "hello"}]
+
+    class _SessionService:
+        def __init__(self):
+            self.appended = []
+
+        async def append_event(self, session, event):
+            self.appended.append(event)
+
+    session_service = _SessionService()
+    runner = SimpleNamespace(session_service=session_service)
+    session = SimpleNamespace(id="sid", state={}, events=[object()])
+
+    asyncio.run(
+        _maybe_backfill_history_from_db(
+            session=session,
+            runner=runner,
+            db=_Db(),
+            agent_name="Squire",
+        )
+    )
+    assert session_service.appended == []
+    assert session.state.get("sql_history_backfilled_v1") is True

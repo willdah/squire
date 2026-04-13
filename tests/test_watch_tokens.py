@@ -32,9 +32,9 @@ def test_extract_token_usage_from_event_with_usage_metadata():
     assert total_tokens == 20
 
 
-def test_accumulate_token_count_sums_across_cycle_events():
+def test_accumulate_token_count_uses_latest_non_null_value():
     assert _accumulate_token_count(None, 8) == 8
-    assert _accumulate_token_count(8, 12) == 20
+    assert _accumulate_token_count(8, 12) == 12
     assert _accumulate_token_count(20, None) == 20
 
 

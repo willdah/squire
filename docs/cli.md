@@ -227,7 +227,7 @@ Displays a table with session ID, creation time, last activity, and a preview of
 
 #### `squire sessions clear`
 
-Delete all chat sessions and their messages.
+Delete all chat sessions and their messages, and purge durable ADK session state.
 
 ```bash
 squire sessions clear         # prompts for confirmation

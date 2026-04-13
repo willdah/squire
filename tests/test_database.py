@@ -135,6 +135,14 @@ async def test_delete_all_sessions_empty(db):
 
 
 @pytest.mark.asyncio
+async def test_list_all_session_ids(db):
+    await db.create_session("sess-a")
+    await db.create_session("sess-b")
+    ids = await db.list_all_session_ids()
+    assert sorted(ids) == ["sess-a", "sess-b"]
+
+
+@pytest.mark.asyncio
 async def test_list_sessions_includes_token_totals(db):
     await db.create_session("sess-tokens")
     await db.save_message(
