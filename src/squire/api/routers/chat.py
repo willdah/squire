@@ -31,6 +31,7 @@ router = APIRouter()
 _EVENT_LOG_DETAIL_MAX = 500
 
 _SKILL_COMPLETE_RE = re.compile(r"\[SKILL\s+COMPLETE\]", re.IGNORECASE)
+_SQL_BACKFILL_MARKER = "sql_history_backfilled_v1"
 
 _RAW_TOOL_CALL_RE = re.compile(r'\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}')
 
@@ -70,6 +71,59 @@ def _should_persist_assistant_turn(
 ) -> bool:
     """Persist assistant messages when there is visible content or token usage."""
     return bool(content) or any(value is not None for value in (input_tokens, output_tokens, total_tokens))
+
+
+def _session_event_count(session: Any) -> int:
+    """Best-effort count of events present on an ADK session object."""
+    events = getattr(session, "events", None)
+    if isinstance(events, list):
+        return len(events)
+    return 0
+
+
+async def _maybe_backfill_history_from_db(
+    *,
+    session: Any,
+    runner: Runner,
+    db: Any,
+    agent_name: str,
+) -> None:
+    """Replay DB messages into ADK session when durable history is missing."""
+    if not db:
+        return
+    state = getattr(session, "state", {})
+    if state.get(_SQL_BACKFILL_MARKER):
+        return
+    if _session_event_count(session) > 0:
+        state[_SQL_BACKFILL_MARKER] = True
+        return
+
+    prior = await db.get_messages(session.id, limit=5000)
+    if not prior:
+        state[_SQL_BACKFILL_MARKER] = True
+        return
+
+    from google.adk.events.event import Event
+
+    replayed = 0
+    for msg in prior:
+        content_text = msg.get("content", "")
+        if not content_text:
+            continue
+        role = msg.get("role", "user")
+        event = Event(
+            author="user" if role == "user" else agent_name,
+            invocation_id=Event.new_id(),
+            content=types.Content(
+                role=role,
+                parts=[types.Part(text=content_text)],
+            ),
+        )
+        await runner.session_service.append_event(session, event)
+        replayed += 1
+
+    state[_SQL_BACKFILL_MARKER] = True
+    logger.info("Backfilled %d conversation events into ADK session %s", replayed, session.id)
 
 
 class WebApprovalBridge:
@@ -268,6 +322,12 @@ async def chat_websocket(
         session.state.pop("active_skill", None)
     if db:
         await db.update_session_active(session_id)
+        await _maybe_backfill_history_from_db(
+            session=session,
+            runner=runner,
+            db=db,
+            agent_name=agent.name,
+        )
 
     streaming_task: asyncio.Task | None = None
     stream_stop_event: asyncio.Event | None = None

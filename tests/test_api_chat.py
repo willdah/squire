@@ -9,6 +9,7 @@ from google.genai import types
 from squire.api.routers.chat import (
     _accumulate_token_count,
     _extract_token_usage_from_event,
+    _maybe_backfill_history_from_db,
     _run_single_turn,
     _should_persist_assistant_turn,
 )
@@ -106,3 +107,62 @@ def test_run_single_turn_honors_stop_requested():
     assert response == ""
     assert tools_called is False
     websocket.send_json.assert_not_called()
+
+
+def test_backfill_replays_db_messages_when_session_has_no_events():
+    class _Db:
+        async def get_messages(self, session_id: str, limit: int = 100):
+            return [
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi"},
+            ]
+
+    class _SessionService:
+        def __init__(self):
+            self.appended = []
+
+        async def append_event(self, session, event):
+            self.appended.append(event)
+
+    session_service = _SessionService()
+    runner = SimpleNamespace(session_service=session_service)
+    session = SimpleNamespace(id="sid", state={}, events=[])
+
+    asyncio.run(
+        _maybe_backfill_history_from_db(
+            session=session,
+            runner=runner,
+            db=_Db(),
+            agent_name="Squire",
+        )
+    )
+    assert len(session_service.appended) == 2
+    assert session.state.get("sql_history_backfilled_v1") is True
+
+
+def test_backfill_skips_when_session_already_has_events():
+    class _Db:
+        async def get_messages(self, session_id: str, limit: int = 100):
+            return [{"role": "user", "content": "hello"}]
+
+    class _SessionService:
+        def __init__(self):
+            self.appended = []
+
+        async def append_event(self, session, event):
+            self.appended.append(event)
+
+    session_service = _SessionService()
+    runner = SimpleNamespace(session_service=session_service)
+    session = SimpleNamespace(id="sid", state={}, events=[object()])
+
+    asyncio.run(
+        _maybe_backfill_history_from_db(
+            session=session,
+            runner=runner,
+            db=_Db(),
+            agent_name="Squire",
+        )
+    )
+    assert session_service.appended == []
+    assert session.state.get("sql_history_backfilled_v1") is True

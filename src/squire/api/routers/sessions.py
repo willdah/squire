@@ -41,8 +41,7 @@ async def delete_all_sessions(
     adk_runtime=Depends(get_adk_runtime),
 ):
     """Delete all sessions, messages, and durable ADK session state."""
-    rows = await db.list_sessions(limit=10_000)
-    session_ids = [str(row.get("session_id")) for row in rows if row.get("session_id")]
+    session_ids = await db.list_all_session_ids()
     count = await db.delete_all_sessions()
     for session_id in session_ids:
         try:
@@ -52,7 +51,7 @@ async def delete_all_sessions(
                 session_id=session_id,
             )
         except Exception:
-            logger.debug("Failed to delete ADK session %s during clear", session_id, exc_info=True)
+            logger.warning("Failed to delete ADK session %s during clear", session_id, exc_info=True)
     return {"deleted": count}
 
 
@@ -74,5 +73,5 @@ async def delete_session(
             session_id=session_id,
         )
     except Exception:
-        logger.debug("Failed to delete ADK session %s", session_id, exc_info=True)
+        logger.warning("Failed to delete ADK session %s", session_id, exc_info=True)
     return {"deleted": True}
