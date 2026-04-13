@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ADK session storage:** Runtime now uses a dedicated ADK session SQLite file (`*.adk_sessions.db`) instead of reusing the main Squire app DB, avoiding schema conflicts at web/watch startup
 - **ADK bootstrap hosts:** `squire.agent` now guarantees managed-host loading even when imported from an already-running event loop
 - **Watch context rotation:** `max_context_events` checks now re-fetch session state from ADK session storage before counting events, improving reliability with durable SQLite-backed sessions
+- **Session clear/delete parity:** Session API/CLI deletion now purges durable ADK session records alongside SQL conversation rows
 
 ## [0.16.0] — 2026-04-12
 
