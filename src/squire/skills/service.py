@@ -75,6 +75,55 @@ class SkillService:
     def __init__(self, skills_dir: Path) -> None:
         self._dir = skills_dir
 
+    def _resolve_skill_dir(self, name: str) -> Path | None:
+        """Find the directory containing SKILL.md for a user-supplied slug or declared name.
+
+        Lookup order:
+
+        1. Exact directory name under ``skills_dir`` (spec slug).
+        2. Case-insensitive directory name match (helps macOS / human-entered URLs).
+        3. Declared ``name`` in SKILL.md frontmatter (directory slug may differ).
+        """
+        key = name.strip()
+        if not key:
+            return None
+        if not self._dir.is_dir():
+            return None
+
+        key_cf = key.casefold()
+        exact_dir: Path | None = None
+        case_dir: Path | None = None
+        for child in sorted(self._dir.iterdir()):
+            if not child.is_dir():
+                continue
+            skill_file = child / "SKILL.md"
+            if not skill_file.is_file():
+                continue
+            if child.name == key:
+                exact_dir = child
+            elif child.name.casefold() == key_cf:
+                case_dir = child
+
+        # Prefer the real directory entry name (correct casing for parsing on
+        # case-insensitive volumes) over constructing ``_dir / key``.
+        if exact_dir is not None:
+            return exact_dir
+        if case_dir is not None:
+            return case_dir
+
+        for child in sorted(self._dir.iterdir()):
+            skill_file = child / "SKILL.md"
+            if not child.is_dir() or not skill_file.is_file():
+                continue
+            try:
+                skill = self._parse_skill_md(skill_file)
+            except Exception:
+                continue
+            if skill.name == key or skill.name.casefold() == key_cf:
+                return child
+
+        return None
+
     def list_skills(self, *, enabled_only: bool = False, trigger: str | None = None) -> list[Skill]:
         """List all skills, optionally filtered by enabled state and trigger type."""
         if not self._dir.is_dir():
@@ -97,12 +146,12 @@ class SkillService:
         return skills
 
     def get_skill(self, name: str) -> Skill | None:
-        """Get a skill by name. Returns None if not found."""
-        skill_file = self._dir / name / "SKILL.md"
-        if not skill_file.is_file():
+        """Get a skill by directory slug or declared frontmatter ``name``."""
+        skill_dir = self._resolve_skill_dir(name)
+        if skill_dir is None:
             return None
         try:
-            return self._parse_skill_md(skill_file)
+            return self._parse_skill_md(skill_dir / "SKILL.md")
         except Exception:
             return None
 
@@ -116,8 +165,8 @@ class SkillService:
 
     def delete_skill(self, name: str) -> bool:
         """Delete a skill directory. Returns True if it existed."""
-        skill_dir = self._dir / name
-        if not skill_dir.is_dir():
+        skill_dir = self._resolve_skill_dir(name)
+        if skill_dir is None or not skill_dir.is_dir():
             return False
         shutil.rmtree(skill_dir)
         return True

@@ -36,6 +36,7 @@ MONITOR_RISK_LEVELS = {
 
 # Container agent — container lifecycle management
 CONTAINER_TOOLS = [
+    safe_tool(docker_ps),
     safe_tool(docker_logs),
     safe_tool(docker_compose),
     safe_tool(docker_container),

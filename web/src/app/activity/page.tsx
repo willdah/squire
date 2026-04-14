@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import useSWR from "swr";
 import { apiGet } from "@/lib/api";
 import { EventTimeline } from "@/components/events/event-timeline";
@@ -15,7 +15,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useUrlState, useUrlStateNumber } from "@/hooks/use-url-state";
 import type { EventInfo, SessionInfo, WatchRunSummary } from "@/lib/types";
+
+type WindowPreset = "1h" | "24h" | "7d" | "custom";
 
 const CATEGORIES = [
   "all",
@@ -42,39 +45,51 @@ const WINDOW_PRESETS = [
   { value: "custom", label: "Custom start", hours: null },
 ] as const;
 
-export default function ActivityPage() {
-  const [category, setCategory] = useState("all");
-  const [limit, setLimit] = useState(100);
-  const [sessionId, setSessionId] = useState("");
-  const [watchId, setWatchId] = useState("");
-  const [windowPreset, setWindowPreset] = useState<(typeof WINDOW_PRESETS)[number]["value"]>("24h");
-  const [customSince, setCustomSince] = useState("");
-  const [presetSinceIso, setPresetSinceIso] = useState<string | null>(null);
+function computeSinceIso(preset: WindowPreset, custom: string): string | null {
+  if (preset === "custom") {
+    if (!custom) return null;
+    const parsed = new Date(custom);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  }
+  const match = WINDOW_PRESETS.find((item) => item.value === preset);
+  if (!match?.hours) return null;
+  return new Date(Date.now() - match.hours * 60 * 60 * 1000).toISOString();
+}
 
-  const handleWindowPresetChange = (value: (typeof WINDOW_PRESETS)[number]["value"]) => {
-    setWindowPreset(value);
-    if (value === "custom") {
-      setPresetSinceIso(null);
-      return;
-    }
-    const preset = WINDOW_PRESETS.find((item) => item.value === value);
-    const hours = preset?.hours;
-    if (!hours) {
-      setPresetSinceIso(null);
-      return;
-    }
-    setPresetSinceIso(new Date(Date.now() - hours * 60 * 60 * 1000).toISOString());
+export default function ActivityPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading activity...</div>}>
+      <ActivityPageInner />
+    </Suspense>
+  );
+}
+
+function ActivityPageInner() {
+  const [category, setCategory] = useUrlState<string>("category", "all");
+  const [limit, setLimit] = useUrlStateNumber("limit", 100);
+  const [sessionId, setSessionId] = useUrlState<string>("session_id", "");
+  const [watchId, setWatchId] = useUrlState<string>("watch_id", "");
+  const [windowPreset, setWindowPreset] = useUrlState<WindowPreset>("window", "24h");
+  const [customSince, setCustomSince] = useUrlState<string>("since", "");
+
+  // `sinceIso` is derived from the preset / custom-start. To keep render pure
+  // (no `Date.now()` during render) the anchor is captured in an initializer
+  // and updated from the input event handlers below.
+  const [sinceIso, setSinceIso] = useState<string | null>(() =>
+    computeSinceIso(windowPreset, customSince),
+  );
+
+  const applyWindowPreset = (next: WindowPreset) => {
+    setWindowPreset(next);
+    setSinceIso(computeSinceIso(next, customSince));
   };
 
-  let sinceIso: string | null = presetSinceIso;
-  if (windowPreset === "custom") {
-    if (!customSince) {
-      sinceIso = null;
-    } else {
-      const parsed = new Date(customSince);
-      sinceIso = Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  const applyCustomSince = (next: string) => {
+    setCustomSince(next);
+    if (windowPreset === "custom") {
+      setSinceIso(computeSinceIso("custom", next));
     }
-  }
+  };
 
   const params = new URLSearchParams();
   if (category !== "all") params.set("category", category);
@@ -122,7 +137,7 @@ export default function ActivityPage() {
               <Label>Window</Label>
               <Select
                 value={windowPreset}
-                onValueChange={(value) => handleWindowPresetChange(value as (typeof WINDOW_PRESETS)[number]["value"])}
+                onValueChange={(value) => applyWindowPreset(String(value ?? "24h") as WindowPreset)}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -144,13 +159,13 @@ export default function ActivityPage() {
                   type="datetime-local"
                   className="w-full"
                   value={customSince}
-                  onChange={(e) => setCustomSince(e.target.value)}
+                  onChange={(e) => applyCustomSince(e.target.value)}
                 />
               </div>
             )}
             <div className="space-y-2">
               <Label>Category</Label>
-              <Select value={category} onValueChange={(v) => setCategory(v ?? "all")}>
+              <Select value={category} onValueChange={(v) => setCategory(String(v ?? "all"))}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>

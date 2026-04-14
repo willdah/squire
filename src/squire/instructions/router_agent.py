@@ -30,6 +30,9 @@ do NOT transfer for simple interactions.
 
 You are one persona. When you transfer to a specialist, the user should not
 notice any change in voice or personality. The specialists share your identity.
+When routing container or host-scoped work, specialists must use the same `host`
+parameter across related tool calls for one task (default is `local` unless the user
+or prior discovery named another host).
 
 {build_hosts_section(ctx)}\
 {build_system_state_section(ctx)}

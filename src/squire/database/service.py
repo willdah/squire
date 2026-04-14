@@ -568,24 +568,47 @@ class DatabaseService:
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
-    async def list_sessions(self, limit: int = 20) -> list[dict]:
-        """List recent chat sessions."""
+    async def list_sessions(self, limit: int = 20, watch_id: str | None = None) -> list[dict]:
+        """List recent chat sessions.
+
+        When ``watch_id`` is provided, restricts results to sessions that were
+        initiated by that watch run (joined through ``watch_sessions.adk_session_id``).
+        """
         conn = await self._get_conn()
-        cursor = await conn.execute(
-            """
-            SELECT
-                s.*,
-                COALESCE(SUM(c.input_tokens), 0) AS input_tokens,
-                COALESCE(SUM(c.output_tokens), 0) AS output_tokens,
-                COALESCE(SUM(c.total_tokens), 0) AS total_tokens
-            FROM sessions s
-            LEFT JOIN conversations c ON c.session_id = s.session_id
-            GROUP BY s.session_id
-            ORDER BY s.last_active DESC
-            LIMIT ?
-            """,
-            (limit,),
-        )
+        if watch_id:
+            cursor = await conn.execute(
+                """
+                SELECT
+                    s.*,
+                    COALESCE(SUM(c.input_tokens), 0) AS input_tokens,
+                    COALESCE(SUM(c.output_tokens), 0) AS output_tokens,
+                    COALESCE(SUM(c.total_tokens), 0) AS total_tokens
+                FROM sessions s
+                INNER JOIN watch_sessions ws ON ws.adk_session_id = s.session_id
+                LEFT JOIN conversations c ON c.session_id = s.session_id
+                WHERE ws.watch_id = ?
+                GROUP BY s.session_id
+                ORDER BY s.last_active DESC
+                LIMIT ?
+                """,
+                (watch_id, limit),
+            )
+        else:
+            cursor = await conn.execute(
+                """
+                SELECT
+                    s.*,
+                    COALESCE(SUM(c.input_tokens), 0) AS input_tokens,
+                    COALESCE(SUM(c.output_tokens), 0) AS output_tokens,
+                    COALESCE(SUM(c.total_tokens), 0) AS total_tokens
+                FROM sessions s
+                LEFT JOIN conversations c ON c.session_id = s.session_id
+                GROUP BY s.session_id
+                ORDER BY s.last_active DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 

@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { Suspense, startTransition, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { apiGet, apiPatch, apiPost } from "@/lib/api";
 import { useWebSocket } from "@/hooks/use-websocket";
@@ -128,6 +128,14 @@ function ChatPageInner() {
   const [modelLoading, setModelLoading] = useState(true);
   const [modelSaving, setModelSaving] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
+
+  // Size the model dropdown trigger to fit the longest option so the layout
+  // stays stable regardless of which model is selected. Uses `ch` units
+  // because the trigger is rendered in a monospace font.
+  const longestModelLen = useMemo(
+    () => modelOptions.reduce((max, opt) => Math.max(max, opt.length), 0),
+    [modelOptions],
+  );
 
   // Track streaming state with a ref to avoid closure staleness
   const chatInputRef = useRef<ChatInputHandle>(null);
@@ -464,7 +472,12 @@ function ChatPageInner() {
             <>
               <Select value={selectedModel} onValueChange={(value) => setSelectedModel(value ?? "")}>
                 <SelectTrigger
-                  className="h-8 w-[20rem] min-w-40 text-xs font-mono"
+                  className="h-8 min-w-48 max-w-[32rem] text-xs font-mono"
+                  style={
+                    longestModelLen
+                      ? { width: `calc(${longestModelLen}ch + 2.5rem)` }
+                      : undefined
+                  }
                   aria-label="Active model"
                   disabled={modelSaving || modelOptions.length === 0}
                 >

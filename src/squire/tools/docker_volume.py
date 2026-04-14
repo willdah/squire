@@ -1,5 +1,6 @@
 """docker_volume tool — manage Docker volumes."""
 
+from ._docker_hints import append_local_docker_error_hint
 from ._registry import get_registry
 
 RISK_LEVELS: dict[str, int] = {
@@ -47,7 +48,8 @@ async def docker_volume(
     result = await backend.run(cmd, timeout=30.0)
 
     if result.returncode != 0:
-        return f"Error running 'docker volume {action}'{f' for {volume!r}' if volume else ''}: {result.stderr}"
+        err = f"Error running 'docker volume {action}'{f' for {volume!r}' if volume else ''}: {result.stderr}"
+        return append_local_docker_error_hint(host, err)
 
     output = result.stdout.strip()
     return output if output else f"docker volume {action} completed successfully."

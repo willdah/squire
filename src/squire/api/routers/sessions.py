@@ -14,10 +14,11 @@ logger = logging.getLogger(__name__)
 @router.get("", response_model=list[SessionInfo])
 async def list_sessions(
     limit: int = Query(20, ge=1, le=100),
+    watch_id: str | None = Query(None, description="Filter to sessions initiated by this watch run"),
     db=Depends(get_db),
 ):
-    """List recent chat sessions."""
-    rows = await db.list_sessions(limit=limit)
+    """List recent chat sessions, optionally filtered to a watch run."""
+    rows = await db.list_sessions(limit=limit, watch_id=watch_id)
     return [SessionInfo(**r) for r in rows]
 
 

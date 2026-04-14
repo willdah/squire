@@ -199,6 +199,10 @@ async def chat_websocket(
     # Read skill name from query params directly (more reliable than
     # FastAPI parameter injection for WebSocket endpoints).
     skill_name = websocket.query_params.get("skill") or None
+    if skill_name is not None:
+        skill_name = skill_name.strip()
+        if not skill_name:
+            skill_name = None
 
     from ..app import get_latest_snapshot
 
@@ -380,6 +384,7 @@ async def chat_websocket(
                         app_config=app_config,
                         db=db,
                         notifier=notifier,
+                        session_state=session_state,
                         skill_active=skill_active,
                         stop_requested=stream_stop_event,
                     )
@@ -409,14 +414,22 @@ async def _stream_response(
     app_config,
     db,
     notifier,
+    session_state: dict[str, Any],
     skill_active: bool = False,
     stop_requested: asyncio.Event | None = None,
 ) -> None:
     """Run the agent and stream response tokens over WebSocket.
 
+    ``session_state`` is passed as ADK ``state_delta`` on each turn so snapshot,
+    guardrails, and ``active_skill`` are persisted with the user message. The
+    runner reloads sessions from SQLite; in-memory updates alone are not enough.
+
     When ``skill_active`` is set, the agent is automatically re-prompted
     after each turn so it works through the skill instructions without the
-    user having to send "continue" manually.
+    user having to send "continue" manually. Auto-continue stops when the
+    model responds without calling tools (nothing left to chain), when
+    ``[SKILL COMPLETE]`` appears, on verbatim repetition, or when turns are
+    exhausted.
     """
     max_turns = 15 if skill_active else 1
     current_text = user_text
@@ -436,6 +449,7 @@ async def _stream_response(
                 app_config=app_config,
                 db=db,
                 stop_requested=stop_requested,
+                state_delta=session_state,
             )
             if stop_requested is not None and stop_requested.is_set():
                 if not completion_sent:
@@ -466,13 +480,19 @@ async def _stream_response(
 
             all_response_text += "\n" + turn_response
 
-            # Stop if [SKILL COMPLETE] marker detected (only when tools were used).
-            if tools_used and _is_skill_complete(all_response_text):
+            # Stop if [SKILL COMPLETE] appears in accumulated assistant text for this skill run.
+            if _is_skill_complete(all_response_text):
                 break
 
             # Safety: stop if the agent repeated itself verbatim.
             if turn > 0 and turn_response == prev_response:
                 break
+
+            # Stop when this turn did not invoke tools — the follow-up prompt only
+            # exists to chain further tool work; text-only replies mean done or stuck.
+            if not tools_used:
+                break
+
             prev_response = turn_response
 
             current_text = "Continue executing the skill. Use your tools."
@@ -511,8 +531,12 @@ async def _run_single_turn(
     app_config,
     db,
     stop_requested: asyncio.Event | None = None,
+    state_delta: dict[str, Any] | None = None,
 ) -> tuple[str, bool, int | None, int | None, int | None]:
     """Run one agent turn and stream events over the WebSocket.
+
+    ``state_delta`` is merged into the durable ADK session with the user
+    message (see ``Runner.run_async``).
 
     Returns:
         A tuple of (response_text, tools_were_called, input_tokens, output_tokens, total_tokens).
@@ -531,6 +555,7 @@ async def _run_single_turn(
         session_id=session.id,
         new_message=message,
         run_config=run_config,
+        state_delta=state_delta,
     ):
         if stop_requested is not None and stop_requested.is_set():
             break

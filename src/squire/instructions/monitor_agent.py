@@ -8,6 +8,7 @@ from google.adk.agents.readonly_context import ReadonlyContext
 
 from .shared import (
     build_conversation_style,
+    build_host_scoped_tools_section,
     build_hosts_section,
     build_identity_section,
     build_risk_section,
@@ -38,6 +39,8 @@ system health, resource usage, container status, logs, and configuration.
   For high-level summaries, use the snapshot in your context.
 - NEVER fabricate command output. If a tool fails or is blocked, report the error
   and continue with any remaining work. Do NOT stop responding.
+
+{build_host_scoped_tools_section()}
 
 {build_risk_section(ctx)}
 {build_hosts_section(ctx)}\

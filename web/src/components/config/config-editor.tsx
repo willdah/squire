@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { ConfigDetailResponse } from "@/lib/types";
 import { ChannelsTab } from "@/components/notifications/channels-tab";
+import { useUrlState } from "@/hooks/use-url-state";
 import { AppConfigForm } from "./app-config-form";
 import { LLMConfigForm } from "./llm-config-form";
 import { WatchConfigForm } from "./watch-config-form";
@@ -92,10 +93,11 @@ function ReadOnlySection({
 }
 
 export function ConfigEditor({ config, onSaved }: ConfigEditorProps) {
+  const [tab, setTab] = useUrlState<string>("tab", "app");
   return (
     <div className="space-y-4">
       <ConfigEnvOverrideNotice config={config} />
-      <Tabs defaultValue="app">
+      <Tabs value={tab} onValueChange={(value) => setTab(String(value))}>
       <TabsList className="flex flex-wrap">
         <TabsTrigger value="app">App</TabsTrigger>
         <TabsTrigger value="llm">LLM</TabsTrigger>

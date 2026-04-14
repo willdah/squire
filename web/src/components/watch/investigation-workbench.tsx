@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Eraser } from "lucide-react";
+import { Eraser, History } from "lucide-react";
 
 function parseJson(value: string | null | undefined): Record<string, unknown> {
   if (!value) return {};
@@ -255,9 +255,19 @@ export function WatchExplorer() {
 
       <Card className="min-w-0 xl:h-[calc(100vh-11rem)]">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">
-            {view === "timeline" ? "Timeline View" : "Sessions & Cycles"}
-          </CardTitle>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-base">
+              {view === "timeline" ? "Timeline View" : "Sessions & Cycles"}
+            </CardTitle>
+            {selectedWatchId && (
+              <Link href={`/sessions?watch_id=${encodeURIComponent(selectedWatchId)}`}>
+                <Button variant="outline" size="sm">
+                  <History className="mr-2 h-4 w-4" />
+                  Open in Sessions
+                </Button>
+              </Link>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-2 overflow-auto xl:max-h-[calc(100vh-15rem)]">
           {view === "timeline" &&

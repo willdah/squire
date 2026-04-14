@@ -1,5 +1,6 @@
 """docker_image tool — manage Docker images."""
 
+from ._docker_hints import append_local_docker_error_hint
 from ._registry import get_registry
 
 RISK_LEVELS: dict[str, int] = {
@@ -54,7 +55,8 @@ async def docker_image(
     result = await backend.run(cmd, timeout=120.0)
 
     if result.returncode != 0:
-        return f"Error running 'docker image {action}'{f' for {image!r}' if image else ''}: {result.stderr}"
+        err = f"Error running 'docker image {action}'{f' for {image!r}' if image else ''}: {result.stderr}"
+        return append_local_docker_error_hint(host, err)
 
     output = result.stdout.strip()
     return output if output else f"docker image {action} completed successfully."
