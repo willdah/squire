@@ -64,7 +64,7 @@ In both modes, the user always sees the single "Squire" persona — sub-agent na
 | Monitor   | System observation    | `system_info`, `network_info`, `docker_ps`, `journalctl`, `read_config`                                | Read-only, risk 1          |
 | Container | Docker lifecycle      | `docker_logs`, `docker_compose`, `docker_container`, `docker_image`, `docker_cleanup`                  | Cautious, risk 1–4         |
 | Admin     | System administration | `systemctl`, `run_command`                                                                             | Elevated, risk 1–4         |
-| Notifier  | Alert management      | `send_notification`, `list_alert_rules`, `create_alert_rule`, `update_alert_rule`, `delete_alert_rule` | Mostly read-only, risk 1–2 |
+| Notifier  | Ad-hoc notifications  | `send_notification`                                                                                    | Mostly read-only, risk 1–2 |
 
 
 ### Multi-agent routing
@@ -77,7 +77,7 @@ flowchart TD
     Monitor["Monitor<br/>system_info · network_info<br/>docker_ps · journalctl · read_config"]
     Container["Container<br/>docker_logs · docker_compose<br/>docker_container · docker_image · docker_cleanup"]
     Admin["Admin<br/>systemctl · run_command"]
-    Notifier["Notifier<br/>send_notification · alert rule tools"]
+    Notifier["Notifier<br/>send_notification"]
 
     User --> Root
     Root -->|"system status / metrics / logs"| Monitor
@@ -195,7 +195,6 @@ flowchart TD
     INIT[Initialize session<br/>load hosts · build risk gate · dispatch watch.start]
     SLEEP[Sleep for interval<br/>default 5 minutes<br/>polling for commands every 5s]
     SNAP[Collect system snapshot<br/>CPU · memory · disk · Docker · services]
-    ALERT[Evaluate alert rules<br/>fire notifications for triggered rules]
     SKILL[Load watch-triggered skills<br/>append to check-in prompt]
     LLM[Send check-in prompt to agent<br/>snapshot in session state]
     TOOLS[Agent calls tools<br/>risk gate in headless mode]
@@ -206,7 +205,7 @@ flowchart TD
 
     START --> INIT --> SLEEP
     SLEEP --> SNAP
-    SNAP --> ALERT --> SKILL --> LLM
+    SNAP --> SKILL --> LLM
     LLM --> TOOLS --> LOG --> ROT
     ROT -->|No| SLEEP
     ROT -->|Yes| SUMM --> SLEEP
@@ -228,7 +227,7 @@ Watch mode is started with `make watch` or `uv run squire watch`. The web UI **W
 | Web API             | FastAPI + Uvicorn           | REST endpoints, WebSocket streaming                                     |
 | Web Frontend        | Next.js + React + shadcn/ui | Browser-based chat, watch monitoring, configuration                     |
 | CLI                 | Typer                       | Command-line interface for scripting and quick tasks                    |
-| Database            | aiosqlite (SQLite)          | Session persistence, events, alert rules, watch state                   |
+| Database            | aiosqlite (SQLite)          | Session persistence, events, watch state                                |
 | Remote Access       | asyncssh                    | SSH-based multi-machine management                                      |
 | Config              | Pydantic Settings           | Layered config (env vars > DB overrides > TOML > defaults)              |
 | HTTP Client         | httpx                       | Webhook notifications, health checks                                    |
@@ -246,7 +245,6 @@ All state is stored in a single SQLite file (default: `~/.local/share/squire/squ
 | `conversations`   | Chat messages keyed by session ID (role, content, optional token usage fields)        |
 | `sessions`        | Session registry with created/last-active timestamps and preview                      |
 | `watch_state`     | Key-value store for current watch mode status (cycle, PID, interval, supervisor counts, cumulative metrics, etc.) |
-| `alert_rules`     | Configured alert conditions with severity, cooldown, and last-fired timestamp         |
 | `watch_runs`      | One row per watch invocation (`watch_id`), timestamps, status, link to watch-level report |
 | `watch_sessions`  | Agent sessions within a run (`watch_session_id`, `adk_session_id`, cycle counts, session report) |
 | `watch_cycles`    | Canonical per-cycle aggregates (tokens, tool/incident counts, status, timing) keyed by `cycle_id` |
@@ -290,11 +288,11 @@ src/squire/              Main application
   database/              SQLite service and schema
   instructions/          Dynamic system prompt builders for each agent
   skills/                File-based skill service (Open Agent Skills spec)
-  notifications/         Webhook dispatcher, email notifier, alert evaluator
+  notifications/         Webhook dispatcher and email notifier
   schemas/               Pydantic models for API request/response
   system/                Backend registry, LocalBackend, SSHBackend
   tools/                 System interaction tools (async, return str)
-    notifications/       Notification and alert rule tools (Notifier sub-agent)
+    notifications/       Ad-hoc notification tools (Notifier sub-agent)
 
 web/                     Next.js frontend
   src/app/               Pages: chat, watch, watch-explorer, skills, tools, sessions, hosts, notifications, config, activity

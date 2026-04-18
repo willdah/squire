@@ -6,7 +6,6 @@ import { apiGet } from "@/lib/api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NotificationHistory } from "@/components/notifications/notification-history";
-import { AlertRulesTab } from "@/components/notifications/alert-rules-tab";
 import { ChannelsTab } from "@/components/notifications/channels-tab";
 import { useUrlState } from "@/hooks/use-url-state";
 import type { EventInfo } from "@/lib/types";
@@ -60,16 +59,11 @@ function NotificationsPageInner() {
       <Tabs value={tab} onValueChange={(value) => setTab(String(value))}>
         <TabsList className="flex flex-wrap">
           <TabsTrigger value="history">History</TabsTrigger>
-          <TabsTrigger value="rules">Alert Rules</TabsTrigger>
           <TabsTrigger value="channels">Channels</TabsTrigger>
         </TabsList>
 
         <TabsContent value="history">
           <NotificationHistory events={events} />
-        </TabsContent>
-
-        <TabsContent value="rules">
-          <AlertRulesTab />
         </TabsContent>
 
         <TabsContent value="channels">

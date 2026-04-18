@@ -21,7 +21,6 @@ export const SLASH_COMMAND_DEFS: SlashCommandDef[] = [
   { id: "watch-start", insert: "/watch start", description: "Start watch mode" },
   { id: "watch-stop", insert: "/watch stop", description: "Stop watch mode" },
   { id: "skill", insert: "/skill ", description: "Run a skill (add skill name after /skill)" },
-  { id: "alerts", insert: "/alerts", description: "List active alert rules" },
   { id: "help", insert: "/help", description: "Show available quick commands" },
 ];
 
@@ -129,13 +128,8 @@ export function transformSlashMessage(trimmed: string): string | null {
 
   if (lower === "help" || lower.startsWith("help ")) {
     out =
-      "Briefly list what you can help with: system status, containers, logs, restarts, watch mode, skills, and alerts. " +
+      "Briefly list what you can help with: system status, containers, logs, restarts, watch mode, and skills. " +
       "Mention that I can also answer normal questions about the homelab.";
-  } else if (lower === "alerts" || lower.startsWith("alerts ")) {
-    const extra = inner.slice(6).trim();
-    out = extra
-      ? `List all active alert rules and their status, with extra context: ${extra}.`
-      : "List all active alert rules and their current status.";
   } else if (lower === "containers" || lower.startsWith("containers ")) {
     const extra = inner.slice(10).trim();
     out = extra

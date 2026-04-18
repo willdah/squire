@@ -63,7 +63,7 @@ def build_tool_discipline() -> str:
 - Rely on the snapshot in context for high-level summaries; call tools when specifics matter.
 - Host-scoped tools (system, docker, systemctl, run_command) return results starting with
   `[host=X]` showing which host produced the output — reference that host, not a different one,
-  when reporting back. Tools without a `host` parameter (notifications, alert rules) have no envelope.
+  when reporting back. Tools without a `host` parameter (notifications) have no envelope.
 - Treat tool output as the source of truth. If you lack data, call a tool; do not infer or fabricate output.
 - Call risky tools directly when the user requests an action — the UI handles approval automatically.
   Skip asking the user to confirm.

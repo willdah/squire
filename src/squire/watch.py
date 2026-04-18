@@ -40,7 +40,6 @@ from .config import (
 from .database.service import DatabaseService
 from .hosts.store import HostStore
 from .main import _collect_all_snapshots
-from .notifications.alert_evaluator import evaluate_alerts
 from .notifications.email import EmailNotifier
 from .notifications.router import NotificationRouter
 from .notifications.webhook import WebhookDispatcher
@@ -672,14 +671,6 @@ async def start_watch() -> None:
                         host=incident.host,
                         cycle_id=cycle_id,
                     )
-
-                # Evaluate alert rules against fresh snapshot
-                try:
-                    fired = await evaluate_alerts(db, notifier, snapshot)
-                    if fired > 0 and emitter:
-                        await emitter.emit_tool_result(cycle_count, "alert_evaluator", f"{fired} alert(s) fired")
-                except Exception:
-                    logger.debug("Alert evaluation failed", exc_info=True)
             except Exception:
                 logger.debug("Snapshot collection failed", exc_info=True)
 

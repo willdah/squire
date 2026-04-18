@@ -1,6 +1,6 @@
-"""Notifier sub-agent — alert and notification management.
+"""Notifier sub-agent — ad-hoc notifications.
 
-Tools: send_notification, list_alert_rules, create_alert_rule, delete_alert_rule
+Tools: send_notification.
 """
 
 from google.adk.agents.llm_agent import Agent
@@ -13,8 +13,8 @@ from ..tools.notifications import NOTIFIER_RISK_LEVELS, NOTIFIER_TOOLS
 from ..types import RiskGateFactory
 
 DESCRIPTION = (
-    "Alert and notification management: creating alert rules, listing active alerts, "
-    "sending test notifications, and managing notification endpoints."
+    "Ad-hoc notifications: sending one-off messages to configured webhook "
+    "endpoints. Alerting itself lives in external monitoring stacks."
 )
 
 

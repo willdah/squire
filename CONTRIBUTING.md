@@ -27,13 +27,13 @@ The `make install` target runs `uv sync --dev` and `npm install` in `web/`. If y
 ```
 src/squire/              Main application
   agents/                ADK agent definitions
-  api/                   FastAPI routers (chat, system, sessions, alerts, skills, etc.)
+  api/                   FastAPI routers (chat, system, sessions, skills, etc.)
   callbacks/             Risk gate implementation
   config/                Config loaders (app, llm, database, hosts, skills)
   database/              SQLite service
   instructions/          Dynamic system prompts for agents
   skills/                File-based skill service (Open Agent Skills spec)
-  notifications/         Webhook dispatcher & alert evaluator
+  notifications/         Webhook dispatcher
   system/                Backend registry (local/SSH execution)
   tools/                 System interaction tools (async, return str)
   agent.py               Root agent builder
@@ -52,7 +52,7 @@ tests/                   pytest suite
   test_tools/            Tool functionality tests
   test_agents/           Agent routing tests
   test_callbacks/        Risk gate tests
-  test_notifications/    Alert/webhook tests
+  test_notifications/    Notification dispatcher tests
 
 docs/                    User documentation
 docker/                  Docker configuration
@@ -179,7 +179,7 @@ A few things to know:
 - The `mock_registry` fixture calls `set_registry(registry)` before yielding and `set_registry(None)` after — always use `mock_registry` (not `mock_backend` alone) when testing code that calls `get_registry()`.
 - The `db` fixture provides a temporary `DatabaseService` backed by a file in `tmp_path`.
 
-Test directories map to subsystems: `test_tools/` for individual tools, `test_agents/` for agent routing logic, `test_callbacks/` for the risk gate, `test_notifications/` for alerts and webhooks.
+Test directories map to subsystems: `test_tools/` for individual tools, `test_agents/` for agent routing logic, `test_callbacks/` for the risk gate, `test_notifications/` for the notification dispatcher and channels.
 
 ## Pull Request Workflow
 

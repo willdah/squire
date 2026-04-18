@@ -83,15 +83,12 @@ export SQUIRE_GUARDRAILS_RISK_TOLERANCE=standard
 | `system_info`       | 1          | CPU, memory, disk, uptime                  |
 | `network_info`      | 1          | Network interfaces, routes                 |
 | `docker_ps`         | 1          | List containers                            |
-| `list_alert_rules`  | 1          | List configured alert rules                |
 | `docker_logs`       | 2          | View container logs                        |
 | `read_config`       | 2          | Read configuration files                   |
 | `journalctl`        | 2          | View system/service logs                   |
 | `send_notification` | 2          | Send a notification                        |
-| `create_alert_rule` | 2          | Create an alert rule                       |
 | `docker_compose`    | 3          | Manage compose stacks (start/stop/restart) |
 | `systemctl`         | 3          | Manage systemd services                    |
-| `delete_alert_rule` | 3          | Delete an alert rule                       |
 | `run_command`       | 5          | Execute arbitrary shell commands           |
 
 
@@ -204,7 +201,7 @@ risk_tolerance = "cautious"                # global default
 monitor_tolerance = "standard"            # auto-allow all monitor tools
 container_tolerance = "cautious"          # prompt for compose mutations
 admin_tolerance = "read-only"             # prompt for everything
-notifier_tolerance = "cautious"           # prompt for delete_alert_rule
+notifier_tolerance = "cautious"           # prompt before sending notifications
 ```
 
 
@@ -254,7 +251,7 @@ multi_agent = true
 | **Monitor**   | `system_info`, `network_info`, `docker_ps`, `journalctl`, `read_config`           | 1--2       |
 | **Container** | `docker_logs`, `docker_compose`                                                   | 2--3       |
 | **Admin**     | `systemctl`, `run_command`                                                        | 3--5       |
-| **Notifier**  | `send_notification`, `list_alert_rules`, `create_alert_rule`, `delete_alert_rule` | 1--3       |
+| **Notifier**  | `send_notification`                                                               | 2          |
 
 
 ---
@@ -376,7 +373,7 @@ Skills with `trigger: watch` and non-empty `incident_keys` become playbook candi
 
 ## Database -- `[db]`
 
-Squire persists chat history, system snapshots, events, and alert rules to SQLite.
+Squire persists chat history, system snapshots, and events to SQLite.
 ADK durable session state is stored in a sibling SQLite file derived from `db.path`
 (`squire.db` -> `squire.adk_sessions.db`). Include both files in backup/restore workflows.
 
@@ -604,7 +601,7 @@ events = ["watch.alert", "watch.action"]
 | `watch.stop`      | Watch  | Watch mode stopped                    |
 | `watch.action`    | Watch  | Agent took a corrective action        |
 | `watch.blocked`   | Watch  | Tool call denied by risk policy       |
-| `watch.alert`     | Watch  | Alert rule triggered                  |
+| `watch.alert`     | Watch  | Watch loop detected an anomaly        |
 | `watch.error`     | Watch  | Exception during a watch cycle        |
 | `watch.incident_detected` | Watch | New incident fingerprint detected |
 | `watch.remediation` | Watch | Autonomous remediation action summary |
