@@ -329,7 +329,12 @@ class SkillsConfigUpdate(BaseModel):
 
 
 class WatchStatusResponse(BaseModel):
+    model_config = {"extra": "ignore"}
+
     status: str = "unknown"
+    state: str = "stopped"
+    last_error: str | None = None
+    watch_autostart: str | None = None
     started_at: str | None = None
     stopped_at: str | None = None
     cycle: str | None = None
@@ -341,7 +346,6 @@ class WatchStatusResponse(BaseModel):
     watch_session_id: str | None = None
     cycle_id: str | None = None
     last_response: str | None = None
-    pid: str | None = None
     total_actions: str | None = None
     total_blocked: str | None = None
     total_errors: str | None = None
@@ -351,6 +355,10 @@ class WatchStatusResponse(BaseModel):
     total_output_tokens: str | None = None
     total_tokens: str | None = None
     last_outcome: str | None = None
+
+
+class WatchAutostartRequest(BaseModel):
+    enabled: bool
 
 
 class WatchConfigResponse(BaseModel):

@@ -4,6 +4,8 @@ These are set during the app lifespan and retrieved via FastAPI's dependency
 injection. Tools also receive these via the global tool registry.
 """
 
+from typing import TYPE_CHECKING
+
 from squire.adk.runtime import AdkRuntime
 from squire.config import AppConfig, DatabaseConfig, GuardrailsConfig, LLMConfig, NotificationsConfig, WatchConfig
 from squire.config.skills import SkillsConfig
@@ -13,12 +15,16 @@ from squire.notifications.router import NotificationRouter
 from squire.skills import SkillService
 from squire.system.registry import BackendRegistry
 
+if TYPE_CHECKING:
+    from squire.watch_controller import WatchController
+
 # Singletons — populated by the lifespan context manager in app.py
 db: DatabaseService | None = None
 registry: BackendRegistry | None = None
 notifier: NotificationRouter | None = None
 skills_service: SkillService | None = None
 adk_runtime: AdkRuntime | None = None
+watch_controller: "WatchController | None" = None
 
 # Configs — loaded once at startup
 app_config: AppConfig | None = None
@@ -89,3 +95,9 @@ def get_host_store() -> HostStore:
     if host_store is None:
         raise RuntimeError("HostStore not initialized")
     return host_store
+
+
+def get_watch_controller() -> "WatchController":
+    if watch_controller is None:
+        raise RuntimeError("WatchController not initialized")
+    return watch_controller

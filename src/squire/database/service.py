@@ -8,7 +8,7 @@ Connection is opened lazily on first use.
 
 import asyncio
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -228,17 +228,6 @@ _CREATE_WATCH_REPORTS_IDX_SESSION = """
 CREATE INDEX IF NOT EXISTS idx_watch_reports_session ON watch_reports(watch_session_id)
 """
 
-_CREATE_WATCH_COMMANDS = """
-CREATE TABLE IF NOT EXISTS watch_commands (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    command    TEXT NOT NULL,
-    payload    TEXT,
-    status     TEXT NOT NULL DEFAULT 'pending',
-    error      TEXT,
-    created_at TEXT NOT NULL
-)
-"""
-
 _CREATE_WATCH_APPROVALS = """
 CREATE TABLE IF NOT EXISTS watch_approvals (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -335,7 +324,6 @@ class DatabaseService:
             _CREATE_WATCH_STATE,
             _CREATE_WATCH_EVENTS,
             _CREATE_WATCH_EVENTS_IDX_CYCLE,
-            _CREATE_WATCH_COMMANDS,
             _CREATE_WATCH_APPROVALS,
             _CREATE_WATCH_RUNS,
             _CREATE_WATCH_SESSIONS,
@@ -359,6 +347,12 @@ class DatabaseService:
         # longer appears in schema introspection. No data rescue — the
         # feature was considered unused.
         await self._conn.execute("DROP TABLE IF EXISTS alert_rules")
+        # Forward-only migration: the watch subprocess was replaced by an
+        # in-process controller. The watch_commands queue and the pid-based
+        # liveness field are no longer consulted. Drop the table and the
+        # stale watch_state rows so schema introspection stays clean.
+        await self._conn.execute("DROP TABLE IF EXISTS watch_commands")
+        await self._conn.execute("DELETE FROM watch_state WHERE key IN ('pid', 'watch_holder')")
         await self._ensure_conversation_token_columns()
         await self._ensure_watch_event_columns()
         await self._ensure_event_context_columns()
@@ -1128,6 +1122,31 @@ class DatabaseService:
             "watch_report_id": watch_report_pk,
         }
 
+    async def finalize_stale_watch_runs_on_boot(
+        self,
+        *,
+        reason: str = "Watch process exited unexpectedly before normal shutdown finalization.",
+    ) -> list[str]:
+        """Finalize every watch run still marked ``running`` at startup.
+
+        Called by the FastAPI lifespan on boot so that half-open run/session/cycle rows
+        from a previous container crash get reports and stopped_at timestamps. Returns
+        the list of watch_ids that were finalized.
+        """
+        conn = await self._get_conn()
+        cursor = await conn.execute("SELECT watch_id FROM watch_runs WHERE status = 'running'")
+        rows = await cursor.fetchall()
+        watch_ids = [row["watch_id"] for row in rows]
+        for watch_id in watch_ids:
+            try:
+                await self.finalize_stale_watch_run(watch_id, reason=reason)
+            except Exception:  # noqa: BLE001 — boot cleanup must not block startup
+                pass
+        # Any per-run status fields in watch_state are now stale.
+        await self._conn.execute("DELETE FROM watch_state WHERE key = 'watch_holder'")
+        await self._conn.commit()
+        return watch_ids
+
     async def create_watch_session(self, watch_session_id: str, *, watch_id: str, adk_session_id: str) -> None:
         """Create a watch session row."""
         conn = await self._get_conn()
@@ -1577,36 +1596,83 @@ class DatabaseService:
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
-    # --- Watch Commands ---
+    # --- Watch Holder (single-writer guard for the watch controller) ---
 
-    async def insert_watch_command(self, command: str, payload: str | None = None) -> int:
-        """Insert a watch command and return its ID."""
+    async def claim_watch_holder(self, holder_id: str, *, ttl_seconds: int = 90) -> bool:
+        """Claim the watch holder lock. Returns True if claimed, False if another holder is still live.
+
+        The holder is stored as a JSON row under ``watch_state.key='watch_holder'``. A claim
+        succeeds if no row exists, if the current row is expired, or if the current row belongs
+        to ``holder_id`` already (idempotent reclaim).
+        """
         conn = await self._get_conn()
-        now = datetime.now(UTC).isoformat()
-        cursor = await conn.execute(
-            "INSERT INTO watch_commands (command, payload, created_at) VALUES (?, ?, ?)",
-            (command, payload, now),
+        cursor = await conn.execute("SELECT value FROM watch_state WHERE key = 'watch_holder'")
+        row = await cursor.fetchone()
+        now = datetime.now(UTC)
+        if row:
+            try:
+                current = json.loads(row[0])
+                expires_at = datetime.fromisoformat(current["expires_at"])
+                if current.get("holder_id") != holder_id and expires_at > now:
+                    return False
+            except (ValueError, KeyError, TypeError):
+                pass  # malformed row — overwrite
+        payload = json.dumps(
+            {
+                "holder_id": holder_id,
+                "expires_at": (now + timedelta(seconds=ttl_seconds)).isoformat(),
+                "claimed_at": now.isoformat(),
+            }
         )
-        await conn.commit()
-        return cursor.lastrowid
-
-    async def get_pending_watch_commands(self) -> list[dict]:
-        """Get all pending watch commands in order."""
-        conn = await self._get_conn()
-        cursor = await conn.execute(
-            "SELECT * FROM watch_commands WHERE status = 'pending' ORDER BY id",
-        )
-        rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
-
-    async def update_watch_command_status(self, cmd_id: int, status: str, error: str | None = None) -> None:
-        """Update a watch command's status."""
-        conn = await self._get_conn()
         await conn.execute(
-            "UPDATE watch_commands SET status = ?, error = ? WHERE id = ?",
-            (status, error, cmd_id),
+            "INSERT OR REPLACE INTO watch_state (key, value) VALUES ('watch_holder', ?)",
+            (payload,),
         )
         await conn.commit()
+        return True
+
+    async def heartbeat_watch_holder(self, holder_id: str, *, ttl_seconds: int = 90) -> bool:
+        """Refresh the lock TTL. Returns False if ``holder_id`` is no longer the holder."""
+        conn = await self._get_conn()
+        cursor = await conn.execute("SELECT value FROM watch_state WHERE key = 'watch_holder'")
+        row = await cursor.fetchone()
+        if not row:
+            return False
+        try:
+            current = json.loads(row[0])
+        except (ValueError, TypeError):
+            return False
+        if current.get("holder_id") != holder_id:
+            return False
+        now = datetime.now(UTC)
+        payload = json.dumps(
+            {
+                "holder_id": holder_id,
+                "expires_at": (now + timedelta(seconds=ttl_seconds)).isoformat(),
+                "claimed_at": current.get("claimed_at", now.isoformat()),
+            }
+        )
+        await conn.execute(
+            "INSERT OR REPLACE INTO watch_state (key, value) VALUES ('watch_holder', ?)",
+            (payload,),
+        )
+        await conn.commit()
+        return True
+
+    async def release_watch_holder(self, holder_id: str) -> None:
+        """Release the lock if ``holder_id`` currently holds it. No-op otherwise."""
+        conn = await self._get_conn()
+        cursor = await conn.execute("SELECT value FROM watch_state WHERE key = 'watch_holder'")
+        row = await cursor.fetchone()
+        if not row:
+            return
+        try:
+            current = json.loads(row[0])
+        except (ValueError, TypeError):
+            current = {}
+        if current.get("holder_id") == holder_id:
+            await conn.execute("DELETE FROM watch_state WHERE key = 'watch_holder'")
+            await conn.commit()
 
     # --- Watch Approvals ---
 
@@ -1652,7 +1718,7 @@ class DatabaseService:
         await conn.commit()
 
     async def cleanup_watch_data(self, max_cycles: int = 500) -> int:
-        """Remove old watch events, commands, and approvals beyond retention."""
+        """Remove old watch events and approvals beyond retention."""
         conn = await self._get_conn()
         cursor = await conn.execute("SELECT cycle_id FROM watch_cycles ORDER BY started_at DESC LIMIT ?", (max_cycles,))
         rows = await cursor.fetchall()
@@ -1671,9 +1737,6 @@ class DatabaseService:
         )
         deleted_cycles = cursor.rowcount
 
-        await conn.execute(
-            "DELETE FROM watch_commands WHERE id NOT IN (SELECT id FROM watch_commands ORDER BY id DESC LIMIT 1000)"
-        )
         await conn.execute(
             "DELETE FROM watch_approvals WHERE id NOT IN (SELECT id FROM watch_approvals ORDER BY id DESC LIMIT 1000)"
         )

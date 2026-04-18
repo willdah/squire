@@ -305,15 +305,20 @@ async def _rewire_after_update(section: str, new_config: Any) -> None:
         deps.skills_service = SkillService(new_config.path)
 
 
-async def _enqueue_reload_command() -> None:
-    """Fire-and-forget ``reload_config`` command for the watch subprocess."""
-    if deps.db is None:
+def _trigger_watch_reload() -> None:
+    """Signal the in-process watch controller to rebuild configs at its next cycle boundary.
+
+    Non-blocking: sets an ``asyncio.Event`` on the live controller. If no controller
+    is registered yet (e.g. very early startup), this is a no-op — the controller will
+    read fresh overrides the first time it enters its run loop.
+    """
+    if deps.watch_controller is None:
         return
     try:
-        await deps.db.insert_watch_command("reload_config")
+        deps.watch_controller.reload()
     except Exception:
-        # A failure to enqueue shouldn't fail the API call; watch will next
-        # pick up overrides on its next natural restart.
+        # A failure to signal shouldn't fail the API call; watch will pick up
+        # overrides on its next natural restart.
         pass
 
 
@@ -367,7 +372,7 @@ async def patch_config(section: str, body: dict = Body(...)):
     new_config = current.model_copy(update=fields)
     setattr(deps, info.attr, new_config)
     await _rewire_after_update(section, new_config)
-    await _enqueue_reload_command()
+    _trigger_watch_reload()
 
     return await _section_meta(info)
 
@@ -390,7 +395,7 @@ async def reset_section(section: str):
     new_config = info.config_cls()
     setattr(deps, info.attr, new_config)
     await _rewire_after_update(section, new_config)
-    await _enqueue_reload_command()
+    _trigger_watch_reload()
 
     return await _section_meta(info)
 
@@ -412,6 +417,6 @@ async def reset_field(section: str, field: str):
     new_config = info.config_cls()
     setattr(deps, info.attr, new_config)
     await _rewire_after_update(section, new_config)
-    await _enqueue_reload_command()
+    _trigger_watch_reload()
 
     return await _section_meta(info)

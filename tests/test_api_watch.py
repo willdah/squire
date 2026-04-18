@@ -5,7 +5,34 @@ import json
 import pytest
 import pytest_asyncio
 
+from squire.api.schemas import WatchAutostartRequest
 from squire.database.service import DatabaseService
+
+
+class _FakeController:
+    """Minimal WatchController stand-in for router tests."""
+
+    def __init__(self, state: str = "stopped", last_error: str | None = None) -> None:
+        self.state = state
+        self.last_error = last_error
+        self.start_called = False
+        self.stop_called = False
+
+    def status(self):
+        from squire.watch_controller import WatchRuntimeStatus
+
+        return WatchRuntimeStatus(state=self.state, last_error=self.last_error, task_done=self.state == "stopped")
+
+    async def start(self):
+        from squire.watch_controller import StartResult
+
+        self.start_called = True
+        self.state = "running"
+        return StartResult.ok()
+
+    async def stop(self, *, timeout: float = 30.0):
+        self.stop_called = True
+        self.state = "stopped"
 
 
 @pytest_asyncio.fixture
@@ -16,16 +43,18 @@ async def db(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_watch_status(db):
+async def test_watch_status_reflects_running_controller(db):
     from squire.api.routers.watch import watch_status
 
-    await db.set_watch_state("status", "running")
+    controller = _FakeController(state="running")
     await db.set_watch_state("cycle", "5")
     await db.set_watch_state("total_input_tokens", "120")
     await db.set_watch_state("total_output_tokens", "75")
     await db.set_watch_state("total_tokens", "195")
-    result = await watch_status(db=db)
-    assert result.status == "running"
+
+    result = await watch_status(db=db, controller=controller)
+    assert result.state == "running"
+    assert result.status == "running"  # legacy mirror for older clients
     assert result.cycle == "5"
     assert result.total_input_tokens == "120"
     assert result.total_output_tokens == "75"
@@ -33,82 +62,47 @@ async def test_watch_status(db):
 
 
 @pytest.mark.asyncio
-async def test_watch_stop(db):
-    from squire.api.routers.watch import watch_stop
-
-    result = await watch_stop(db=db)
-    assert result.status == "ok"
-
-    pending = await db.get_pending_watch_commands()
-    assert len(pending) == 1
-    assert pending[0]["command"] == "stop"
-
-
-@pytest.mark.asyncio
-async def test_watch_stop_stale_process_finalizes_watch_artifacts(db, monkeypatch):
-    from squire.api.routers.watch import watch_stop
-
-    def _missing_process(_pid: int, _signal: int) -> None:
-        raise ProcessLookupError
-
-    monkeypatch.setattr("squire.api.routers.watch.os.kill", _missing_process)
-
-    await db.create_watch_run("watch_stale_stop")
-    await db.create_watch_session("wss_stale_stop", watch_id="watch_stale_stop", adk_session_id="adk_stale_stop")
-    await db.set_watch_state("status", "running")
-    await db.set_watch_state("pid", "999999")
-    await db.set_watch_state("watch_id", "watch_stale_stop")
-    await db.set_watch_state("watch_session_id", "wss_stale_stop")
-
-    result = await watch_stop(db=db)
-    assert result.status == "ok"
-
-    run = await db.get_watch_run("watch_stale_stop")
-    assert run is not None
-    assert run["status"] == "stopped"
-    assert run["stopped_at"]
-
-    watch_report = await db.get_watch_completion_report("watch_stale_stop")
-    assert watch_report is not None
-    assert watch_report["report_type"] == "watch"
-
-    sessions = await db.list_watch_sessions_for_run("watch_stale_stop", page=1, per_page=20)
-    assert len(sessions) == 1
-    assert sessions[0]["status"] == "stopped"
-    assert sessions[0]["session_report_id"] is not None
-
-
-@pytest.mark.asyncio
-async def test_watch_status_stale_process_finalizes_watch_artifacts(db, monkeypatch):
+async def test_watch_status_surfaces_failed_state_and_last_error(db):
     from squire.api.routers.watch import watch_status
 
-    def _missing_process(_pid: int, _signal: int) -> None:
-        raise ProcessLookupError
+    controller = _FakeController(state="failed", last_error="RuntimeError: cycle boom")
+    result = await watch_status(db=db, controller=controller)
+    assert result.state == "failed"
+    assert result.last_error == "RuntimeError: cycle boom"
+    assert result.status == "failed"
 
-    monkeypatch.setattr("squire.api.routers.watch.os.kill", _missing_process)
 
-    await db.create_watch_run("watch_stale_status")
-    await db.create_watch_session("wss_stale_status", watch_id="watch_stale_status", adk_session_id="adk_stale_status")
-    await db.set_watch_state("status", "running")
-    await db.set_watch_state("pid", "999999")
-    await db.set_watch_state("watch_id", "watch_stale_status")
-    await db.set_watch_state("watch_session_id", "wss_stale_status")
+@pytest.mark.asyncio
+async def test_watch_start_delegates_to_controller():
+    from squire.api.routers.watch import watch_start
 
-    result = await watch_status(db=db)
-    assert result.status == "stopped"
+    controller = _FakeController(state="stopped")
+    result = await watch_start(controller=controller)
+    assert result.status == "ok"
+    assert controller.start_called is True
 
-    run = await db.get_watch_run("watch_stale_status")
-    assert run is not None
-    assert run["status"] == "stopped"
 
-    watch_report = await db.get_watch_completion_report("watch_stale_status")
-    assert watch_report is not None
-    assert watch_report["report_type"] == "watch"
+@pytest.mark.asyncio
+async def test_watch_stop_delegates_to_controller():
+    from squire.api.routers.watch import watch_stop
 
-    sessions = await db.list_watch_sessions_for_run("watch_stale_status", page=1, per_page=20)
-    assert len(sessions) == 1
-    assert sessions[0]["status"] == "stopped"
-    assert sessions[0]["session_report_id"] is not None
+    controller = _FakeController(state="running")
+    result = await watch_stop(controller=controller)
+    assert result.status == "ok"
+    assert controller.stop_called is True
+
+
+@pytest.mark.asyncio
+async def test_watch_autostart_persists_preference(db):
+    from squire.api.routers.watch import watch_autostart
+
+    result = await watch_autostart(body=WatchAutostartRequest(enabled=True), db=db)
+    assert result.status == "ok"
+    assert await db.get_watch_state("watch_autostart") == "true"
+
+    result = await watch_autostart(body=WatchAutostartRequest(enabled=False), db=db)
+    assert await db.get_watch_state("watch_autostart") == "false"
+    assert "disabled" in result.message.lower()
 
 
 @pytest.mark.asyncio

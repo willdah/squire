@@ -1,14 +1,14 @@
 """Watch mode API endpoints — control, status, and history."""
 
 import asyncio
-import os
 
 from agent_risk_engine import RuleGate
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 
-from ..dependencies import get_db, get_guardrails, get_watch_config
+from ..dependencies import get_db, get_guardrails, get_watch_config, get_watch_controller
 from ..schemas import (
     WatchApprovalAction,
+    WatchAutostartRequest,
     WatchCommandResponse,
     WatchConfigResponse,
     WatchCycleSummary,
@@ -20,20 +20,6 @@ from ..schemas import (
 )
 
 router = APIRouter()
-
-
-async def _finalize_stale_watch_process(db, state: dict[str, str], *, reason: str) -> str:
-    """Finalize watch artifacts when the process is no longer running."""
-    from datetime import UTC, datetime
-
-    stopped_at = datetime.now(UTC).isoformat()
-    watch_id = state.get("watch_id")
-    watch_session_id = state.get("watch_session_id")
-    if watch_id:
-        await db.finalize_stale_watch_run(watch_id, watch_session_id=watch_session_id, reason=reason)
-    await db.set_watch_state("status", "stopped")
-    await db.set_watch_state("stopped_at", stopped_at)
-    return stopped_at
 
 
 def _effective_watch_risk_level(guardrails) -> int:
@@ -59,83 +45,54 @@ async def _decrement_supervisor_count(db) -> None:
 
 
 @router.get("/status", response_model=WatchStatusResponse)
-async def watch_status(db=Depends(get_db)):
+async def watch_status(db=Depends(get_db), controller=Depends(get_watch_controller)):
     """Current watch mode state.
 
-    Detects stale ``running`` status when the process has exited and
-    corrects the DB so the UI stays accurate.
+    Merges the in-memory controller state (authoritative for running/failed)
+    with DB-persisted counters and timestamps.
     """
     state = await db.get_all_watch_state()
-    if not state:
-        return WatchStatusResponse()
-
-    pid = state.get("pid")
-    if pid and state.get("status") == "running":
-        try:
-            os.kill(int(pid), 0)
-        except (ProcessLookupError, ValueError):
-            stopped_at = await _finalize_stale_watch_process(
-                db,
-                state,
-                reason="Watch process exited unexpectedly before stop finalization.",
-            )
-            state["status"] = "stopped"
-            state["stopped_at"] = stopped_at
-
-    return WatchStatusResponse(**state)
+    runtime = controller.status()
+    payload = dict(state or {})
+    payload["state"] = runtime.state
+    if runtime.last_error:
+        payload["last_error"] = runtime.last_error
+    # Keep the legacy ``status`` field aligned for older clients.
+    if runtime.state == "running":
+        payload["status"] = "running"
+    elif runtime.state == "failed":
+        payload["status"] = "failed"
+    else:
+        payload.setdefault("status", "stopped")
+    return WatchStatusResponse(**payload)
 
 
 @router.post("/start", response_model=WatchCommandResponse)
-async def watch_start(db=Depends(get_db)):
+async def watch_start(controller=Depends(get_watch_controller)):
     """Start watch mode if not already running."""
-    state = await db.get_all_watch_state()
-    pid = state.get("pid")
-    if pid and state.get("status") == "running":
-        try:
-            os.kill(int(pid), 0)
-            return WatchCommandResponse(status="ok", message="Watch already running")
-        except (ProcessLookupError, ValueError):
-            pass
-
-    await db.insert_watch_command("start")
-
-    import subprocess
-    import sys
-
-    subprocess.Popen(
-        [sys.executable, "-m", "squire", "watch"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
-    return WatchCommandResponse(status="ok", message="Watch starting")
+    result = await controller.start()
+    return WatchCommandResponse(status=result.status, message=result.message)
 
 
 @router.post("/stop", response_model=WatchCommandResponse)
-async def watch_stop(db=Depends(get_db)):
-    """Stop watch mode.
+async def watch_stop(controller=Depends(get_watch_controller)):
+    """Stop watch mode. Graceful; cancels after 30s if a cycle is still running."""
+    await controller.stop()
+    return WatchCommandResponse(status="ok", message="Watch stop requested")
 
-    If the watch process is still alive, queues a stop command for it to
-    pick up on its next poll.  If the process has already exited (crash,
-    OOM, etc.) but the DB still says ``running``, cleans up the stale
-    state directly so the UI reflects the real status.
+
+@router.post("/autostart", response_model=WatchCommandResponse)
+async def watch_autostart(body: WatchAutostartRequest = Body(...), db=Depends(get_db)):
+    """Persist the user's auto-start-on-boot intent.
+
+    When ``enabled`` is true, the FastAPI lifespan calls ``controller.start()``
+    after the container boots so watch survives restarts without a manual click.
     """
-    state = await db.get_all_watch_state()
-    pid = state.get("pid")
-
-    if pid and state.get("status") == "running":
-        try:
-            os.kill(int(pid), 0)
-        except (ProcessLookupError, ValueError):
-            await _finalize_stale_watch_process(
-                db,
-                state,
-                reason="Watch process already exited; finalized stale run artifacts.",
-            )
-            return WatchCommandResponse(status="ok", message="Watch process already exited; finalized watch artifacts")
-
-    await db.insert_watch_command("stop")
-    return WatchCommandResponse(status="ok", message="Stop command sent")
+    await db.set_watch_state("watch_autostart", "true" if body.enabled else "false")
+    return WatchCommandResponse(
+        status="ok",
+        message=("Auto-start enabled" if body.enabled else "Auto-start disabled"),
+    )
 
 
 @router.get("/config", response_model=WatchConfigResponse)

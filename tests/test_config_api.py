@@ -139,12 +139,30 @@ class TestPatchConfig:
         stored = await _setup_deps.get_config_overrides("watch")
         assert stored["interval_minutes"] == 7
 
-    async def test_patch_enqueues_reload_config_command(self, _setup_deps):
+    async def test_patch_triggers_watch_controller_reload(self, _setup_deps, monkeypatch):
+        """PATCH /config/* should call WatchController.reload() in-process when a controller exists."""
         from squire.api.routers.config import patch_config
 
-        await patch_config("watch", {"interval_minutes": 8})
-        pending = await _setup_deps.get_pending_watch_commands()
-        assert any(cmd["command"] == "reload_config" for cmd in pending)
+        reload_calls: list[bool] = []
+
+        class _FakeController:
+            def reload(self) -> None:
+                reload_calls.append(True)
+
+        monkeypatch.setattr(deps, "watch_controller", _FakeController())
+        try:
+            await patch_config("watch", {"interval_minutes": 8})
+            assert reload_calls == [True]
+        finally:
+            monkeypatch.setattr(deps, "watch_controller", None)
+
+    async def test_patch_tolerates_missing_watch_controller(self, _setup_deps):
+        """When the controller is not yet initialized, PATCH still succeeds silently."""
+        from squire.api.routers.config import patch_config
+
+        # deps.watch_controller is None by default in this fixture.
+        await patch_config("watch", {"interval_minutes": 9})
+        assert deps.watch_config.interval_minutes == 9
 
     async def test_patch_llm_updates_in_memory(self):
         from squire.api.routers.config import patch_config

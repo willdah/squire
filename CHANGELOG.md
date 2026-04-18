@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Watch mode in Docker containers:** Watch no longer becomes "lost" after navigating away from the watch page, and subsequent starts reliably reach `running`. The previous subprocess model spawned the watch loop via `subprocess.Popen` with `stderr=DEVNULL`, so failures were invisible; inside a container, PID reuse in the PID namespace could also make `os.kill(pid, 0)` return false positives, freezing the UI in a stale "running" state that couldn't be restarted. Root cause was architectural, not a single bug — the fix is the refactor below.
+
+### Changed
+
+- **Watch mode architecture:** Watch now runs as an **in-process asyncio task** managed by the FastAPI lifespan (`WatchController` in `src/squire/watch_controller.py`), not a separate Python subprocess. Start/stop/reload are driven by in-memory `asyncio.Event` signals instead of DB-polled `watch_commands` rows, eliminating the ~5-second command-polling latency and the hidden-subprocess-crash failure mode. A new `WatchController.status()` adds a first-class `state` field (`stopped` | `starting` | `running` | `failed`) with a `last_error` message, so a crashed cycle surfaces in the UI instead of leaving the status stuck. Loop crashes no longer take the API down: the supervisor wraps the loop in a top-level `try/except` that flips state to `failed` and finalizes half-open `watch_runs`/`watch_sessions` rows.
+- **Auto-start on container boot:** New opt-in `watch_autostart` preference (toggle on the Watch page → Control card) persists in `watch_state`; the lifespan calls `controller.start()` on boot when it's enabled, so watch survives container restarts without a manual click. Defaults to off.
+- **Concurrency guard:** A DB-backed holder lock (`watch_state.watch_holder` row with UUID + TTL + periodic heartbeat) protects against two watch loops running against the same SQLite — e.g. an accidental `uvicorn --workers 2` or invoking `squire watch` standalone while the web server already runs watch. The second caller gets `status="holder_busy"` and exits cleanly.
+- **Config reload latency:** `PATCH /api/config/*` and `DELETE /api/config/{section}` now invoke `WatchController.reload()` directly (sets an `asyncio.Event`) instead of inserting a row that the subprocess polled for. Effective update arrives at the next cycle boundary, typically sub-millisecond.
+- **Graceful shutdown:** `WatchController.stop()` signals shutdown, waits up to 30 s for the in-flight cycle to drain, then cancels the task. Cycle-level timeout (`cycle_timeout_seconds`, default 300 s) remains the first line of defense; worst case the container's existing stale-run cleanup on the next boot handles it.
+- **`squire watch` CLI:** The standalone CLI entrypoint still works and remains the path for headless deployments. Internally it now constructs a `WatchController`, shares the same holder lock (so the CLI can't collide with the web UI), and listens for SIGTERM/SIGINT to trigger a clean `controller.stop()`.
+- **Long-running memory fix:** `all_cycle_records` is now bounded to the most recent 500 cycles (`_ALL_CYCLES_MAX`). Previously this list grew for the life of a watch run — on a 5-minute interval over months it would accumulate tens of thousands of small dicts. Final watch-completion reports now reflect the bounded window, which is plenty for operator review.
+
+### Removed
+
+- **`watch_commands` SQLite table:** Dropped in a forward-only migration; the subprocess command queue is obsolete. The related helpers `DatabaseService.insert_watch_command`, `get_pending_watch_commands`, and `update_watch_command_status` are removed.
+- **`watch_state.pid` row:** Removed on migration. The field was only consulted to check if the subprocess was still alive — superfluous now that the controller is in-process. The `WatchStatusResponse.pid` API field is gone; consumers should read `state` instead.
+- **Subprocess liveness probing:** Every `os.kill(int(pid), 0)` call in `src/squire/api/routers/watch.py` is deleted, along with the `_finalize_stale_watch_process` helper. Stale-run cleanup is now a one-shot `finalize_stale_watch_runs_on_boot` run at lifespan startup.
+
+### Migration
+
+- The `watch_commands` table is dropped on first boot via a forward-only migration; the `pid` row in `watch_state` and any stale `watch_holder` row are deleted in the same pass. No manual intervention needed.
+- **Breaking**: `WatchStatusResponse.pid` is gone. The first-party UI is updated in lockstep. Third-party consumers of `/api/watch/status` that read `pid` should migrate to `state` (`"stopped" | "starting" | "running" | "failed"`) and `last_error`.
+- Operators who ran `squire watch` standalone keep doing so — the CLI command is preserved. If you run the web server *and* `squire watch` against the same `squire.db`, the second to start will now exit immediately with a "holder_busy" message; pick one.
+
 ## [0.19.0] — 2026-04-18
 
 ### Removed

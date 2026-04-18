@@ -7,7 +7,15 @@ import pytest_asyncio
 from google.genai import types
 
 from squire.database.service import DatabaseService
-from squire.watch import _accumulate_token_count, _extract_token_usage_from_event, _persist_watch_metrics
+from squire.watch_loop import (
+    accumulate_token_count as _accumulate_token_count,
+)
+from squire.watch_loop import (
+    extract_token_usage as _extract_token_usage_from_event,
+)
+from squire.watch_loop import (
+    persist_watch_metrics as _persist_watch_metrics,
+)
 
 
 @pytest_asyncio.fixture
