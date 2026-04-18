@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Chat skill loop:** WebSocket skill auto-continue no longer runs up to 15 text-only turns when the model stops calling tools; `[SKILL COMPLETE]` is honored from accumulated assistant text even on a final text-only turn.
 - **Skill lookup:** `SkillService.get_skill` (and `delete_skill`) now resolve skills by directory slug, case-insensitive directory match, or declared frontmatter `name`, so chat `?skill=` and the API match how skills are listed; WebSocket skill query params are trimmed.
 - **Chat skills:** Session state built when the WebSocket opens (including `active_skill`) is now passed as ADK `state_delta` on each `run_async` call. The runner reloads chat sessions from SQLite, so in-memory `session.state.update` alone never applied skill instructions to the model.
+- **DB init race:** `DatabaseService._get_conn` now only flips its ready flag once schema creation has fully completed, so concurrent first callers can no longer observe a partially-built database (e.g. a missing `watch_approvals` table) — fixes a flaky `test_approval_denied` failure on Python 3.13 CI.
 
 ## [0.17.0] — 2026-04-12
 

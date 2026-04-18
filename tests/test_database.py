@@ -1,6 +1,10 @@
 """Tests for DatabaseService."""
 
+import asyncio
+
 import pytest
+
+from squire.database.service import DatabaseService
 
 
 @pytest.mark.asyncio
@@ -314,3 +318,52 @@ async def test_watch_hierarchy_queries(db):
     cycles = await db.list_watch_cycles_for_session("watch_h1", "wss_h1")
     assert len(cycles) == 1
     assert cycles[0]["cycle_id"] == "cyc_h1"
+
+
+@pytest.mark.asyncio
+async def test_late_caller_waits_for_schema_creation(tmp_path, monkeypatch):
+    """A caller that arrives mid-init must not see a half-built schema.
+
+    Regression: ``_get_conn`` used to flip its "connection is ready" state
+    *before* ``_ensure_schema`` completed. A second caller arriving while
+    schema was still being built hit the fast path (``self._conn is not None``,
+    no lock) and ran queries against tables that hadn't been created yet —
+    surfacing as a flaky ``no such table: watch_approvals`` error on slower
+    CI runners.
+
+    This test forces the race by slowing ``_ensure_schema`` with a sleep,
+    then starting a late caller after the lock has been taken so it reaches
+    ``_get_conn`` while schema creation is mid-flight.
+    """
+    db = DatabaseService(tmp_path / "race.db")
+    original_ensure_schema = db._ensure_schema
+
+    async def slow_ensure_schema() -> None:
+        await asyncio.sleep(0.2)
+        await original_ensure_schema()
+
+    monkeypatch.setattr(db, "_ensure_schema", slow_ensure_schema)
+
+    try:
+
+        async def late_caller() -> int:
+            await asyncio.sleep(0.05)
+            return await db.insert_watch_approval(
+                request_id="late",
+                tool_name="restart_container",
+                args=None,
+                risk_level=3,
+            )
+
+        early = asyncio.create_task(
+            db.insert_watch_approval(
+                request_id="early",
+                tool_name="restart_container",
+                args=None,
+                risk_level=3,
+            )
+        )
+        late = asyncio.create_task(late_caller())
+        await asyncio.gather(early, late)
+    finally:
+        await db.close()
