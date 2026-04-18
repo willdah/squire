@@ -72,6 +72,10 @@ web: web-build ## Build Next.js export then start FastAPI + static UI
 watch: ## Start autonomous watch mode
 	cd $(REPO_ROOT) && uv run squire watch
 
+.PHONY: webhook-receiver
+webhook-receiver: ## Dev-only HTTP server to capture Squire notification webhooks
+	cd $(REPO_ROOT) && uv run python scripts/webhook_receiver.py
+
 # ---------------------------------------------------------------------------
 # Docker
 # ---------------------------------------------------------------------------
