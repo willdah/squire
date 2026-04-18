@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Dev tooling:** ``scripts/webhook_receiver.py`` and ``make webhook-receiver`` — stdlib HTTP server that logs Squire webhook POSTs (for integration testing); ``squire.example.toml`` documents localhost and ``host.docker.internal`` URLs.
 - **Agent instructions:** Shared guidance for host-scoped tools (default `host`, which host tool output describes, consistency across Docker calls, daemon vs remote confusion, anti-retry after repeated identical failures) on the root Squire agent, Monitor, Container, and router; Container agent now includes `docker_ps` for discovery without a Monitor handoff (also on Monitor for read-only observation).
 - **Docker errors:** When Docker fails on `local` (missing CLI, unreachable daemon, or socket/connect errors), Docker tool error text appends a short hint about passing `host=` consistently and lists other configured hosts when available.
 - **Sessions filter by watch run:** `GET /api/sessions` now accepts an optional `watch_id` query param that joins through `watch_sessions` to restrict results to chat sessions initiated by that watch.

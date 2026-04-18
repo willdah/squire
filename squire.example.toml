@@ -101,6 +101,15 @@
 # name = "ntfy"
 # url = "https://ntfy.sh/squire-alerts"
 # events = ["*"]
+#
+# Local test receiver (``uv run python scripts/webhook_receiver.py`` — default path /webhook, port 9847):
+# [[notifications.webhooks]]
+# name = "dev-echo"
+# url = "http://127.0.0.1:9847/webhook"
+# events = ["*"]
+#
+# Same receiver on the Docker host when Squire runs in a container:
+# url = "http://host.docker.internal:9847/webhook"
 
 # --- Email notifications ---
 # [notifications.email]
