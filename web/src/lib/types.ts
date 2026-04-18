@@ -20,6 +20,7 @@ export interface HostSnapshot {
   disk_usage_raw: string;
   containers: ContainerInfo[];
   error?: string | null;
+  checked_at?: string | null;
 }
 
 export interface SystemStatusResponse {
@@ -59,6 +60,7 @@ export interface HostVerifyResponse {
   name: string;
   reachable: boolean;
   message: string;
+  checked_at: string;
 }
 
 export interface SessionInfo {

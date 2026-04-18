@@ -8,6 +8,7 @@ import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConnectivityBadge } from "@/components/hosts/connectivity-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -33,8 +34,6 @@ import {
   Server,
   ShieldAlert,
   Trash2,
-  Wifi,
-  WifiOff,
 } from "lucide-react";
 
 function HostsSkeleton() {
@@ -51,13 +50,11 @@ function HostsSkeleton() {
 }
 
 function StatusBadge({ status }: { status: string }) {
+  // Presence on the hosts page already implies enrollment, so we only
+  // surface the status when it's actionable ("pending_key" = user still
+  // needs to deploy the SSH key).
   if (status === "active") {
-    return (
-      <Badge variant="secondary" className="gap-1">
-        <Check className="h-3 w-3" />
-        Active
-      </Badge>
-    );
+    return null;
   }
   return (
     <Badge variant="outline" className="gap-1 border-amber-500 text-amber-600">
@@ -275,8 +272,10 @@ function CopyableKey({ publicKey }: { publicKey: string }) {
 
 function HostDetail({ name }: { name: string }) {
   const router = useRouter();
-  const { data: host, isLoading } = useSWR(`/api/hosts/${name}`, () =>
-    apiGet<HostInfo>(`/api/hosts/${name}`)
+  const { data: host, isLoading } = useSWR(
+    `/api/hosts/${name}`,
+    () => apiGet<HostInfo>(`/api/hosts/${name}`),
+    { refreshInterval: 30_000 },
   );
   const { data: keyData } = useSWR(
     host?.status === "pending_key" ? `/api/hosts/${name}/public-key` : null,
@@ -295,8 +294,6 @@ function HostDetail({ name }: { name: string }) {
     );
   }
 
-  const isReachable = host.snapshot && !host.snapshot.error;
-
   const handleVerify = async () => {
     setVerifying(true);
     setVerifyResult(null);
@@ -310,6 +307,8 @@ function HostDetail({ name }: { name: string }) {
       }
     } catch {
       setVerifyResult("failed");
+      await mutate(`/api/hosts/${name}`);
+      await mutate("/api/hosts");
     } finally {
       setVerifying(false);
     }
@@ -336,17 +335,7 @@ function HostDetail({ name }: { name: string }) {
           </Button>
         </Link>
         <h1 className="text-2xl">{host.name}</h1>
-        {isReachable ? (
-          <Badge variant="secondary" className="gap-1">
-            <Wifi className="h-3 w-3" />
-            Reachable
-          </Badge>
-        ) : (
-          <Badge variant="destructive" className="gap-1">
-            <WifiOff className="h-3 w-3" />
-            Unreachable
-          </Badge>
-        )}
+        <ConnectivityBadge host={host} />
         <StatusBadge status={host.status} />
       </div>
 
@@ -456,8 +445,10 @@ function HostDetail({ name }: { name: string }) {
 }
 
 function HostList() {
-  const { data: hosts, isLoading } = useSWR("/api/hosts", () =>
-    apiGet<HostInfo[]>("/api/hosts")
+  const { data: hosts, isLoading } = useSWR(
+    "/api/hosts",
+    () => apiGet<HostInfo[]>("/api/hosts"),
+    { refreshInterval: 30_000 },
   );
 
   return (
@@ -487,8 +478,6 @@ function HostList() {
       )}
       {hosts && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {hosts.map((host) => {
-          const isReachable = host.snapshot && !host.snapshot.error;
-
           return (
             <Link key={host.name} href={`/hosts?name=${host.name}`}>
               <Card className="hover:border-primary/50 transition-colors cursor-pointer">
@@ -498,11 +487,7 @@ function HostList() {
                     {host.name}
                     <div className="ml-auto flex items-center gap-1">
                       <StatusBadge status={host.status} />
-                      {isReachable ? (
-                        <Wifi className="h-3 w-3 text-green-500" />
-                      ) : (
-                        <WifiOff className="h-3 w-3 text-destructive" />
-                      )}
+                      <ConnectivityBadge host={host} iconOnly />
                     </div>
                   </CardTitle>
                 </CardHeader>

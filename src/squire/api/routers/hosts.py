@@ -140,8 +140,14 @@ async def remove_host(name: str, host_store=Depends(get_host_store)):
 
 @router.post("/{name}/verify", response_model=HostVerifyResponse)
 async def verify_host(name: str, host_store=Depends(get_host_store)):
-    """Verify connectivity to a managed host."""
-    from ...main import _collect_snapshot
+    """Verify connectivity to a managed host.
+
+    Updates the cached snapshot on both success and failure so the UI
+    reflects the latest probe result immediately — a failed verify writes
+    ``{"error": "unreachable", "checked_at": now}`` rather than leaving
+    stale data in place.
+    """
+    from ...main import _collect_snapshot, _now_iso
     from ..app import get_latest_snapshot, set_latest_snapshot
 
     try:
@@ -152,16 +158,20 @@ async def verify_host(name: str, host_store=Depends(get_host_store)):
     if reachable:
         try:
             snap = await _collect_snapshot(host=name)
-            current = await get_latest_snapshot()
-            current[name] = snap
-            await set_latest_snapshot(current)
         except Exception:
-            pass
+            snap = {"hostname": name, "error": "unreachable", "containers": [], "checked_at": _now_iso()}
+    else:
+        snap = {"hostname": name, "error": "unreachable", "containers": [], "checked_at": _now_iso()}
+
+    current = await get_latest_snapshot()
+    current[name] = snap
+    await set_latest_snapshot(current)
 
     return HostVerifyResponse(
         name=name,
         reachable=reachable,
         message="Host is reachable." if reachable else "Could not connect.",
+        checked_at=snap["checked_at"],
     )
 
 
