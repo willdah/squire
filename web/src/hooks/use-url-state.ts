@@ -27,7 +27,7 @@ export function useUrlState<T extends string>(
 
   const setValue = useCallback(
     (next: T) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(currentSearchString(searchParams));
       if (!next || next === defaultValue) {
         params.delete(key);
       } else {
@@ -56,7 +56,7 @@ export function useUrlStateSet(key: string): [Set<string>, (next: Set<string>) =
 
   const setValue = useCallback(
     (next: Set<string>) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(currentSearchString(searchParams));
       if (next.size === 0) {
         params.delete(key);
       } else {
@@ -88,7 +88,7 @@ export function useUrlStateNumber(
 
   const setValue = useCallback(
     (next: number) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(currentSearchString(searchParams));
       if (next === defaultValue) {
         params.delete(key);
       } else {
@@ -101,4 +101,20 @@ export function useUrlStateNumber(
   );
 
   return [value, setValue];
+}
+
+/**
+ * Return the live URL search string when possible. `useSearchParams()` reflects
+ * the snapshot at render time — if two setters from different `useUrlState`
+ * hooks fire in the same event handler, the second one would otherwise race
+ * against the first's `router.replace()` and clobber it. Next.js's
+ * `router.replace()` updates `window.location` synchronously via
+ * `history.replaceState()`, so reading from the window lets sequential writes
+ * compose.
+ */
+function currentSearchString(searchParams: ReturnType<typeof useSearchParams>): string {
+  if (typeof window !== "undefined") {
+    return window.location.search.replace(/^\?/, "");
+  }
+  return searchParams.toString();
 }
