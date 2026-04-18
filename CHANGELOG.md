@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-04-18
+
 ### Added
 
 - **Tool & skill effect classification:** Every tool declares an `EFFECT` (`read` / `write` / `mixed`); multi-action tools declare per-action `EFFECTS`. New `TOOL_EFFECTS` registry and `get_tool_effect()` helper in `squire.tools`. `GET /api/tools` now includes a tool-level `effect` field and per-action `effect` on multi-action tools; `GET /api/skills` includes `effect` (optional frontmatter `metadata.effect`, default `"mixed"`). The Tools and Skills pages render an Effect column with a colored badge and a filter dropdown (read/write/mixed); the Tools page URL-state backs the new filter. Skill form has a matching Effect selector. Bootstrapped watch playbooks (`recover-container-unhealthy`, `triage-disk-pressure`) are seeded as `effect: write`. Effect is UI-only metadata — orthogonal to risk and not consumed by the risk gate, guardrails, or approval today.
