@@ -26,7 +26,7 @@ classifiers = [
 dependencies = [
     "google-adk==1.31.0",
     "litellm==1.82.2",
-    "pydantic==2.12.5",
+    "pydantic==2.13.2",
     "pydantic-settings==2.13.1",
     "python-dotenv==1.2.2",
     "typer==0.24.1",
