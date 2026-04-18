@@ -8,6 +8,7 @@ from google.adk.agents.readonly_context import ReadonlyContext
 
 from .shared import (
     build_conversation_style,
+    build_host_scoped_tools_section,
     build_hosts_section,
     build_identity_section,
     build_risk_section,
@@ -51,6 +52,8 @@ def build_instruction(ctx: ReadonlyContext) -> str:
   with any remaining work. Do NOT stop responding — always give the user a complete answer.
 - NEVER pretend you have run a command or tool. If a tool call fails, tell the user
   exactly what happened.
+
+{build_host_scoped_tools_section()}
 
 {build_risk_section(ctx)}
 {build_hosts_section(ctx)}\

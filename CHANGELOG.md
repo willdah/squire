@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Agent instructions:** Shared guidance for host-scoped tools (default `host`, which host tool output describes, consistency across Docker calls, daemon vs remote confusion, anti-retry after repeated identical failures) on the root Squire agent, Monitor, Container, and router; Container agent now includes `docker_ps` for discovery without a Monitor handoff (also on Monitor for read-only observation).
+- **Docker errors:** When Docker fails on `local` (missing CLI, unreachable daemon, or socket/connect errors), Docker tool error text appends a short hint about passing `host=` consistently and lists other configured hosts when available.
+- **Sessions filter by watch run:** `GET /api/sessions` now accepts an optional `watch_id` query param that joins through `watch_sessions` to restrict results to chat sessions initiated by that watch.
+- **Watch Explorer → Sessions handoff:** Watch Explorer now has an "Open in Sessions" button on the selected run that navigates to `/sessions?watch_id=<id>` with a filter chip and clear button on the Sessions page.
+- **Shared URL-state hook:** New `useUrlState` / `useUrlStateSet` / `useUrlStateNumber` hooks in `web/src/hooks/use-url-state.ts` that sync component state with URL search params, modeled after the existing Watch Explorer pattern.
+
+### Changed
+
+- **Multi-agent tests:** Sub-agent tool uniqueness is asserted per specialist; the same tool may appear on more than one sub-agent when intentionally shared.
+- **Chat model dropdown:** Chat header dropdown now auto-sizes to fit the longest available model name (with min/max caps) instead of a hardcoded 20rem width, so long model ids no longer clip and the layout stays stable across selections.
+- **UI state preservation:** Config tabs, Notifications tabs, Watch tabs, Tools filters/sort/expanded rows, and Activity filters are now backed by URL search params and survive navigation away and back. The sidebar also remembers the last full URL visited within each top-level section (via sessionStorage), so clicking `Config` after visiting another page returns the user to the same tab (e.g. Guardrails) they left.
+
+### Fixed
+
+- **Chat skill loop:** WebSocket skill auto-continue no longer runs up to 15 text-only turns when the model stops calling tools; `[SKILL COMPLETE]` is honored from accumulated assistant text even on a final text-only turn.
+- **Skill lookup:** `SkillService.get_skill` (and `delete_skill`) now resolve skills by directory slug, case-insensitive directory match, or declared frontmatter `name`, so chat `?skill=` and the API match how skills are listed; WebSocket skill query params are trimmed.
+- **Chat skills:** Session state built when the WebSocket opens (including `active_skill`) is now passed as ADK `state_delta` on each `run_async` call. The runner reloads chat sessions from SQLite, so in-memory `session.state.update` alone never applied skill instructions to the model.
+- **DB init race:** `DatabaseService._get_conn` now only flips its ready flag once schema creation has fully completed, so concurrent first callers can no longer observe a partially-built database (e.g. a missing `watch_approvals` table) — fixes a flaky `test_approval_denied` failure on Python 3.13 CI.
+
 ## [0.17.0] — 2026-04-12
 
 ### Added

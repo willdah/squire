@@ -296,24 +296,30 @@ class DatabaseService:
         self._db_path = db_path
         self._conn: aiosqlite.Connection | None = None
         self._conn_lock = asyncio.Lock()
+        self._initialized = False
 
     async def _get_conn(self) -> aiosqlite.Connection:
         """Open and return the database connection, creating schema on first call.
 
         Uses a lock to prevent concurrent coroutines from racing to
-        initialize the connection and schema simultaneously.
+        initialize the connection and schema simultaneously. The
+        ``_initialized`` flag is only flipped once schema creation has
+        fully completed, so concurrent callers that enter while schema is
+        being built wait on the lock instead of observing a half-built DB.
         """
-        if self._conn is not None:
-            return self._conn
+        if self._initialized:
+            return self._conn  # type: ignore[return-value]
         async with self._conn_lock:
-            if self._conn is None:
-                self._db_path.parent.mkdir(parents=True, exist_ok=True)
-                self._conn = await aiosqlite.connect(self._db_path)
-                self._conn.row_factory = aiosqlite.Row
-                await self._conn.execute("PRAGMA journal_mode=WAL")
-                await self._conn.execute("PRAGMA busy_timeout=5000")
-                await self._conn.execute("PRAGMA foreign_keys=ON")
-                await self._ensure_schema()
+            if self._initialized:
+                return self._conn  # type: ignore[return-value]
+            self._db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._conn = await aiosqlite.connect(self._db_path)
+            self._conn.row_factory = aiosqlite.Row
+            await self._conn.execute("PRAGMA journal_mode=WAL")
+            await self._conn.execute("PRAGMA busy_timeout=5000")
+            await self._conn.execute("PRAGMA foreign_keys=ON")
+            await self._ensure_schema()
+            self._initialized = True
         return self._conn
 
     async def _ensure_schema(self) -> None:
@@ -568,24 +574,47 @@ class DatabaseService:
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
-    async def list_sessions(self, limit: int = 20) -> list[dict]:
-        """List recent chat sessions."""
+    async def list_sessions(self, limit: int = 20, watch_id: str | None = None) -> list[dict]:
+        """List recent chat sessions.
+
+        When ``watch_id`` is provided, restricts results to sessions that were
+        initiated by that watch run (joined through ``watch_sessions.adk_session_id``).
+        """
         conn = await self._get_conn()
-        cursor = await conn.execute(
-            """
-            SELECT
-                s.*,
-                COALESCE(SUM(c.input_tokens), 0) AS input_tokens,
-                COALESCE(SUM(c.output_tokens), 0) AS output_tokens,
-                COALESCE(SUM(c.total_tokens), 0) AS total_tokens
-            FROM sessions s
-            LEFT JOIN conversations c ON c.session_id = s.session_id
-            GROUP BY s.session_id
-            ORDER BY s.last_active DESC
-            LIMIT ?
-            """,
-            (limit,),
-        )
+        if watch_id:
+            cursor = await conn.execute(
+                """
+                SELECT
+                    s.*,
+                    COALESCE(SUM(c.input_tokens), 0) AS input_tokens,
+                    COALESCE(SUM(c.output_tokens), 0) AS output_tokens,
+                    COALESCE(SUM(c.total_tokens), 0) AS total_tokens
+                FROM sessions s
+                INNER JOIN watch_sessions ws ON ws.adk_session_id = s.session_id
+                LEFT JOIN conversations c ON c.session_id = s.session_id
+                WHERE ws.watch_id = ?
+                GROUP BY s.session_id
+                ORDER BY s.last_active DESC
+                LIMIT ?
+                """,
+                (watch_id, limit),
+            )
+        else:
+            cursor = await conn.execute(
+                """
+                SELECT
+                    s.*,
+                    COALESCE(SUM(c.input_tokens), 0) AS input_tokens,
+                    COALESCE(SUM(c.output_tokens), 0) AS output_tokens,
+                    COALESCE(SUM(c.total_tokens), 0) AS total_tokens
+                FROM sessions s
+                LEFT JOIN conversations c ON c.session_id = s.session_id
+                GROUP BY s.session_id
+                ORDER BY s.last_active DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
@@ -1747,3 +1776,4 @@ class DatabaseService:
         if self._conn is not None:
             await self._conn.close()
             self._conn = None
+        self._initialized = False

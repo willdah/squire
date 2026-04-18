@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import useSWR from "swr";
 import { apiGet } from "@/lib/api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -7,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { NotificationHistory } from "@/components/notifications/notification-history";
 import { AlertRulesTab } from "@/components/notifications/alert-rules-tab";
 import { ChannelsTab } from "@/components/notifications/channels-tab";
+import { useUrlState } from "@/hooks/use-url-state";
 import type { EventInfo } from "@/lib/types";
 
 const NOTIFICATION_CATEGORIES = [
@@ -28,6 +30,15 @@ function NotificationsSkeleton() {
 }
 
 export default function NotificationsPage() {
+  return (
+    <Suspense fallback={<NotificationsSkeleton />}>
+      <NotificationsPageInner />
+    </Suspense>
+  );
+}
+
+function NotificationsPageInner() {
+  const [tab, setTab] = useUrlState<string>("tab", "history");
   const { data: allEvents, isLoading } = useSWR(
     `/api/events?limit=200`,
     () => apiGet<EventInfo[]>(`/api/events?limit=200`),
@@ -46,7 +57,7 @@ export default function NotificationsPage() {
     <div className="space-y-6 animate-fade-in-up">
       <h1 className="text-2xl">Notifications</h1>
 
-      <Tabs defaultValue="history">
+      <Tabs value={tab} onValueChange={(value) => setTab(String(value))}>
         <TabsList className="flex flex-wrap">
           <TabsTrigger value="history">History</TabsTrigger>
           <TabsTrigger value="rules">Alert Rules</TabsTrigger>

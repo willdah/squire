@@ -1,5 +1,6 @@
 """docker_logs tool — read container logs."""
 
+from ._docker_hints import append_local_docker_error_hint
 from ._registry import get_registry
 
 RISK_LEVEL = 2  # Low
@@ -43,7 +44,8 @@ async def docker_logs(
     result = await backend.run(cmd, timeout=30.0)
 
     if result.returncode != 0:
-        return f"Error reading logs for '{container}': {result.stderr}"
+        err = f"Error reading logs for '{container}': {result.stderr}"
+        return append_local_docker_error_hint(resolved_host, err)
 
     output = result.stdout + result.stderr  # docker logs writes to stderr too
 

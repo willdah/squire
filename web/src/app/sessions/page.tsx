@@ -1,7 +1,9 @@
 "use client";
 
+import { Suspense } from "react";
 import useSWR from "swr";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiGet, apiDelete } from "@/lib/api";
 import {
   Table,
@@ -12,7 +14,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Trash2, MessageSquare, History, Eraser, FileSearch } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Trash2, MessageSquare, History, Eraser, FileSearch, X } from "lucide-react";
 import type { SessionInfo } from "@/lib/types";
 
 function relativeTime(dateStr: string): string {
@@ -30,9 +33,23 @@ function relativeTime(dateStr: string): string {
 }
 
 export default function SessionsPage() {
-  const { data: sessions, mutate } = useSWR("/api/sessions", () =>
-    apiGet<SessionInfo[]>("/api/sessions")
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading sessions...</div>}>
+      <SessionsPageInner />
+    </Suspense>
   );
+}
+
+function SessionsPageInner() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const watchId = searchParams.get("watch_id");
+
+  const fetchKey = watchId
+    ? `/api/sessions?watch_id=${encodeURIComponent(watchId)}`
+    : "/api/sessions";
+
+  const { data: sessions, mutate } = useSWR(fetchKey, () => apiGet<SessionInfo[]>(fetchKey));
 
   const handleDelete = async (sessionId: string) => {
     if (!confirm("Delete this session and all its messages?")) return;
@@ -44,6 +61,10 @@ export default function SessionsPage() {
     if (!confirm("Delete ALL sessions and their messages? This cannot be undone.")) return;
     await apiDelete("/api/sessions");
     mutate();
+  };
+
+  const clearWatchFilter = () => {
+    router.replace("/sessions");
   };
 
   return (
@@ -58,10 +79,33 @@ export default function SessionsPage() {
         )}
       </div>
 
+      {watchId && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+          <span className="text-muted-foreground">Filtered by watch run:</span>
+          <Badge variant="secondary" className="font-mono text-xs">
+            {watchId}
+          </Badge>
+          <Button variant="ghost" size="sm" className="ml-auto h-7" onClick={clearWatchFilter}>
+            <X className="mr-1 h-3.5 w-3.5" />
+            Clear filter
+          </Button>
+        </div>
+      )}
+
       {!sessions || sessions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
           <History className="h-8 w-8" />
-          <p className="text-sm">No sessions found</p>
+          <p className="text-sm">
+            {watchId ? "No sessions found for this watch run" : "No sessions found"}
+          </p>
+          {watchId && (
+            <Link
+              href={`/watch-explorer?watch_id=${encodeURIComponent(watchId)}`}
+              className="text-xs text-primary underline-offset-4 hover:underline"
+            >
+              Back to Watch Explorer
+            </Link>
+          )}
         </div>
       ) : (
         <Table>

@@ -8,6 +8,7 @@ from google.adk.agents.readonly_context import ReadonlyContext
 
 from .shared import (
     build_conversation_style,
+    build_host_scoped_tools_section,
     build_hosts_section,
     build_identity_section,
     build_risk_section,
@@ -28,6 +29,7 @@ You manage container lifecycle — viewing logs, managing containers, pulling
 images, cleaning up resources, and managing Docker Compose stacks.
 
 ## Tool Usage
+- Use `docker_ps` to list containers and confirm which `host` runs Docker before other actions.
 - Use `docker_logs` to view container logs for troubleshooting.
 - Use `docker_compose` to manage Compose stacks (start, stop, restart, pull, up, down).
 - Use `docker_container` to manage individual containers (inspect, start, stop, restart, remove).
@@ -41,6 +43,8 @@ images, cleaning up resources, and managing Docker Compose stacks.
   — the risk gate handles approval for dangerous actions via a UI dialog automatically.
 - NEVER fabricate command output. If a tool fails or is blocked, report the error
   and continue with any remaining work. Do NOT stop responding.
+
+{build_host_scoped_tools_section()}
 
 {build_risk_section(ctx)}
 {build_hosts_section(ctx)}\

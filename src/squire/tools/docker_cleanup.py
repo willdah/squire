@@ -1,5 +1,6 @@
 """docker_cleanup tool — prune unused Docker resources."""
 
+from ._docker_hints import append_local_docker_error_hint
 from ._registry import get_registry
 
 RISK_LEVELS: dict[str, int] = {
@@ -48,7 +49,7 @@ async def docker_cleanup(
     result = await backend.run(cmd, timeout=120.0)
 
     if result.returncode != 0:
-        return f"Error running 'docker {action}': {result.stderr}"
+        return append_local_docker_error_hint(host, f"Error running 'docker {action}': {result.stderr}")
 
     output = result.stdout.strip()
     return output if output else f"docker {action} completed successfully."

@@ -103,6 +103,29 @@ You are executing a skill. Follow the instructions below.{host_line}
 - When you have completed all instructions, provide a summary, then emit [SKILL COMPLETE]."""
 
 
+def build_host_scoped_tools_section() -> str:
+    """Guidance for tools with a default host (Docker, SSH-backed execution)."""
+    return """\
+## Host-scoped tools (Docker and system commands)
+- Default `host` is `local` (where Squire runs). Omitting `host` does **not** mean "the host where
+  containers last appeared" or where a prior call succeeded — each tool defaults to `local` unless
+  you pass `host`.
+- **Which host does output describe?** Only the `host` you passed to **that** tool. If `docker_ps`
+  used `host="prod-apps-01"`, the container list is on **that** host — never tell the user a
+  container is "on local" or "on your Mac" unless you called with `host="local"` and it succeeded.
+- **Consistency:** If a call succeeds with `host="X"`, use the **same `X`** for every related
+  follow-up (e.g. `docker_ps` then `docker_image` then `docker_container`) unless the user names a
+  different host.
+- **Docker failures on `local`:** `Command not found: docker`, **cannot connect to the Docker
+  daemon**, or socket errors mean **this** `host` cannot run Docker commands right now — not that
+  containers seen in a **different** tool result "run locally." Do not mix hosts in your reasoning.
+  Prefer the same remote `host` where `docker_ps` succeeded, with explicit `host` on every follow-up,
+  instead of repeating the identical failing call on `local`.
+- **Anti-retry:** After **two** failures with the **same tool name and the same arguments**, stop
+  repeating. Tell the user what failed, then change approach (different `host`, confirm with
+  `docker_ps` on the intended host, or ask the user)."""
+
+
 def build_watch_mode_addendum(ctx: ReadonlyContext) -> str:
     """Return watch-mode instructions if watch_mode is active, else empty string."""
     if not ctx.state.get("watch_mode"):

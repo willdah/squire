@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import useSWR from "swr";
 import { apiGet } from "@/lib/api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,10 +9,20 @@ import { WatchStatsCard } from "@/components/watch/watch-stats-card";
 import { WatchLiveStream } from "@/components/watch/watch-live-stream";
 import { WatchCycleHistory } from "@/components/watch/watch-cycle-history";
 import { WatchConfigDrawer } from "@/components/watch/watch-config-drawer";
+import { useUrlState } from "@/hooks/use-url-state";
 import type { WatchStatus } from "@/lib/types";
 
 export default function WatchPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading watch...</div>}>
+      <WatchPageInner />
+    </Suspense>
+  );
+}
+
+function WatchPageInner() {
   const [configOpen, setConfigOpen] = useState(false);
+  const [tab, setTab] = useUrlState<string>("tab", "stream");
 
   const { data: status, mutate } = useSWR(
     "/api/watch/status",
@@ -39,7 +49,7 @@ export default function WatchPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="stream">
+      <Tabs value={tab} onValueChange={(value) => setTab(String(value))}>
         <TabsList>
           <TabsTrigger value="stream">Live Stream</TabsTrigger>
           <TabsTrigger value="history">Cycle History</TabsTrigger>

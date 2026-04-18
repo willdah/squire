@@ -2,8 +2,9 @@
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
+import pytest
 from google.genai import types
 
 from squire.api.routers.chat import (
@@ -12,6 +13,7 @@ from squire.api.routers.chat import (
     _maybe_backfill_history_from_db,
     _run_single_turn,
     _should_persist_assistant_turn,
+    _stream_response,
 )
 
 
@@ -60,6 +62,65 @@ def test_should_not_persist_empty_turn_without_tokens():
     assert _should_persist_assistant_turn("", None, None, None) is False
 
 
+@pytest.mark.asyncio
+async def test_stream_response_skill_stops_after_text_only_followup():
+    """Skill auto-continue must not loop when the model answers without tools."""
+    websocket = AsyncMock()
+    session = SimpleNamespace(id="sid")
+    app_config = SimpleNamespace(user_id="uid")
+
+    with patch("squire.api.routers.chat._run_single_turn", new_callable=AsyncMock) as m_turn:
+        m_turn.side_effect = [
+            ("Ran tools", True, None, None, None),
+            ("Finished (text only)", False, None, None, None),
+        ]
+        session_state = {"latest_snapshot": {}, "available_hosts": []}
+        await _stream_response(
+            websocket=websocket,
+            runner=SimpleNamespace(),
+            session=session,
+            agent=SimpleNamespace(name="Squire"),
+            user_text="run skill",
+            app_config=app_config,
+            db=None,
+            notifier=None,
+            session_state=session_state,
+            skill_active=True,
+            stop_requested=None,
+        )
+    assert m_turn.call_count == 2
+    assert m_turn.call_args_list[0].kwargs.get("state_delta") is session_state
+    assert m_turn.call_args_list[1].kwargs.get("state_delta") is session_state
+
+
+@pytest.mark.asyncio
+async def test_stream_response_skill_stops_on_marker_after_tool_turn():
+    """[SKILL COMPLETE] on a later text-only turn ends the loop (not gated on tools that turn)."""
+    websocket = AsyncMock()
+    session = SimpleNamespace(id="sid")
+    app_config = SimpleNamespace(user_id="uid")
+
+    with patch("squire.api.routers.chat._run_single_turn", new_callable=AsyncMock) as m_turn:
+        m_turn.side_effect = [
+            ("Step done", True, None, None, None),
+            ("All done\n[SKILL COMPLETE]", False, None, None, None),
+        ]
+        await _stream_response(
+            websocket=websocket,
+            runner=SimpleNamespace(),
+            session=session,
+            agent=SimpleNamespace(name="Squire"),
+            user_text="run skill",
+            app_config=app_config,
+            db=None,
+            notifier=None,
+            session_state={},
+            skill_active=True,
+            stop_requested=None,
+        )
+    assert m_turn.call_count == 2
+
+
 class _FakeRunner:
     def __init__(self, events):
         self._events = events
@@ -82,6 +143,37 @@ def _text_event(text: str, *, partial: bool, final: bool):
         content=SimpleNamespace(parts=[part]),
         is_final_response=lambda: final,
     )
+
+
+@pytest.mark.asyncio
+async def test_run_single_turn_forwards_state_delta_to_runner():
+    """Durable ADK session must receive state (e.g. active_skill) via run_async state_delta."""
+    captured: dict = {}
+
+    async def fake_run_async(**kwargs):
+        captured.update(kwargs)
+        if False:
+            yield None  # pragma: no cover
+
+    runner = SimpleNamespace(run_async=fake_run_async)
+    websocket = AsyncMock()
+    session = SimpleNamespace(id="sid")
+    app_config = SimpleNamespace(user_id="uid")
+    delta = {"active_skill": {"skill_name": "t", "hosts": ["all"], "instructions": "go"}}
+
+    await _run_single_turn(
+        websocket=websocket,
+        runner=runner,
+        session=session,
+        agent=SimpleNamespace(name="Squire"),
+        user_text="hi",
+        app_config=app_config,
+        db=None,
+        state_delta=delta,
+    )
+    assert captured.get("state_delta") is delta
+    assert captured.get("session_id") == "sid"
+    assert captured.get("user_id") == "uid"
 
 
 def test_run_single_turn_honors_stop_requested():

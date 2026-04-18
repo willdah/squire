@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import useSWR from "swr";
 import { apiGet } from "@/lib/api";
 import { ConfigEditor } from "@/components/config/config-editor";
@@ -37,7 +38,9 @@ export default function ConfigPage() {
           restart.
         </p>
       </div>
-      <ConfigEditor config={config} onSaved={() => mutate()} />
+      <Suspense fallback={<Skeleton className="h-64 rounded-lg" />}>
+        <ConfigEditor config={config} onSaved={() => mutate()} />
+      </Suspense>
     </div>
   );
 }

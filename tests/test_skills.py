@@ -120,6 +120,32 @@ class TestParsing:
         assert skill.name == "dir-name"
         assert skill.instructions == "Do something."
 
+    def test_get_skill_by_frontmatter_when_directory_slug_differs(self, skill_service, tmp_path):
+        """Chat and API pass declared ``name``; directory may be a different slug."""
+        skill_dir = tmp_path / "folder-slug"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\nname: logical-name\ndescription: test\n---\n\nRun the task.")
+        by_dir = skill_service.get_skill("folder-slug")
+        by_name = skill_service.get_skill("logical-name")
+        assert by_dir is not None and by_name is not None
+        assert by_dir.name == "logical-name"
+        assert by_name.instructions == "Run the task."
+
+    def test_delete_skill_resolves_declared_name(self, skill_service, tmp_path):
+        skill_dir = tmp_path / "folder-slug"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\nname: logical-name\ndescription: x\n---\n\nBody.")
+        assert skill_service.delete_skill("logical-name") is True
+        assert not skill_dir.exists()
+
+    def test_get_skill_case_insensitive_directory(self, skill_service, tmp_path):
+        skill_dir = tmp_path / "my-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\ndescription: x\n---\n\nHi.")
+        loaded = skill_service.get_skill("MY-SKILL")
+        assert loaded is not None
+        assert loaded.name == "my-skill"
+
     def test_multiline_instructions(self, skill_service):
         instructions = "Step 1: Check containers.\n\nStep 2: Restart if needed.\n\n- Item A\n- Item B"
         skill = _make_skill(instructions=instructions)

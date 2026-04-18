@@ -1,5 +1,6 @@
 """docker_compose tool — read and manage Docker Compose stacks."""
 
+from ._docker_hints import append_local_docker_error_hint
 from ._registry import get_registry
 
 RISK_LEVELS: dict[str, int] = {
@@ -82,7 +83,8 @@ async def docker_compose(
 
     if result.returncode != 0:
         path_info = f" (resolved path: {resolved_dir}/docker-compose.yml)" if resolved_dir else ""
-        return f"Error running 'docker compose {action}'{path_info}: {result.stderr}"
+        err = f"Error running 'docker compose {action}'{path_info}: {result.stderr}"
+        return append_local_docker_error_hint(resolved_host, err)
 
     output = result.stdout.strip()
     return output if output else f"docker compose {action} completed successfully."

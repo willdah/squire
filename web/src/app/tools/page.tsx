@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, Suspense, useState } from "react";
 import useSWR from "swr";
 import { apiGet, apiPatch } from "@/lib/api";
 import {
@@ -23,7 +23,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Wrench, ChevronRight, Save, Loader2, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { useUrlState, useUrlStateSet } from "@/hooks/use-url-state";
 import type { ToolInfo, ToolAction } from "@/lib/types";
+
+type SortCol = "name" | "group" | "risk" | "";
 
 const RISK_COLORS: Record<number, string> = {
   1: "bg-green-500/15 text-green-700 dark:text-green-400",
@@ -86,19 +89,27 @@ function ActionRow({ toolName, action, onOverride, pendingValue }: {
 }
 
 export default function ToolsPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading tools...</div>}>
+      <ToolsPageInner />
+    </Suspense>
+  );
+}
+
+function ToolsPageInner() {
   const { data: tools, mutate } = useSWR("/api/tools", () =>
     apiGet<ToolInfo[]>("/api/tools")
   );
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useUrlStateSet("expanded");
   const [saving, setSaving] = useState(false);
   const [persist, setPersist] = useState(false);
 
-  // Search, filter, sort
-  const [search, setSearch] = useState("");
-  const [groupFilter, setGroupFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [sortCol, setSortCol] = useState<"name" | "group" | "risk" | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  // Search, filter, sort — URL-backed so they survive navigation.
+  const [search, setSearch] = useUrlState<string>("q", "");
+  const [groupFilter, setGroupFilter] = useUrlState<string>("group", "all");
+  const [statusFilter, setStatusFilter] = useUrlState<string>("status", "all");
+  const [sortCol, setSortCol] = useUrlState<SortCol>("sort", "");
+  const [sortDir, setSortDir] = useUrlState<"asc" | "desc">("dir", "asc");
 
   // Track pending config changes
   const [pendingOverrides, setPendingOverrides] = useState<Record<string, number | null>>({});
@@ -111,12 +122,10 @@ export default function ToolsPage() {
     Object.keys(pendingApproval).length > 0;
 
   const toggleExpand = (name: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
+    const next = new Set(expanded);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    setExpanded(next);
   };
 
   const getEffectiveStatus = (tool: ToolInfo): boolean => {
@@ -217,7 +226,7 @@ export default function ToolsPage() {
 
   const toggleSort = (col: "name" | "group" | "risk") => {
     if (sortCol === col) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
     } else {
       setSortCol(col);
       setSortDir("asc");
@@ -280,7 +289,7 @@ export default function ToolsPage() {
               className="pl-8 h-8 text-sm"
             />
           </div>
-          <Select value={groupFilter} onValueChange={(v) => setGroupFilter(v ?? "all")}>
+          <Select value={groupFilter} onValueChange={(v) => setGroupFilter(String(v ?? "all"))}>
             <SelectTrigger className="h-8 w-[130px] text-xs">
               <SelectValue placeholder="All groups" />
             </SelectTrigger>
@@ -291,7 +300,7 @@ export default function ToolsPage() {
               <SelectItem value="admin">Admin</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? "all")}>
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(String(v ?? "all"))}>
             <SelectTrigger className="h-8 w-[130px] text-xs">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>

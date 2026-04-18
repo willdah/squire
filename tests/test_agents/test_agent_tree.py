@@ -56,19 +56,16 @@ class TestMultiAgentMode:
         for sa in agent.sub_agents:
             assert sa.before_tool_callback is not None, f"{sa.name} missing callback"
 
-    def test_no_duplicate_tools(self):
+    def test_each_sub_agent_has_unique_tools(self):
+        """Sub-agents must not wire the same tool twice; sharing across agents is allowed."""
         config = AppConfig(multi_agent=True)
         agent = create_squire_agent(
             app_config=config,
             risk_gate_factory=_make_factory(),
         )
-        all_tool_names = []
         for sa in agent.sub_agents:
-            for tool in sa.tools:
-                name = tool.__name__ if hasattr(tool, "__name__") else str(tool)
-                all_tool_names.append(name)
-
-        assert len(all_tool_names) == len(set(all_tool_names)), f"Duplicate tools: {all_tool_names}"
+            names = [tool.__name__ if hasattr(tool, "__name__") else str(tool) for tool in sa.tools]
+            assert len(names) == len(set(names)), f"{sa.name} has duplicate tools: {names}"
 
     def test_sub_agent_tool_counts(self):
         config = AppConfig(multi_agent=True)
@@ -77,7 +74,7 @@ class TestMultiAgentMode:
             risk_gate_factory=_make_factory(),
         )
         tool_counts = {sa.name: len(sa.tools) for sa in agent.sub_agents}
-        assert tool_counts == {"Monitor": 5, "Container": 7, "Admin": 2, "Notifier": 5}
+        assert tool_counts == {"Monitor": 5, "Container": 8, "Admin": 2, "Notifier": 5}
 
     def test_requires_risk_gate_factory(self):
         config = AppConfig(multi_agent=True)
