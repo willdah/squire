@@ -5,7 +5,7 @@ import from here, and __init__.py imports tool modules.
 
 Provides accessors for:
 - BackendRegistry (local/SSH backends for command execution)
-- DatabaseService (persistence for sessions, events, alert rules)
+- DatabaseService (persistence for sessions, events, watch state)
 - WebhookDispatcher (notification delivery)
 """
 
