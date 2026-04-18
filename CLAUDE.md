@@ -39,13 +39,13 @@ Squire is an AI-powered homelab monitoring and management agent. It uses Google 
 ```
 src/squire/              Main application
   agents/                ADK agent definitions
-  api/                   FastAPI routers (chat, system, sessions, alerts, skills, etc.)
+  api/                   FastAPI routers (chat, system, sessions, skills, etc.)
   callbacks/             Risk gate implementation
   config/                Config loaders (app, llm, database, hosts, skills)
   database/              SQLite service
   instructions/          Dynamic system prompts for agents
   skills/                File-based skill service (Open Agent Skills spec)
-  notifications/         Webhook dispatcher & alert evaluator
+  notifications/         Webhook dispatcher
   schemas/               Pydantic models
   system/                Backend registry (local/SSH execution)
   tools/                 System interaction tools (async, return str)
@@ -66,7 +66,7 @@ tests/                   pytest suite
   test_tools/            Tool functionality tests
   test_agents/           Agent routing tests
   test_callbacks/        Risk gate tests
-  test_notifications/    Alert/webhook tests
+  test_notifications/    Notification dispatcher tests
 
 docs/                    User documentation
 docker/                  Docker configuration

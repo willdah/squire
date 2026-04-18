@@ -24,8 +24,7 @@ Squire is an AI-powered agent that monitors, manages, and guards your homelab. I
 
 - **Multi-agent architecture** — specialized sub-agents (Monitor, Container, Admin, Notifier) collaborate via [Google ADK](https://google.github.io/adk-docs/) while presenting a single unified persona
 - **Web UI + CLI** — browser interface for chat, watch, and configuration; command-line tools for automation and management
-- **Autonomous watch mode** — headless monitoring loop that checks your systems, evaluates alert rules, and takes corrective action within risk limits
-- **Alert rules** — define conditions like `cpu_percent > 90` and get notified when thresholds are crossed
+- **Autonomous watch mode** — headless monitoring loop that checks your systems, detects incidents, and takes corrective action within risk limits
 - **Skills** — file-based instruction sets ([Open Agent Skills spec](https://openagentskills.dev)) for guided, repeatable behavior — run manually or on a watch schedule
 - **Multi-machine management** — connect to remote hosts over SSH and manage your entire homelab from one instance
 - **Risk profiles** — `read-only`, `cautious`, `standard`, or `full-trust` — globally or per sub-agent, with fine-grained guardrails
@@ -64,7 +63,7 @@ See the [Usage Guide](docs/usage.md#docker-deployment) for Docker deployment.
 
 | Document | Description |
 |---|---|
-| [Usage Guide](docs/usage.md) | Web UI, CLI, configuration, remote hosts, watch mode, alerts, skills, notifications, Docker |
+| [Usage Guide](docs/usage.md) | Web UI, CLI, configuration, remote hosts, watch mode, skills, notifications, Docker |
 | [Architecture](docs/architecture.md) | System design, agent architecture, risk pipeline, tech stack, database schema |
 | [CLI Reference](docs/cli.md) | All commands and options |
 | [Configuration Reference](docs/configuration.md) | Full config reference with all fields, env vars, and examples |
