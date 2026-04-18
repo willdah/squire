@@ -1,7 +1,6 @@
 """Watch mode API endpoints — control, status, and history."""
 
 import asyncio
-import json
 import os
 
 from agent_risk_engine import RuleGate
@@ -12,7 +11,6 @@ from ..schemas import (
     WatchApprovalAction,
     WatchCommandResponse,
     WatchConfigResponse,
-    WatchConfigUpdate,
     WatchCycleSummary,
     WatchReportInfo,
     WatchRunSummary,
@@ -160,16 +158,6 @@ async def watch_config_get(
         max_remote_actions_per_cycle=watch_config.max_remote_actions_per_cycle,
         risk_tolerance=_effective_watch_risk_level(guardrails),
     )
-
-
-@router.put("/config", response_model=WatchCommandResponse)
-async def watch_config_update(update: WatchConfigUpdate, db=Depends(get_db)):
-    """Send config update to the running watch process."""
-    payload = update.model_dump(exclude_none=True)
-    if not payload:
-        raise HTTPException(status_code=400, detail="No fields to update")
-    await db.insert_watch_command("update_config", payload=json.dumps(payload))
-    return WatchCommandResponse(status="ok", message="Config update sent")
 
 
 @router.get("/cycles")

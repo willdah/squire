@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **DB-backed config overrides:** UI edits to `app`, `llm`, `watch`, `guardrails`, `notifications`, and `skills` now persist as rows in a new `config_overrides` SQLite table (auto-created on first boot) and override `squire.toml` at load time. `squire.toml` is user-owned and read-only from the app's perspective. Pydantic config loaders compose a new `DatabaseOverrideSource` between env and TOML, so the precedence is **env vars > DB overrides > `squire.toml` > code defaults** for every mutable section. `DatabaseConfig` deliberately opts out of DB overrides to avoid a chicken-and-egg path resolution loop.
+- **Config provenance in API:** `ConfigSectionMeta` now includes a `sources` map (`{field: "env" | "db" | "toml" | "default"}`) so `GET /api/config` reports where each field's effective value came from.
+- **Reset endpoints:** `DELETE /api/config/{section}` and `DELETE /api/config/{section}/{field}` clear UI-driven overrides so values revert to TOML/defaults. Both rebuild the in-memory singleton, rewire downstream services (notifier/guardrails/skills), and enqueue a watch reload command.
+- **Config UI provenance indicators:** Each config field shows a small database pip when its current value came from a UI override; clicking the pip deletes that single override. A "Reset" button on each section header clears every DB override for that section at once.
+- **Watch subprocess deep reload:** A new `reload_config` command (enqueued automatically by any PATCH/DELETE on `/api/config`) rebuilds `WatchConfig`, `GuardrailsConfig`, `NotificationsConfig`, and the `NotificationRouter` from DB + TOML + defaults, closes the old notifier, and re-attaches fresh risk gates to the running agent (handles both single-agent and multi-agent modes). `_interruptible_sleep` now reads its interval through a getter so a mid-sleep reload that shortens `watch.interval_minutes` takes effect before the next cycle fires.
+
 ### Changed
 
+- **Configuration UI:** Removed the "Save to disk" checkbox from every config form. UI edits now always go to the DB and live-apply; use the section Reset or per-field pip to revert. The Watch page drawer now PATCHes `/api/config/watch` + `/api/config/guardrails` directly and revalidates SWR caches so reopening the drawer shows fresh values.
 - **Prompting strategy overhaul:** Applied the prompting review punch-list across `src/squire/instructions/` and the `safe_tool` decorator. Five changes:
   - **Host attribution via tool envelope (not prose):** `safe_tool` now inspects the wrapped function's signature and prepends `[host=X]\n` to the result when the tool accepts a `host` parameter. The root and sub-agent prompts lost the ~200-token "Host-scoped tools" block that previously taught the model not to mix hosts — the result envelope carries that information mechanically.
   - **Deduplicated shared contract:** A new `build_tool_discipline()` section in `shared.py` carries tool-calling rules (including the anti-hallucination line) once per prompt. Sub-agents received a `build_style_summary()` replacement for the full conversation-style block since the router/root already produces the user-visible voice. Monitor drops the risk-tolerance section entirely (all its tools are level 1 and never trip the gate).
@@ -19,9 +28,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Bulleted risk contract:** `format_risk_guidance()` now renders a 3-bullet contract instead of a flat sentence, scannable by the model at a glance.
 - **Watch-mode prompt:** The autonomous watch addendum now references prior cycle context in conversation history (previously silent) so the agent skips re-reporting stable state across rotations.
 
+### Removed
+
+- **`PUT /api/watch/config`** — UI should use `PATCH /api/config/watch` (and `PATCH /api/config/guardrails` for risk tolerance) instead. The legacy "update_config" watch command is gone; the subprocess only accepts `reload_config`.
+- **`WatchConfigUpdate` schema** and the `persist` query parameter on `PATCH /api/config/*` — no longer used now that UI edits flow through DB overrides.
+
 ### Changed — Breaking
 
 - **Alert-rule tool signatures:** `create_alert_rule` and `update_alert_rule` now take typed `field: Literal[...]`, `op: Literal[...]`, `value: float` arguments instead of a free-form `condition: str`. The tool schema teaches the LLM through Python types; the Notifier prompt dropped the condition-DSL prose (6 lines). **Any caller that invoked these tools with `condition="cpu_percent > 90"` (external scripts, saved playbooks, pinned prompts) will fail** — migrate to the structured form: `create_alert_rule(name="x", field="cpu_percent", op=">", value=90)`. The internal condition format stored in the SQLite DB is unchanged (`"{field} {op} {value}"`), so existing alert rows and the `evaluate_alerts` parser keep working without migration.
+
+### Migration
+
+- `config_overrides` is created automatically on first boot — no manual migration needed.
+- Operators relying on `PUT /api/watch/config` should switch to `PATCH /api/config/watch`. Scripts using `?persist=true` should drop the parameter; edits are now always durable (stored in `squire.db`).
+- Treat `squire.db` with the same sensitivity as `squire.toml`: webhook URLs and SMTP passwords edited via the UI now land there in plaintext.
+- `squire.toml` can be mounted read-only in Docker.
 
 ## [0.18.0] — 2026-04-18
 

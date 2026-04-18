@@ -11,6 +11,7 @@ from pydantic import BeforeValidator, Field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 from .app import RiskTolerance, _coerce_risk_tolerance
+from .db_source import DatabaseOverrideSource
 from .loader import TomlSectionSource, get_section
 
 
@@ -36,6 +37,7 @@ class GuardrailsConfig(BaseSettings):
             init_settings,
             env_settings,
             dotenv_settings,
+            DatabaseOverrideSource(settings_cls, "guardrails"),
             TomlSectionSource(settings_cls, partial(get_section, "guardrails")),
             file_secret_settings,
         )

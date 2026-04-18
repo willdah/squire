@@ -112,22 +112,6 @@ async def test_watch_status_stale_process_finalizes_watch_artifacts(db, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_watch_config_update(db):
-    from squire.api.routers.watch import watch_config_update
-    from squire.api.schemas import WatchConfigUpdate
-
-    update = WatchConfigUpdate(interval_minutes=1, checkin_prompt="Custom prompt")
-    result = await watch_config_update(update=update, db=db)
-    assert result.status == "ok"
-
-    pending = await db.get_pending_watch_commands()
-    assert len(pending) == 1
-    payload = json.loads(pending[0]["payload"])
-    assert payload["interval_minutes"] == 1
-    assert payload["checkin_prompt"] == "Custom prompt"
-
-
-@pytest.mark.asyncio
 async def test_watch_cycles(db):
     from squire.api.routers.watch import watch_cycles
 

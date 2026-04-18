@@ -269,9 +269,13 @@ class ConfigResponse(BaseModel):
     hosts: list[dict]
 
 
+ConfigSource = Literal["env", "db", "toml", "default"]
+
+
 class ConfigSectionMeta(BaseModel):
     values: dict
     env_overrides: list[str] = []
+    sources: dict[str, ConfigSource] = Field(default_factory=dict)
 
 
 class ConfigDetailResponse(BaseModel):
@@ -377,21 +381,6 @@ class WatchStatusResponse(BaseModel):
     total_output_tokens: str | None = None
     total_tokens: str | None = None
     last_outcome: str | None = None
-
-
-class WatchConfigUpdate(BaseModel):
-    interval_minutes: int | None = Field(default=None, ge=1)
-    max_tool_calls_per_cycle: int | None = Field(default=None, ge=1)
-    cycle_timeout_seconds: int | None = Field(default=None, ge=30)
-    checkin_prompt: str | None = None
-    notify_on_action: bool | None = None
-    notify_on_blocked: bool | None = None
-    cycles_per_session: int | None = Field(default=None, ge=1)
-    max_context_events: int | None = Field(default=None, ge=10)
-    max_identical_actions_per_cycle: int | None = Field(default=None, ge=1)
-    blocked_action_cooldown_cycles: int | None = Field(default=None, ge=1)
-    max_remote_actions_per_cycle: int | None = Field(default=None, ge=1)
-    risk_tolerance: int | None = Field(default=None, ge=1, le=5)
 
 
 class WatchConfigResponse(BaseModel):

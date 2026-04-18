@@ -3,6 +3,7 @@ from functools import partial
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
+from .db_source import DatabaseOverrideSource
 from .loader import TomlSectionSource, get_section
 
 
@@ -57,6 +58,7 @@ class NotificationsConfig(BaseSettings):
             init_settings,
             env_settings,
             dotenv_settings,
+            DatabaseOverrideSource(settings_cls, "notifications"),
             TomlSectionSource(settings_cls, partial(get_section, "notifications", preserve={"email"})),
             file_secret_settings,
         )

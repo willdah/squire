@@ -23,11 +23,14 @@ import {
 } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import type { ConfigSource } from "@/lib/types";
 import { ConfigHint, ConfigIntro } from "./config-help";
+import { SectionResetButton, SourceBadge } from "./provenance";
 
 interface GuardrailsConfigFormProps {
   values: Record<string, unknown>;
   envOverrides: string[];
+  sources: Record<string, ConfigSource>;
   tomlPath: string | null;
   onSaved: () => void;
 }
@@ -123,7 +126,7 @@ function arraysEqual(a: unknown, b: string[]): boolean {
   return arr.length === b.length && arr.every((v, i) => v === b[i]);
 }
 
-export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }: GuardrailsConfigFormProps) {
+export function GuardrailsConfigForm({ values, envOverrides, sources, onSaved }: GuardrailsConfigFormProps) {
   const toArr = (v: unknown): string[] => (Array.isArray(v) ? (v as string[]) : []);
   const toStr = (v: unknown): string => (v != null ? String(v) : "");
 
@@ -150,7 +153,6 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
     2
   );
   const [toolsRiskJson, setToolsRiskJson] = useState(riskOrigJson);
-  const [persist, setPersist] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -264,8 +266,7 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
       if (!arraysEqual(values.config_paths, configPaths)) changed.config_paths = configPaths;
       if (parsedOverrides !== undefined) changed.tools_risk_overrides = parsedOverrides;
 
-      const url = persist ? "/api/config/guardrails?persist=true" : "/api/config/guardrails";
-      await apiPatch(url, changed);
+      await apiPatch("/api/config/guardrails", changed);
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -276,18 +277,21 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Guardrails</CardTitle>
-        <CardDescription>
-          Global risk policy, tool lists, per-agent overrides, watch-specific policy, and command/path restrictions.
-        </CardDescription>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <div>
+          <CardTitle className="text-base">Guardrails</CardTitle>
+          <CardDescription>
+            Global risk policy, tool lists, per-agent overrides, watch-specific policy, and command/path restrictions.
+          </CardDescription>
+        </div>
+        <SectionResetButton section="guardrails" sources={sources} onReset={onSaved} />
       </CardHeader>
       <CardContent className="space-y-4">
         <ConfigIntro title="How this interacts with chat and watch">
           <p>
             All settings here—including risk tolerance, tool lists, and command allowlists—take effect immediately for
-            new chat sessions and tool calls as soon as you save. The separate <strong>watch</strong> process loads
-            guardrails at startup; restart watch for changes to take effect there.
+            new chat sessions and tool calls as soon as you save. A running <strong>watch</strong> process reloads
+            within seconds; UI edits override <code>squire.toml</code>.
           </p>
         </ConfigIntro>
 
@@ -295,6 +299,7 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
           <div className="flex items-center gap-1.5">
             <Label>Risk Tolerance</Label>
             {isLocked("risk_tolerance") && <EnvLock field="risk_tolerance" prefix="SQUIRE_GUARDRAILS_" />}
+            <SourceBadge section="guardrails" field="risk_tolerance" sources={sources} onReset={onSaved} />
           </div>
           <Select
             value={riskTolerance}
@@ -521,20 +526,7 @@ export function GuardrailsConfigForm({ values, envOverrides, tomlPath, onSaved }
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <div className="flex items-center justify-between pt-2 border-t">
-          <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center">
-            <input
-              type="checkbox"
-              checked={persist}
-              onChange={(e) => setPersist(e.target.checked)}
-              disabled={!tomlPath}
-              className="rounded"
-            />
-            <span>
-              Save to disk{tomlPath ? "" : " (no squire.toml found)"} — writes the{" "}
-              <code className="font-mono text-[11px]">[guardrails]</code> section.
-            </span>
-          </label>
+        <div className="flex items-center justify-end pt-2 border-t">
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={revert} disabled={!isDirty}>
               <RotateCcw className="h-3.5 w-3.5 mr-1" />

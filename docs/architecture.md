@@ -230,7 +230,7 @@ Watch mode is started with `make watch` or `uv run squire watch`. The web UI **W
 | CLI                 | Typer                       | Command-line interface for scripting and quick tasks                    |
 | Database            | aiosqlite (SQLite)          | Session persistence, events, alert rules, watch state                   |
 | Remote Access       | asyncssh                    | SSH-based multi-machine management                                      |
-| Config              | Pydantic Settings           | Layered config (env vars > TOML > defaults)                             |
+| Config              | Pydantic Settings           | Layered config (env vars > DB overrides > TOML > defaults)              |
 | HTTP Client         | httpx                       | Webhook notifications, health checks                                    |
 
 
@@ -252,7 +252,8 @@ All state is stored in a single SQLite file (default: `~/.local/share/squire/squ
 | `watch_cycles`    | Canonical per-cycle aggregates (tokens, tool/incident counts, status, timing) keyed by `cycle_id` |
 | `watch_reports`   | Structured completion reports (watch- and session-level JSON digests)                 |
 | `watch_events`    | Append-only stream per cycle (`cycle_id`, `watch_id`, `watch_session_id`): tokens, tool calls, phases, incidents, cycle boundaries |
-| `watch_commands`  | Commands from the API to the watch process (`start`, `stop`, `update_config`)         |
+| `watch_commands`  | Commands from the API to the watch process (`start`, `stop`, `reload_config`)         |
+| `config_overrides` | Per-field UI overrides (section, field, value_json) that take precedence over `squire.toml` at load time |
 | `watch_approvals` | Approval requests from watch mode (pending / approved / denied)                     |
 | `managed_hosts`   | Remote hosts registered via the Hosts page (address, SSH config, tags, services)      |
 

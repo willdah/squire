@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import useSWR from "swr";
-import { apiGet, apiPut } from "@/lib/api";
+import useSWR, { mutate } from "swr";
+import { apiGet, apiPatch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +30,14 @@ const riskLevels = [
   { value: 5, label: "Full" },
 ];
 
+const riskLevelToTolerance: Record<number, string> = {
+  1: "read-only",
+  2: "cautious",
+  3: "standard",
+  4: "standard",
+  5: "full-trust",
+};
+
 export function WatchConfigDrawer({ open, onOpenChange }: WatchConfigDrawerProps) {
   const { data: config } = useSWR(
     open ? "/api/watch/config" : null,
@@ -55,14 +63,20 @@ export function WatchConfigDrawer({ open, onOpenChange }: WatchConfigDrawerProps
   }
 
   const handleApply = async () => {
-    await apiPut("/api/watch/config", {
+    await apiPatch("/api/config/watch", {
       interval_minutes: interval,
-      risk_tolerance: risk,
       checkin_prompt: prompt,
       max_identical_actions_per_cycle: maxIdenticalActions,
       blocked_action_cooldown_cycles: blockedCooldown,
       max_remote_actions_per_cycle: maxRemoteActions,
     });
+    await apiPatch("/api/config/guardrails", {
+      watch_tolerance: riskLevelToTolerance[risk],
+    });
+    await Promise.all([
+      mutate("/api/config"),
+      mutate("/api/watch/config"),
+    ]);
     onOpenChange(false);
   };
 

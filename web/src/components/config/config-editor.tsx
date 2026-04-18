@@ -113,6 +113,7 @@ export function ConfigEditor({ config, onSaved }: ConfigEditorProps) {
         <AppConfigForm
           values={config.app.values}
           envOverrides={config.app.env_overrides}
+          sources={config.app.sources}
           tomlPath={config.toml_path}
           onSaved={onSaved}
         />
@@ -122,6 +123,7 @@ export function ConfigEditor({ config, onSaved }: ConfigEditorProps) {
         <LLMConfigForm
           values={config.llm.values}
           envOverrides={config.llm.env_overrides}
+          sources={config.llm.sources}
           tomlPath={config.toml_path}
           onSaved={onSaved}
         />
@@ -160,6 +162,7 @@ export function ConfigEditor({ config, onSaved }: ConfigEditorProps) {
         <GuardrailsConfigForm
           values={config.guardrails.values}
           envOverrides={config.guardrails.env_overrides}
+          sources={config.guardrails.sources}
           tomlPath={config.toml_path}
           onSaved={onSaved}
         />
@@ -169,7 +172,7 @@ export function ConfigEditor({ config, onSaved }: ConfigEditorProps) {
         <WatchConfigForm
           values={config.watch.values}
           envOverrides={config.watch.env_overrides}
-          tomlPath={config.toml_path}
+          sources={config.watch.sources}
           onSaved={onSaved}
         />
       </TabsContent>
@@ -178,6 +181,7 @@ export function ConfigEditor({ config, onSaved }: ConfigEditorProps) {
         <SkillsConfigForm
           values={config.skills.values}
           envOverrides={config.skills.env_overrides}
+          sources={config.skills.sources}
           tomlPath={config.toml_path}
           onSaved={onSaved}
         />

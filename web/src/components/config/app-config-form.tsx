@@ -14,11 +14,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import type { ConfigSource } from "@/lib/types";
 import { ConfigHint, ConfigIntro } from "./config-help";
+import { SectionResetButton, SourceBadge } from "./provenance";
 
 interface AppConfigFormProps {
   values: Record<string, unknown>;
   envOverrides: string[];
+  sources: Record<string, ConfigSource>;
   tomlPath: string | null;
   onSaved: () => void;
 }
@@ -38,13 +41,12 @@ function EnvLock({ field, prefix }: { field: string; prefix: string }) {
   );
 }
 
-export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppConfigFormProps) {
+export function AppConfigForm({ values, envOverrides, sources, onSaved }: AppConfigFormProps) {
   const [appName, setAppName] = useState(String(values.app_name ?? "Squire"));
   const [userId, setUserId] = useState(String(values.user_id ?? "squire-user"));
   const [historyLimit, setHistoryLimit] = useState(Number(values.history_limit ?? 50));
   const [maxToolRounds, setMaxToolRounds] = useState(Number(values.max_tool_rounds ?? 10));
   const [multiAgent, setMultiAgent] = useState(Boolean(values.multi_agent));
-  const [persist, setPersist] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,8 +79,7 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
       if (maxToolRounds !== Number(values.max_tool_rounds ?? 10)) changed.max_tool_rounds = maxToolRounds;
       if (multiAgent !== Boolean(values.multi_agent)) changed.multi_agent = multiAgent;
 
-      const url = persist ? "/api/config/app?persist=true" : "/api/config/app";
-      await apiPatch(url, changed);
+      await apiPatch("/api/config/app", changed);
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -89,23 +90,27 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">App</CardTitle>
-        <CardDescription>
-          Identity and session behavior. Affects new and ongoing chat sessions.
-        </CardDescription>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <div>
+          <CardTitle className="text-base">App</CardTitle>
+          <CardDescription>
+            Identity and session behavior. Affects new and ongoing chat sessions.
+          </CardDescription>
+        </div>
+        <SectionResetButton section="app" sources={sources} onReset={onSaved} />
       </CardHeader>
       <CardContent className="space-y-4">
         <ConfigIntro title="When changes apply">
           <p>
-            Saving updates the running API server immediately for new and ongoing chat sessions. Check{" "}
-            <strong>Save to disk</strong> below to write values into <code>squire.toml</code> when a file is found.
+            Saving updates the running API server immediately for new and ongoing chat sessions. UI edits are stored in
+            the database and override <code>squire.toml</code>; use &ldquo;Reset&rdquo; to revert to file defaults.
           </p>
         </ConfigIntro>
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
             <Label>App name</Label>
             {isLocked("app_name") && <EnvLock field="app_name" prefix="SQUIRE_" />}
+            <SourceBadge section="app" field="app_name" sources={sources} onReset={onSaved} />
           </div>
           <Input
             value={appName}
@@ -119,6 +124,7 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
           <div className="flex items-center gap-1.5">
             <Label>User ID</Label>
             {isLocked("user_id") && <EnvLock field="user_id" prefix="SQUIRE_" />}
+            <SourceBadge section="app" field="user_id" sources={sources} onReset={onSaved} />
           </div>
           <Input
             value={userId}
@@ -135,6 +141,7 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
           <div className="flex items-center gap-1.5">
             <Label>History Limit</Label>
             {isLocked("history_limit") && <EnvLock field="history_limit" prefix="SQUIRE_" />}
+            <SourceBadge section="app" field="history_limit" sources={sources} onReset={onSaved} />
           </div>
           <Input
             type="number"
@@ -153,6 +160,7 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
           <div className="flex items-center gap-1.5">
             <Label>Max Tool Rounds</Label>
             {isLocked("max_tool_rounds") && <EnvLock field="max_tool_rounds" prefix="SQUIRE_" />}
+            <SourceBadge section="app" field="max_tool_rounds" sources={sources} onReset={onSaved} />
           </div>
           <Input
             type="number"
@@ -172,6 +180,7 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
             <div className="flex items-center gap-1.5">
               <Label>Multi-Agent</Label>
               {isLocked("multi_agent") && <EnvLock field="multi_agent" prefix="SQUIRE_" />}
+              <SourceBadge section="app" field="multi_agent" sources={sources} onReset={onSaved} />
             </div>
             <Switch
               checked={multiAgent}
@@ -187,20 +196,7 @@ export function AppConfigForm({ values, envOverrides, tomlPath, onSaved }: AppCo
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <div className="flex items-center justify-between pt-2 border-t">
-          <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center">
-            <input
-              type="checkbox"
-              checked={persist}
-              onChange={(e) => setPersist(e.target.checked)}
-              disabled={!tomlPath}
-              className="rounded"
-            />
-            <span>
-              Save to disk{tomlPath ? "" : " (no squire.toml found)"} — also writes{" "}
-              <code className="font-mono text-[11px]">squire.toml</code> so values survive restart.
-            </span>
-          </label>
+        <div className="flex items-center justify-end pt-2 border-t">
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={revert} disabled={!isDirty}>
               <RotateCcw className="h-3.5 w-3.5 mr-1" />

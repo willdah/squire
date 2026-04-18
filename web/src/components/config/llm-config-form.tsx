@@ -14,12 +14,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { LLMModelsResponse } from "@/lib/types";
+import type { ConfigSource, LLMModelsResponse } from "@/lib/types";
 import { ConfigHint, ConfigIntro } from "./config-help";
+import { SectionResetButton, SourceBadge } from "./provenance";
 
 interface LLMConfigFormProps {
   values: Record<string, unknown>;
   envOverrides: string[];
+  sources: Record<string, ConfigSource>;
   tomlPath: string | null;
   onSaved: () => void;
 }
@@ -47,7 +49,7 @@ function apiBaseFromValues(v: unknown): string {
   return s === REDACTED ? "" : s;
 }
 
-export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMConfigFormProps) {
+export function LLMConfigForm({ values, envOverrides, sources, onSaved }: LLMConfigFormProps) {
   const [model, setModel] = useState(String(values.model ?? ""));
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [modelProvider, setModelProvider] = useState<string>("");
@@ -56,7 +58,6 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
   const [temperature, setTemperature] = useState(Number(values.temperature ?? 0.2));
   const [maxTokens, setMaxTokens] = useState(Number(values.max_tokens ?? 4096));
   const [apiBase, setApiBase] = useState(() => apiBaseFromValues(values.api_base));
-  const [persist, setPersist] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -122,8 +123,7 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
       if (maxTokens !== Number(values.max_tokens ?? 4096)) changed.max_tokens = maxTokens;
       if (apiBase !== origApiBase) changed.api_base = apiBase.trim() === "" ? null : apiBase.trim();
 
-      const url = persist ? "/api/config/llm?persist=true" : "/api/config/llm";
-      await apiPatch(url, changed);
+      await apiPatch("/api/config/llm", changed);
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -134,12 +134,15 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">LLM</CardTitle>
-        <CardDescription>
-          LiteLLM model id and generation parameters for chat (and the web-driven agent). Takes effect on the next
-          request that builds the model client.
-        </CardDescription>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <div>
+          <CardTitle className="text-base">LLM</CardTitle>
+          <CardDescription>
+            LiteLLM model id and generation parameters for chat and the web-driven agent. Takes effect on the next
+            request that builds the model client.
+          </CardDescription>
+        </div>
+        <SectionResetButton section="llm" sources={sources} onReset={onSaved} />
       </CardHeader>
       <CardContent className="space-y-4">
         <ConfigIntro title="Provider keys">
@@ -152,6 +155,7 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
           <div className="flex items-center gap-1.5">
             <Label>Model{modelProvider ? ` (${modelProvider})` : ""}</Label>
             {isLocked("model") && <EnvLock field="model" prefix="SQUIRE_LLM_" />}
+            <SourceBadge section="llm" field="model" sources={sources} onReset={onSaved} />
           </div>
           {modelsLoading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -183,6 +187,7 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
           <div className="flex items-center gap-1.5">
             <Label>Temperature</Label>
             {isLocked("temperature") && <EnvLock field="temperature" prefix="SQUIRE_LLM_" />}
+            <SourceBadge section="llm" field="temperature" sources={sources} onReset={onSaved} />
           </div>
           <Input
             type="number"
@@ -203,6 +208,7 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
           <div className="flex items-center gap-1.5">
             <Label>Max Tokens</Label>
             {isLocked("max_tokens") && <EnvLock field="max_tokens" prefix="SQUIRE_LLM_" />}
+            <SourceBadge section="llm" field="max_tokens" sources={sources} onReset={onSaved} />
           </div>
           <Input
             type="number"
@@ -218,6 +224,7 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
           <div className="flex items-center gap-1.5">
             <Label>API Base URL</Label>
             {isLocked("api_base") && <EnvLock field="api_base" prefix="SQUIRE_LLM_" />}
+            <SourceBadge section="llm" field="api_base" sources={sources} onReset={onSaved} />
           </div>
           <Input
             value={apiBase}
@@ -234,20 +241,7 @@ export function LLMConfigForm({ values, envOverrides, tomlPath, onSaved }: LLMCo
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <div className="flex items-center justify-between pt-2 border-t">
-          <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center">
-            <input
-              type="checkbox"
-              checked={persist}
-              onChange={(e) => setPersist(e.target.checked)}
-              disabled={!tomlPath}
-              className="rounded"
-            />
-            <span>
-              Save to disk{tomlPath ? "" : " (no squire.toml found)"} — persists the{" "}
-              <code className="font-mono text-[11px]">[llm]</code> section.
-            </span>
-          </label>
+        <div className="flex items-center justify-end pt-2 border-t">
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={revert} disabled={!isDirty}>
               <RotateCcw className="h-3.5 w-3.5 mr-1" />
