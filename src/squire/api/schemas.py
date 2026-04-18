@@ -108,36 +108,6 @@ class MessageInfo(BaseModel):
     total_tokens: int | None = None
 
 
-# --- Alerts ---
-
-
-class AlertRule(BaseModel):
-    id: int | None = None
-    name: str
-    condition: str
-    host: str = "all"
-    severity: str = "warning"
-    cooldown_minutes: int = 30
-    last_fired_at: str | None = None
-    enabled: bool = True
-    created_at: str | None = None
-
-
-class AlertRuleCreate(BaseModel):
-    name: str
-    condition: str
-    host: str = "all"
-    severity: str = "warning"
-    cooldown_minutes: int = 30
-
-
-class AlertRuleUpdate(BaseModel):
-    condition: str | None = None
-    host: str | None = None
-    severity: str | None = None
-    cooldown_minutes: int | None = None
-
-
 # --- Skills ---
 
 
