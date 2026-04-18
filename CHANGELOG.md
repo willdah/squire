@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-04-18
+
 ### Fixed
 
 - **Watch mode in Docker containers:** Watch no longer becomes "lost" after navigating away from the watch page, and subsequent starts reliably reach `running`. The previous subprocess model spawned the watch loop via `subprocess.Popen` with `stderr=DEVNULL`, so failures were invisible; inside a container, PID reuse in the PID namespace could also make `os.kill(pid, 0)` return false positives, freezing the UI in a stale "running" state that couldn't be restarted. Root cause was architectural, not a single bug — the fix is the refactor below.
