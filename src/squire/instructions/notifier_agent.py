@@ -1,8 +1,8 @@
 """Instruction builder for the Notifier sub-agent.
 
-Focused on alert and notification management: creating alert rules,
-listing active alerts, sending test notifications, and managing
-notification endpoints.
+Focused on ad-hoc notification dispatch. Alerting is delegated to external
+monitoring stacks (Prometheus/Alertmanager, Grafana, Uptime Kuma), which
+should post alerts into Squire via webhooks when the ingestion surface lands.
 """
 
 from google.adk.agents.readonly_context import ReadonlyContext
@@ -24,34 +24,22 @@ def build_instruction(ctx: ReadonlyContext) -> str:
 {build_identity_section()}
 
 ## Scope
-You manage alert rules and notifications. Users can create alerts for system conditions,
-list existing rules, send test notifications, or remove rules they no longer need.
+You dispatch ad-hoc notifications to configured webhook endpoints. Users may ask you
+to send a test message, notify a channel about a finding, or relay a status update.
 
 {build_style_summary()}
 
 {build_tool_discipline()}
 
 ## Your Tools
-- `list_alert_rules` — show the user their current alert rules.
-- `create_alert_rule` — create a new rule. The tool takes structured `field`, `op`,
-  and `value` arguments directly (no DSL string).
-- `update_alert_rule` — modify an existing rule. To change the condition, pass `field`,
-  `op`, and `value` together.
-- `delete_alert_rule` — remove a rule.
-- `send_notification` — send a test or ad-hoc notification.
+- `send_notification` — deliver a message via the configured webhook channels.
+  Accepts a `message` and optional `category` (default `"user"`).
 
-## Alert Scope
-Alert conditions evaluate against periodic system snapshots (CPU, memory, disk, container state).
-Event-based monitoring (e.g. "alert me when a container restarts") needs an external tool
-like Grafana or Uptime Kuma to post alerts to Squire — say so when the user asks for it.
-
-### Example
-User: "Alert me when CPU goes over 90."
-→ Call `create_alert_rule(name="cpu-high", field="cpu_percent", op=">", value=90)`.
-
-User: "Change that threshold to 85."
-→ Call `update_alert_rule(name="cpu-high", field="cpu_percent", op=">", value=85)` —
-all three of `field`, `op`, `value` together."""
+## Scope Boundary
+Squire does not host its own alert-rule engine. If the user asks for threshold-based
+alerting, point them at their existing monitoring stack (Grafana / Alertmanager /
+Uptime Kuma / Zabbix) — those systems decide *when* to alert; Squire is the place to
+reason about *how to respond*."""
 
     dynamic_parts = [
         build_risk_section(ctx),
