@@ -2,9 +2,17 @@
 
 Provides reusable formatting functions and section builders that maintain
 a consistent persona across the root agent and all sub-agents.
+
+Layout contract: build functions are grouped by how often their output
+changes. Callers compose the full prompt so *all static sections come
+first*, followed by dynamic sections in strict change-frequency order
+(least-frequent first). This keeps prefix hashes stable for provider
+prompt-caching.
 """
 
 from google.adk.agents.readonly_context import ReadonlyContext
+
+# --- Static sections (identical across invocations) ---
 
 
 def build_identity_section() -> str:
@@ -15,35 +23,66 @@ You help users monitor, troubleshoot, and maintain their homelab infrastructure.
 
 
 def build_conversation_style() -> str:
-    """Return the conversation style guidelines."""
+    """Return the full conversation style guidelines for the root/router agent."""
     return """\
 ## Conversation Style
-- Match your response to the user's intent. If they greet you, greet them back.
-  If they ask a casual question, answer conversationally.
-  Only use tools when the user is asking about the system or requesting an action.
-- When greeting or in casual conversation, respond naturally and conversationally.
-  You can reference that you're keeping an eye on things without listing specifics unless asked.
-- If the user asks a broad question like "how's everything?", give a brief high-level
-  summary from the snapshot in your context. Don't call tools — the snapshot is recent enough.
-- You are a companion, not a report generator. Don't dump system information unless asked.
-- Be concise and direct in your responses.
+- Match your response to the user's intent. Greet back if greeted; answer casual questions conversationally.
+- Use tools when the user asks about the system or requests an action.
+- For broad questions like "how's everything?", give a brief high-level summary from the snapshot in context.
+- You are a companion, not a report generator. Offer detail when asked.
+- Be concise and direct.
 
 ## Response Format
 - Keep responses tight. One clear paragraph beats three meandering sentences.
 - Use **bold** for key values — hostnames, statuses, percentages — so they scan at a glance.
 - Use bullet lists when reporting multiple items. Use tables when comparing across hosts or containers.
-- Use fenced code blocks with language tags: \`\`\`bash for commands, \`\`\`log for logs, \`\`\`json for JSON.
-- Use headings (##) only for multi-section responses. A single-topic answer needs no heading.
+- Use fenced code blocks with language tags: ```bash for commands, ```log for logs, ```json for JSON.
+- Use headings (##) only for multi-section responses. Skip headings for single-topic answers.
 - When reporting system status, lead with the conclusion ("All healthy", "1 issue found"), then give details.
-- Never use emoji in responses."""
+- Skip emoji."""
+
+
+def build_style_summary() -> str:
+    """Terse style reminder for sub-agents that inherit the root's full style."""
+    return """\
+## Response Format
+- Keep status output tight. Bold key values (hosts, states, percentages).
+- Fenced code blocks for logs/commands/JSON. Tables for cross-host comparisons.
+- Lead with the conclusion, then detail."""
+
+
+def build_tool_discipline() -> str:
+    """Shared rules about when to call tools and how to handle results.
+
+    Positive framing, single source of truth — included once at root and
+    once per sub-agent in place of repeated anti-hallucination lines.
+    """
+    return """\
+## Tool Discipline
+- Call tools only when the user's message needs current system data or an action.
+- Rely on the snapshot in context for high-level summaries; call tools when specifics matter.
+- Each tool result starts with `[host=X]` showing which host produced it — reference that host,
+  not a different one, when reporting back.
+- Treat tool output as the source of truth. If you lack data, call a tool; do not infer or fabricate output.
+- Call risky tools directly when the user requests an action — the UI handles approval automatically.
+  Skip asking the user to confirm.
+- On a result starting with `[BLOCKED]` or `[DENIED]`, explain the block and suggest an alternative;
+  do not retry the same call.
+- After two failures with the same tool and arguments, stop retrying and change approach or tell the user."""
+
+
+# --- Dynamic sections (ordered least-frequent → most-frequent change) ---
 
 
 def build_risk_section(ctx: ReadonlyContext) -> str:
-    """Build the risk tolerance guidance section."""
+    """Build the risk tolerance guidance section.
+
+    Empty string when no sensitive tools exist in scope (see
+    ``include_risk_section``); injecting it wastes context for read-only
+    agents whose tools never trip the gate.
+    """
     risk_tolerance = ctx.state.get("risk_tolerance", 2)
-    return f"""\
-## Risk Tolerance: {risk_tolerance}/5
-{format_risk_guidance(risk_tolerance)}"""
+    return format_risk_guidance(risk_tolerance)
 
 
 def build_hosts_section(ctx: ReadonlyContext) -> str:
@@ -61,6 +100,23 @@ def build_system_state_section(ctx: ReadonlyContext) -> str:
     snapshot = ctx.state.get("latest_snapshot", {})
     system_context = format_snapshot(snapshot) if snapshot else "No system snapshot available yet."
     return f"## Current System State\n{system_context}"
+
+
+def build_watch_mode_addendum(ctx: ReadonlyContext) -> str:
+    """Return watch-mode instructions if watch_mode is active, else empty string."""
+    if not ctx.state.get("watch_mode"):
+        return ""
+    return """
+## Autonomous Watch Mode
+You are running autonomously — no human is in the loop.
+- Review the current system state and act on anything that needs attention.
+- Prioritize: container health > service availability > resource usage.
+- Be targeted with tool calls — only call tools when you have a specific reason.
+- Treat prior cycle context in your conversation history as already-known state;
+  skip re-reporting stable conditions.
+- On a blocked action, note it and move on without retrying.
+- Report what you found, what you did, and what needs human attention.
+- Keep your response concise — this is a periodic check-in, not a conversation."""
 
 
 def build_skill_section(ctx: ReadonlyContext) -> str:
@@ -90,55 +146,19 @@ def build_skill_section(ctx: ReadonlyContext) -> str:
 
     return f"""
 ## Active Skill: "{skill_name}"
-You are executing a skill. Follow the instructions below.{host_line}
+Execute the instructions below by calling your tools (do not explain them to the user).{host_line}
 
 ### Instructions
 {instructions}
 
 ### Execution Rules
-- You MUST execute the instructions by calling your tools. Do NOT tell the user how to do it.
 - Work through the instructions methodically, calling tools as needed.
-- If a condition doesn't apply, explain why and move on.
-- If a tool call is blocked, note it and continue.
-- When you have completed all instructions, provide a summary, then emit [SKILL COMPLETE]."""
+- If a condition does not apply, say why and move on.
+- If a tool is blocked, note it and continue with the remaining steps.
+- When every step is done, summarize what you did, then emit `[SKILL COMPLETE]` on its own line."""
 
 
-def build_host_scoped_tools_section() -> str:
-    """Guidance for tools with a default host (Docker, SSH-backed execution)."""
-    return """\
-## Host-scoped tools (Docker and system commands)
-- Default `host` is `local` (where Squire runs). Omitting `host` does **not** mean "the host where
-  containers last appeared" or where a prior call succeeded — each tool defaults to `local` unless
-  you pass `host`.
-- **Which host does output describe?** Only the `host` you passed to **that** tool. If `docker_ps`
-  used `host="prod-apps-01"`, the container list is on **that** host — never tell the user a
-  container is "on local" or "on your Mac" unless you called with `host="local"` and it succeeded.
-- **Consistency:** If a call succeeds with `host="X"`, use the **same `X`** for every related
-  follow-up (e.g. `docker_ps` then `docker_image` then `docker_container`) unless the user names a
-  different host.
-- **Docker failures on `local`:** `Command not found: docker`, **cannot connect to the Docker
-  daemon**, or socket errors mean **this** `host` cannot run Docker commands right now — not that
-  containers seen in a **different** tool result "run locally." Do not mix hosts in your reasoning.
-  Prefer the same remote `host` where `docker_ps` succeeded, with explicit `host` on every follow-up,
-  instead of repeating the identical failing call on `local`.
-- **Anti-retry:** After **two** failures with the **same tool name and the same arguments**, stop
-  repeating. Tell the user what failed, then change approach (different `host`, confirm with
-  `docker_ps` on the intended host, or ask the user)."""
-
-
-def build_watch_mode_addendum(ctx: ReadonlyContext) -> str:
-    """Return watch-mode instructions if watch_mode is active, else empty string."""
-    if not ctx.state.get("watch_mode"):
-        return ""
-    return """
-## Autonomous Watch Mode
-You are running autonomously — no human is in the loop.
-- Review the current system state and act on anything that needs attention.
-- Prioritize: container health > service availability > resource usage.
-- Be targeted with tool calls — only call tools when you have a specific reason.
-- Do NOT retry failed actions. If a tool is blocked, note it and move on.
-- Report what you found, what you did, and what needs human attention.
-- Keep your response concise — this is a periodic check-in, not a conversation."""
+# --- Helpers ---
 
 
 def _load_hosts_from_registry() -> tuple[list[str], dict]:
@@ -156,9 +176,6 @@ def _load_hosts_from_registry() -> tuple[list[str], dict]:
         return available, configs
     except Exception:
         return ["local"], {}
-
-
-# --- Formatting helpers ---
 
 
 def format_snapshot(snapshot: dict) -> str:
@@ -230,9 +247,8 @@ def format_hosts_section(available_hosts: list[str], host_configs: dict) -> str:
 
     lines = ["## Available Hosts"]
     lines.append(
-        "Every tool accepts an optional `host` parameter. "
-        "Use the host name below to target a remote machine. "
-        "Default is `local` (this machine).\n"
+        "Every host-aware tool takes a `host` parameter. "
+        "Pass the name below to target a remote machine; `local` means this machine.\n"
     )
     for name in available_hosts:
         if name == "local":
@@ -253,14 +269,13 @@ def format_hosts_section(available_hosts: list[str], host_configs: dict) -> str:
 
 
 def format_risk_guidance(threshold: int) -> str:
-    """Return guidance text based on the active risk tolerance."""
+    """Return bulleted risk-tolerance contract for the prompt."""
     from agent_risk_engine import RiskLevel
 
     level_label = RiskLevel(threshold).label if 1 <= threshold <= 5 else "Custom"
     return (
-        f"Your risk tolerance is set to {threshold}/5 ({level_label}). "
-        f"Tools at risk level {threshold} or below run automatically. "
-        f"Tools above level {threshold} require user approval via a UI dialog — "
-        f"you do NOT need to ask the user for confirmation yourself. Just call the tool. "
-        f"Some tools may be individually overridden (always allowed, always prompted, or denied)."
+        f"## Risk Tolerance: {threshold}/5 ({level_label})\n"
+        f"- Tools at risk level ≤ {threshold} run automatically.\n"
+        f"- Tools above level {threshold} open a UI approval dialog — call them directly; the UI prompts the user.\n"
+        f"- Per-tool overrides (always allow / always prompt / deny) may apply."
     )

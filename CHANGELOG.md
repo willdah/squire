@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Prompting strategy overhaul:** Applied the prompting review punch-list across `src/squire/instructions/` and the `safe_tool` decorator. Five changes:
+  - **Host attribution via tool envelope (not prose):** `safe_tool` now inspects the wrapped function's signature and prepends `[host=X]\n` to the result when the tool accepts a `host` parameter. The root and sub-agent prompts lost the ~200-token "Host-scoped tools" block that previously taught the model not to mix hosts — the result envelope carries that information mechanically.
+  - **Deduplicated shared contract:** A new `build_tool_discipline()` section in `shared.py` carries tool-calling rules (including the anti-hallucination line) once per prompt. Sub-agents received a `build_style_summary()` replacement for the full conversation-style block since the router/root already produces the user-visible voice. Monitor drops the risk-tolerance section entirely (all its tools are level 1 and never trip the gate).
+  - **Static-before-dynamic ordering for cache stability:** Every instruction builder composes `static_block` first, then a `dynamic_block` assembled in strict change-frequency order: risk → hosts → snapshot → watch → skill. Keeps prefix hashes stable for provider prompt caching.
+  - **Dropped role-name contradictions:** Sub-agents replaced `## Your Role: System Monitor` (etc.) with `## Scope` so the model no longer sees "You are Squire" followed by "You are the Monitor specialist" — reinforces the single-persona guarantee from `CLAUDE.md`.
+  - **Router domain table + few-shot examples:** Multi-agent router now enumerates the four specialists and includes a routing example. Admin agent gained a pre-action reasoning scaffold and a worked example. Notifier agent gained two examples demonstrating structured-argument calls.
+  - **Positive framing:** Mechanical pass replacing `Do NOT` / `NEVER` with positive instructions throughout.
+  - **Bulleted risk contract:** `format_risk_guidance()` now renders a 3-bullet contract instead of a flat sentence, scannable by the model at a glance.
+- **Structured alert-condition arguments:** `create_alert_rule` and `update_alert_rule` now take typed `field: Literal[...]`, `op: Literal[...]`, `value: float` arguments instead of a free-form condition string. The tool schema teaches the LLM through Python types; the Notifier prompt dropped the condition-DSL prose (6 lines). The internal condition format stored in the DB is unchanged — the new args assemble the same string before persisting, so existing rules keep working.
+- **Watch-mode prompt:** The autonomous watch addendum now references prior cycle context in conversation history (previously silent) so the agent skips re-reporting stable state across rotations.
+
 ## [0.18.0] — 2026-04-18
 
 ### Added

@@ -1,48 +1,47 @@
 """Instruction builder for the Monitor sub-agent.
 
 Focused on read-only system observation: health checks, resource usage,
-container listing, log viewing, and config reading.
+container listing, log viewing, and config reading. All Monitor tools are
+at risk level 1, so the risk-tolerance section is deliberately omitted —
+nothing here can ever trip the gate.
 """
 
 from google.adk.agents.readonly_context import ReadonlyContext
 
 from .shared import (
-    build_conversation_style,
-    build_host_scoped_tools_section,
     build_hosts_section,
     build_identity_section,
-    build_risk_section,
+    build_style_summary,
     build_system_state_section,
+    build_tool_discipline,
     build_watch_mode_addendum,
 )
 
 
 def build_instruction(ctx: ReadonlyContext) -> str:
     """Build the Monitor agent instruction."""
-    return f"""\
+    static_block = f"""\
 {build_identity_section()}
 
-{build_conversation_style()}
+## Scope
+You handle read-only system observation: health, resource usage, container state, logs, and configuration.
 
-## Your Role: System Monitor
-You are the monitoring specialist. Your tools are read-only — you observe
-the system but never modify it. Use your tools to answer questions about
-system health, resource usage, container status, logs, and configuration.
+{build_style_summary()}
 
-## Tool Usage
-- Use `system_info` for CPU, memory, disk, and uptime data.
-- Use `network_info` for network interfaces, routes, and connectivity.
-- Use `docker_ps` to list containers and their states.
-- Use `journalctl` to view system and service logs.
-- Use `read_config` to inspect configuration files.
-- Only call tools when the user's message requires current system data.
-  For high-level summaries, use the snapshot in your context.
-- NEVER fabricate command output. If a tool fails or is blocked, report the error
-  and continue with any remaining work. Do NOT stop responding.
+{build_tool_discipline()}
 
-{build_host_scoped_tools_section()}
+## Your Tools
+- `system_info` — CPU, memory, disk, uptime.
+- `network_info` — network interfaces, routes, connectivity.
+- `docker_ps` — list containers and their states.
+- `journalctl` — system and service logs.
+- `read_config` — inspect configuration files."""
 
-{build_risk_section(ctx)}
-{build_hosts_section(ctx)}\
-{build_system_state_section(ctx)}
-{build_watch_mode_addendum(ctx)}"""
+    dynamic_parts = [
+        build_hosts_section(ctx),
+        build_system_state_section(ctx),
+        build_watch_mode_addendum(ctx),
+    ]
+    dynamic_block = "\n\n".join(part for part in dynamic_parts if part)
+
+    return f"{static_block}\n\n{dynamic_block}" if dynamic_block else static_block

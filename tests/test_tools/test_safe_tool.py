@@ -64,10 +64,19 @@ class TestNormalPassthrough:
     async def test_returns_normal_value(self):
         wrapped = safe_tool(example_tool)
         result = await wrapped(host="remote", lines=10)
-        assert result == "ok: remote 10"
+        assert result == "[host=remote]\nok: remote 10"
 
     @pytest.mark.asyncio
     async def test_default_args(self):
         wrapped = safe_tool(example_tool)
         result = await wrapped()
-        assert result == "ok: local 50"
+        assert result == "[host=local]\nok: local 50"
+
+    @pytest.mark.asyncio
+    async def test_no_host_parameter_no_prefix(self):
+        async def hostless_tool(name: str) -> str:
+            return f"ok: {name}"
+
+        wrapped = safe_tool(hostless_tool)
+        result = await wrapped(name="foo")
+        assert result == "ok: foo"
