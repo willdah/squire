@@ -75,76 +75,8 @@ Logs to stdout in structured format, suitable for systemd/journald.
 | `watch.stop` | Watch mode stopped |
 | `watch.action` | Agent took a corrective action |
 | `watch.blocked` | Tool call denied by risk policy |
-| `watch.alert` | Alert rule triggered |
+| `watch.alert` | Watch loop detected an anomaly |
 | `watch.error` | Exception during a cycle |
-
----
-
-### `squire alerts`
-
-Manage alert rules that trigger notifications when system metrics cross thresholds.
-
-#### `squire alerts list`
-
-List all configured alert rules with their status.
-
-```bash
-squire alerts list
-```
-
-#### `squire alerts add`
-
-Create a new alert rule.
-
-```bash
-squire alerts add --name "disk-full" --condition "cpu_percent > 90" --severity warning
-squire alerts add -n "high-mem" -c "memory_used_mb > 14000" --host prod-apps-01 -s critical --cooldown 60
-```
-
-| Option | Short | Required | Default | Description |
-|---|---|---|---|---|
-| `--name` | `-n` | Yes | | Human-readable rule name (must be unique) |
-| `--condition` | `-c` | Yes | | Condition expression (see below) |
-| `--host` | | No | `all` | Host to monitor (`all` or a specific host name) |
-| `--severity` | `-s` | No | `warning` | `info`, `warning`, or `critical` |
-| `--cooldown` | | No | `30` | Minimum minutes between repeated alerts |
-
-**Condition syntax:** `<field> <op> <value>`
-
-- **field** -- dot-path into the snapshot (e.g., `cpu_percent`, `memory_used_mb`, `disk_percent`)
-- **op** -- `>`, `<`, `>=`, `<=`, `==`, `!=`
-- **value** -- number or string literal
-
-Examples:
-```
-cpu_percent > 90
-memory_used_mb >= 14000
-disk_percent > 85
-```
-
-#### `squire alerts remove`
-
-Delete an alert rule by name.
-
-```bash
-squire alerts remove disk-full
-```
-
-#### `squire alerts enable`
-
-Enable a previously disabled alert rule.
-
-```bash
-squire alerts enable disk-full
-```
-
-#### `squire alerts disable`
-
-Disable an alert rule without deleting it.
-
-```bash
-squire alerts disable disk-full
-```
 
 ---
 

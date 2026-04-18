@@ -1,6 +1,6 @@
 # Squire Usage Guide
 
-Squire is an AI-powered homelab monitoring and management agent. This guide covers the web UI and CLI, configuration, remote hosts, watch mode, alert rules, skills, notifications, and Docker deployment.
+Squire is an AI-powered homelab monitoring and management agent. This guide covers the web UI and CLI, configuration, remote hosts, watch mode, skills, notifications, and Docker deployment.
 
 For individual command flags, see the [CLI Reference](cli.md). For full configuration options, see the [Configuration Reference](configuration.md).
 
@@ -52,7 +52,6 @@ All management operations work without a running UI:
 ```bash
 squire web                     # web interface
 squire watch                   # autonomous monitoring
-squire alerts list             # manage alert rules
 squire skills list             # manage skills
 squire sessions list           # browse sessions
 squire version                 # show version
@@ -196,7 +195,7 @@ multi_agent = true
 | Monitor   | Read-only system observation  | `read-only`            | `system_info`, `network_info`, `docker_ps`, `journalctl`, `read_config`               |
 | Container | Docker lifecycle management   | `cautious`             | `docker_logs`, `docker_compose`, `docker_container`, `docker_image`, `docker_cleanup` |
 | Admin     | Systemd and command execution | `standard`             | `systemctl`, `run_command`                                                            |
-| Notifier  | Alerts and notifications      | `read-only`            | `send_notification`, `list_alert_rules`, `create_alert_rule`, `delete_alert_rule`     |
+| Notifier  | Ad-hoc notifications          | `read-only`            | `send_notification`                                                                   |
 
 
 The LLM routes requests to the appropriate specialist. You always interact with Squire — the sub-agent structure is an implementation detail.
@@ -208,15 +207,14 @@ Per-agent tolerances are configurable under `[guardrails]` in `squire.toml`. See
 ## Autonomous Watch Mode
 
 > [!WARNING]
-> Watch mode is **experimental** and can take actions on your system. Start with `tolerance = "read-only"` under `[guardrails.watch]` and confirm your alert rules before enabling any corrective behavior.
+> Watch mode is **experimental** and can take actions on your system. Start with `tolerance = "read-only"` under `[guardrails.watch]` before loosening risk limits.
 
 Watch mode is a headless monitoring loop. Each cycle it:
 
 1. Collects system snapshots from all configured hosts
-2. Evaluates your alert rules against the snapshot data
-3. Injects a check-in prompt into the agent
-4. Lets the agent reason about system state and optionally take action (within risk limits)
-5. Persists the response and dispatches notifications
+2. Injects a check-in prompt into the agent
+3. Lets the agent reason about system state and optionally take action (within risk limits)
+4. Persists the response and dispatches notifications
 
 Tools above the configured risk tolerance are auto-denied — there is no interactive approval in headless mode. Session state rotates after a configurable number of cycles to keep memory bounded.
 
@@ -239,11 +237,7 @@ You can also start and supervise watch mode from the web UI (**Watch** page) wit
    [guardrails.watch]
    tolerance = "read-only"
   ```
-3. Optionally add alert rules:
-  ```bash
-   squire alerts add --name "disk-full" --condition "disk_percent > 90" --severity warning
-  ```
-4. Start watch mode:
+3. Start watch mode:
   ```bash
    squire watch
   ```
@@ -276,60 +270,9 @@ See [Configuration Reference](configuration.md#watch-mode-risk-overrides----guar
 
 ---
 
-## Alert Rules
+## Alerting
 
-Alert rules trigger notifications when system metrics cross thresholds. Watch mode evaluates them each cycle.
-
-### Managing Rules
-
-```bash
-squire alerts add --name "disk-full" --condition "disk_percent > 90" --severity warning
-squire alerts add --name "high-cpu" --condition "cpu_percent > 85" --host all
-squire alerts add --name "mem-critical" --condition "memory_percent > 95" --severity critical --cooldown 60
-squire alerts list
-squire alerts disable disk-full
-squire alerts enable disk-full
-squire alerts remove high-cpu
-```
-
-Or just ask Squire: "alert me if disk usage exceeds 90%".
-
-### Condition Syntax
-
-Conditions follow the format `<field> <op> <value>`:
-
-- **field** — snapshot field name (see table below)
-- **op** — `>`, `<`, `>=`, `<=`, `==`, `!=`
-- **value** — number or string literal
-
-Examples:
-
-```
-cpu_percent > 90
-memory_used_mb >= 14000
-disk_percent > 85
-load_5m > 4.0
-```
-
-The condition evaluator is safe — no `eval()`, just a structured parser.
-
-### Snapshot Fields
-
-
-| Field            | Type  | Description             |
-| ---------------- | ----- | ----------------------- |
-| `cpu_percent`    | float | CPU usage percentage    |
-| `memory_used_mb` | float | Memory usage in MB      |
-| `memory_percent` | float | Memory usage percentage |
-| `disk_percent`   | float | Disk usage percentage   |
-| `disk_used_gb`   | float | Disk usage in GB        |
-| `load_1m`        | float | 1-minute load average   |
-| `load_5m`        | float | 5-minute load average   |
-| `load_15m`       | float | 15-minute load average  |
-| `uptime_hours`   | float | System uptime in hours  |
-
-
-Dot-path notation works for nested fields (e.g., `containers.nginx.state`).
+> **Alerting is delegated to external tooling.** Squire does not include a built-in threshold alerter. Run Prometheus/Alertmanager, Grafana, Uptime Kuma, or similar — they decide *when* to alert, and point their webhook outputs at Squire's notification channels (or a future inbound-alert endpoint) so Squire can reason about *how to respond*.
 
 ---
 
@@ -462,7 +405,7 @@ events = ["watch.alert", "watch.error"]
 | `watch.stop`    | Watch mode stopped              |
 | `watch.action`  | Agent took a corrective action  |
 | `watch.blocked` | Tool call denied by risk policy |
-| `watch.alert`   | Alert rule triggered            |
+| `watch.alert`   | Watch loop detected an anomaly  |
 | `watch.error`   | Exception during a cycle        |
 
 
@@ -515,7 +458,7 @@ All persistent data lives under `/data` inside the container. Mount a named volu
 
 | Path              | Contents                                                     |
 | ----------------- | ------------------------------------------------------------ |
-| `/data/squire.db` | SQLite database (sessions, events, alert rules, watch state) |
+| `/data/squire.db` | SQLite database (sessions, events, watch state)              |
 | `/data/skills/`   | Skill definitions (Open Agent Skills format)                 |
 | `/data/keys/`     | SSH key pairs for managed remote hosts                       |
 
@@ -604,11 +547,11 @@ Run one-off CLI commands against a running container or the data volume:
 
 ```bash
 # Against a running container
-docker exec squire uv run squire alerts list
 docker exec squire uv run squire sessions list
+docker exec squire uv run squire hosts list
 
 # One-off with the data volume
-docker run --rm -v squire-data:/data squire alerts list
+docker run --rm -v squire-data:/data squire sessions list
 docker run --rm -v squire-data:/data squire hosts list
 ```
 
