@@ -24,7 +24,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "google-adk==1.27.1",
+    "google-adk==1.31.0",
     "litellm==1.82.2",
     "pydantic==2.12.5",
     "pydantic-settings==2.13.1",
