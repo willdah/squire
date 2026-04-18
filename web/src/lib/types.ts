@@ -86,26 +86,6 @@ export interface MessageInfo {
   total_tokens?: number | null;
 }
 
-export interface AlertRule {
-  id?: number;
-  name: string;
-  condition: string;
-  host: string;
-  severity: string;
-  cooldown_minutes: number;
-  last_fired_at?: string | null;
-  enabled: boolean;
-  created_at?: string;
-}
-
-export interface AlertRuleCreate {
-  name: string;
-  condition: string;
-  host?: string;
-  severity?: string;
-  cooldown_minutes?: number;
-}
-
 export interface Skill {
   name: string;
   description: string;
