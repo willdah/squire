@@ -48,6 +48,15 @@ const EFFECT_COLORS: Record<Effect, string> = {
   mixed: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300",
 };
 
+// base-ui's <SelectValue> renders the raw value key, not the selected item's
+// label. Pass the label text as children so the trigger shows "Risk-based"
+// instead of "default".
+const APPROVAL_LABELS: Record<string, string> = {
+  default: "Risk-based",
+  always: "Always",
+  never: "Auto-allow",
+};
+
 function EffectBadge({ effect }: { effect: Effect }) {
   return (
     <Badge variant="outline" className={EFFECT_COLORS[effect]}>
@@ -138,10 +147,37 @@ function ToolsPageInner() {
   // Bulk-selection state (ephemeral — cleared after save).
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const hasPending =
-    Object.keys(pendingOverrides).length > 0 ||
-    pendingDeny !== null ||
-    Object.keys(pendingApproval).length > 0;
+  // `hasPending` must reflect *effective* changes, not just stale entries in
+  // the pending maps: a user can edit and then revert a field, and the save
+  // bar should disappear.
+  const originalDeny = new Set(
+    (tools ?? []).filter((t) => t.status === "disabled").map((t) => t.name)
+  );
+
+  const denyChanged = (() => {
+    if (pendingDeny === null) return false;
+    if (pendingDeny.size !== originalDeny.size) return true;
+    for (const n of pendingDeny) if (!originalDeny.has(n)) return true;
+    return false;
+  })();
+
+  const approvalChanged = Object.entries(pendingApproval).some(([name, policy]) => {
+    const tool = tools?.find((t) => t.name === name);
+    const original = tool?.approval_policy ?? null;
+    return policy !== original;
+  });
+
+  const overridesChanged = Object.entries(pendingOverrides).some(([key, value]) => {
+    const [toolName, actionName] = key.split(":");
+    const tool = tools?.find((t) => t.name === toolName);
+    if (!tool) return value !== null;
+    const original = actionName
+      ? tool.actions?.find((a) => a.name === actionName)?.risk_override ?? null
+      : tool.risk_override ?? null;
+    return value !== original;
+  });
+
+  const hasPending = denyChanged || approvalChanged || overridesChanged;
 
   const toggleExpand = (name: string) => {
     const next = new Set(expanded);
@@ -553,7 +589,9 @@ function ToolsPageInner() {
                           onValueChange={(v) => handleApprovalChange(tool.name, v ?? "default")}
                         >
                           <SelectTrigger className="h-7 w-[120px] text-xs" onClick={(e) => e.stopPropagation()}>
-                            <SelectValue />
+                            <SelectValue>
+                              {APPROVAL_LABELS[getEffectiveApproval(tool) ?? "default"]}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="default">Risk-based</SelectItem>
