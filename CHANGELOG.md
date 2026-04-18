@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-04-18
+
 ### Removed
 
 - **Alert-rule engine:** Removed the in-project threshold-based alert engine — `alert_rules` SQLite table (dropped on first launch via forward-only migration), `GET/POST/PUT/DELETE/POST toggle /api/alerts*` REST endpoints, `create_alert_rule` / `list_alert_rules` / `update_alert_rule` / `delete_alert_rule` LLM tools on the Notifier sub-agent, `squire alerts {list,add,remove,enable,disable}` CLI sub-app, the Notifications page "Alert Rules" tab and form, and the `/alerts` chat slash command. The Notifier sub-agent is kept but trimmed to `send_notification` only. Webhook channels, notification history, approval notifications, and watch-event notifications are unchanged. Alerting is better delegated to external monitoring stacks (Prometheus/Alertmanager, Grafana, Uptime Kuma, Zabbix); a future inbound-alert ingestion endpoint is tracked separately. **Breaking change** for anyone relying on alert rules — export `alert_rules` rows before upgrading if the data is needed (resolves #143).
