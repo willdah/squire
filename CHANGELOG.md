@@ -17,8 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Router domain table + few-shot examples:** Multi-agent router now enumerates the four specialists and includes a routing example. Admin agent gained a pre-action reasoning scaffold and a worked example. Notifier agent gained two examples demonstrating structured-argument calls.
   - **Positive framing:** Mechanical pass replacing `Do NOT` / `NEVER` with positive instructions throughout.
   - **Bulleted risk contract:** `format_risk_guidance()` now renders a 3-bullet contract instead of a flat sentence, scannable by the model at a glance.
-- **Structured alert-condition arguments:** `create_alert_rule` and `update_alert_rule` now take typed `field: Literal[...]`, `op: Literal[...]`, `value: float` arguments instead of a free-form condition string. The tool schema teaches the LLM through Python types; the Notifier prompt dropped the condition-DSL prose (6 lines). The internal condition format stored in the DB is unchanged — the new args assemble the same string before persisting, so existing rules keep working.
 - **Watch-mode prompt:** The autonomous watch addendum now references prior cycle context in conversation history (previously silent) so the agent skips re-reporting stable state across rotations.
+
+### Changed — Breaking
+
+- **Alert-rule tool signatures:** `create_alert_rule` and `update_alert_rule` now take typed `field: Literal[...]`, `op: Literal[...]`, `value: float` arguments instead of a free-form `condition: str`. The tool schema teaches the LLM through Python types; the Notifier prompt dropped the condition-DSL prose (6 lines). **Any caller that invoked these tools with `condition="cpu_percent > 90"` (external scripts, saved playbooks, pinned prompts) will fail** — migrate to the structured form: `create_alert_rule(name="x", field="cpu_percent", op=">", value=90)`. The internal condition format stored in the SQLite DB is unchanged (`"{field} {op} {value}"`), so existing alert rows and the `evaluate_alerts` parser keep working without migration.
 
 ## [0.18.0] — 2026-04-18
 
