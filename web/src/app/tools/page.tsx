@@ -27,6 +27,24 @@ import { useUrlState, useUrlStateSet } from "@/hooks/use-url-state";
 import type { Effect, ToolInfo, ToolAction } from "@/lib/types";
 
 type SortCol = "name" | "group" | "risk" | "effect" | "";
+type SortDir = "asc" | "desc";
+
+// Sort is persisted as a single URL param so sequential setter calls from
+// `toggleSort` don't race against each other via `router.replace`. Empty
+// sortCol maps to no param.
+function parseSortParam(raw: string): { col: SortCol; dir: SortDir } {
+  if (!raw) return { col: "", dir: "asc" };
+  if (raw.startsWith("-")) {
+    const col = raw.slice(1) as SortCol;
+    return { col, dir: "desc" };
+  }
+  return { col: raw as SortCol, dir: "asc" };
+}
+
+function serializeSortParam(col: SortCol, dir: SortDir): string {
+  if (!col) return "";
+  return dir === "desc" ? `-${col}` : col;
+}
 
 const RISK_COLORS: Record<number, string> = {
   1: "bg-green-500/15 text-green-700 dark:text-green-400",
@@ -136,8 +154,8 @@ function ToolsPageInner() {
   const [groupFilter, setGroupFilter] = useUrlState<string>("group", "all");
   const [effectFilter, setEffectFilter] = useUrlState<string>("effect", "all");
   const [statusFilter, setStatusFilter] = useUrlState<string>("status", "all");
-  const [sortCol, setSortCol] = useUrlState<SortCol>("sort", "");
-  const [sortDir, setSortDir] = useUrlState<"asc" | "desc">("dir", "asc");
+  const [sortParam, setSortParam] = useUrlState<string>("sort", "");
+  const { col: sortCol, dir: sortDir } = parseSortParam(sortParam);
 
   // Track pending config changes
   const [pendingOverrides, setPendingOverrides] = useState<Record<string, number | null>>({});
@@ -320,10 +338,9 @@ function ToolsPageInner() {
 
   const toggleSort = (col: "name" | "group" | "risk" | "effect") => {
     if (sortCol === col) {
-      setSortDir(sortDir === "asc" ? "desc" : "asc");
+      setSortParam(serializeSortParam(col, sortDir === "asc" ? "desc" : "asc"));
     } else {
-      setSortCol(col);
-      setSortDir("asc");
+      setSortParam(serializeSortParam(col, "asc"));
     }
   };
 
