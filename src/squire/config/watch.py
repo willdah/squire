@@ -9,6 +9,7 @@ from functools import partial
 from pydantic import Field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
+from .db_source import DatabaseOverrideSource
 from .loader import TomlSectionSource, get_section
 
 
@@ -34,6 +35,7 @@ class WatchConfig(BaseSettings):
             init_settings,
             env_settings,
             dotenv_settings,
+            DatabaseOverrideSource(settings_cls, "watch"),
             TomlSectionSource(settings_cls, partial(get_section, "watch")),
             file_secret_settings,
         )

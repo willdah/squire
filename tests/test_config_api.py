@@ -1,11 +1,13 @@
-"""Tests for configuration API endpoints (GET detail + PATCH)."""
+"""Tests for configuration API endpoints (GET detail + PATCH + DELETE)."""
 
 import pytest
+import pytest_asyncio
 
 import squire.api.dependencies as deps
 import squire.config.loader as loader_mod
 from squire.config import AppConfig, GuardrailsConfig, LLMConfig, NotificationsConfig, WatchConfig
 from squire.config.notifications import WebhookConfig
+from squire.database.service import DatabaseService
 
 
 @pytest.fixture(autouse=True)
@@ -14,9 +16,9 @@ def _empty_toml(monkeypatch):
     monkeypatch.setattr(loader_mod, "_cached", {})
 
 
-@pytest.fixture
-def _setup_deps(monkeypatch):
-    """Populate deps singletons with default configs."""
+@pytest_asyncio.fixture
+async def _setup_deps(monkeypatch, tmp_path):
+    """Populate deps singletons with default configs and a scratch DB."""
     from squire.config.skills import SkillsConfig
     from squire.skills import SkillService
 
@@ -30,6 +32,14 @@ def _setup_deps(monkeypatch):
     monkeypatch.setattr(deps, "db_config", None)
     monkeypatch.setattr(deps, "host_store", None)
     monkeypatch.setattr(deps, "notifier", None)
+
+    db = DatabaseService(tmp_path / "test.db")
+    monkeypatch.setattr(deps, "db", db)
+    try:
+        yield db
+    finally:
+        await db.close()
+        monkeypatch.setattr(deps, "db", None)
 
 
 # --- GET /api/config ---
@@ -45,6 +55,7 @@ class TestGetConfig:
 
         result = await get_config(app_config=deps.app_config, llm_config=deps.llm_config)
         assert "risk_tolerance" in result.guardrails.env_overrides
+        assert result.guardrails.sources["risk_tolerance"] == "env"
 
     async def test_returns_section_values(self):
         from squire.api.routers.config import get_config
@@ -53,6 +64,7 @@ class TestGetConfig:
         assert result.app.values["app_name"] == "Squire"
         assert "model" in result.llm.values
         assert "path" in result.skills.values
+        assert result.llm.sources["model"] == "default"
 
     async def test_returns_toml_path(self, tmp_path, monkeypatch):
         from squire.api.routers.config import get_config
@@ -115,47 +127,65 @@ class TestPatchConfig:
     async def test_patch_guardrails_risk_tolerance(self):
         from squire.api.routers.config import patch_config
 
-        result = await patch_config("guardrails", {"risk_tolerance": "full-trust"}, persist=False)
-        assert result["values"]["risk_tolerance"] == "full-trust"
+        result = await patch_config("guardrails", {"risk_tolerance": "full-trust"})
+        assert result.values["risk_tolerance"] == "full-trust"
+        assert result.sources["risk_tolerance"] == "db"
         assert deps.guardrails.risk_tolerance == "full-trust"
+
+    async def test_patch_writes_to_config_overrides(self, _setup_deps):
+        from squire.api.routers.config import patch_config
+
+        await patch_config("watch", {"interval_minutes": 7})
+        stored = await _setup_deps.get_config_overrides("watch")
+        assert stored["interval_minutes"] == 7
+
+    async def test_patch_enqueues_reload_config_command(self, _setup_deps):
+        from squire.api.routers.config import patch_config
+
+        await patch_config("watch", {"interval_minutes": 8})
+        pending = await _setup_deps.get_pending_watch_commands()
+        assert any(cmd["command"] == "reload_config" for cmd in pending)
 
     async def test_patch_llm_updates_in_memory(self):
         from squire.api.routers.config import patch_config
 
-        result = await patch_config("llm", {"temperature": 0.8}, persist=False)
+        result = await patch_config("llm", {"temperature": 0.8})
         assert deps.llm_config.temperature == 0.8
         # api_base should be redacted in response
-        assert result["values"].get("api_base") != deps.llm_config.api_base or deps.llm_config.api_base is None
+        assert result.values.get("api_base") != deps.llm_config.api_base or deps.llm_config.api_base is None
 
     async def test_patch_watch_updates_in_memory(self):
         from squire.api.routers.config import patch_config
 
-        await patch_config("watch", {"interval_minutes": 10, "notify_on_action": False}, persist=False)
+        await patch_config("watch", {"interval_minutes": 10, "notify_on_action": False})
         assert deps.watch_config.interval_minutes == 10
         assert deps.watch_config.notify_on_action is False
 
     async def test_patch_guardrails_updates_in_memory(self):
         from squire.api.routers.config import patch_config
 
-        await patch_config("guardrails", {"tools_deny": ["run_command"]}, persist=False)
+        await patch_config("guardrails", {"tools_deny": ["run_command"]})
         assert deps.guardrails.tools_deny == ["run_command"]
 
-    async def test_rejects_env_locked_field(self, monkeypatch):
+    async def test_rejects_env_locked_field(self, _setup_deps, monkeypatch):
         from fastapi import HTTPException
 
         from squire.api.routers.config import patch_config
 
         monkeypatch.setenv("SQUIRE_GUARDRAILS_RISK_TOLERANCE", "read-only")
         with pytest.raises(HTTPException) as exc_info:
-            await patch_config("guardrails", {"risk_tolerance": "full-trust"}, persist=False)
+            await patch_config("guardrails", {"risk_tolerance": "full-trust"})
         assert exc_info.value.status_code == 409
         assert "SQUIRE_GUARDRAILS_RISK_TOLERANCE" in exc_info.value.detail
+        # Env lock path must NOT write to DB.
+        stored = await _setup_deps.get_config_overrides("guardrails")
+        assert "risk_tolerance" not in stored
 
     async def test_strips_redacted_sentinel(self):
         from squire.api.routers.config import patch_config
 
         original_temp = deps.llm_config.temperature
-        await patch_config("llm", {"model": "new-model", "temperature": "••••••"}, persist=False)
+        await patch_config("llm", {"model": "new-model", "temperature": "••••••"})
         assert deps.llm_config.model == "new-model"
         assert deps.llm_config.temperature == original_temp
 
@@ -165,7 +195,7 @@ class TestPatchConfig:
         from squire.api.routers.config import patch_config
 
         with pytest.raises(HTTPException) as exc_info:
-            await patch_config("bogus", {"key": "val"}, persist=False)
+            await patch_config("bogus", {"key": "val"})
         assert exc_info.value.status_code == 404
 
     async def test_immutable_section_404(self):
@@ -174,7 +204,7 @@ class TestPatchConfig:
         from squire.api.routers.config import patch_config
 
         with pytest.raises(HTTPException) as exc_info:
-            await patch_config("database", {"path": "/tmp/db"}, persist=False)
+            await patch_config("database", {"path": "/tmp/db"})
         assert exc_info.value.status_code == 404
 
     async def test_patch_skills_updates_service(self, monkeypatch, tmp_path):
@@ -182,7 +212,7 @@ class TestPatchConfig:
 
         new_dir = tmp_path / "skills2"
         new_dir.mkdir()
-        await patch_config("skills", {"path": str(new_dir)}, persist=False)
+        await patch_config("skills", {"path": str(new_dir)})
         assert deps.skills_config.path == new_dir
         assert deps.skills_service._dir == new_dir
 
@@ -192,7 +222,7 @@ class TestPatchConfig:
         from squire.api.routers.config import patch_config
 
         with pytest.raises(HTTPException) as exc_info:
-            await patch_config("app", {}, persist=False)
+            await patch_config("app", {})
         assert exc_info.value.status_code == 400
 
     async def test_all_redacted_body_400(self):
@@ -201,7 +231,7 @@ class TestPatchConfig:
         from squire.api.routers.config import patch_config
 
         with pytest.raises(HTTPException) as exc_info:
-            await patch_config("llm", {"model": "••••••"}, persist=False)
+            await patch_config("llm", {"model": "••••••"})
         assert exc_info.value.status_code == 400
 
 
@@ -223,7 +253,6 @@ class TestNotificationsWebhookMerge:
         await patch_config(
             "notifications",
             {"webhooks": [{"name": "discord", "url": "••••••", "events": ["error"]}]},
-            persist=False,
         )
         assert deps.notif_config.webhooks[0].url == "https://real-url.com"
         assert deps.notif_config.webhooks[0].events == ["error"]
@@ -242,7 +271,6 @@ class TestNotificationsWebhookMerge:
         await patch_config(
             "notifications",
             {"webhooks": [{"name": "ntfy", "url": "••••••", "headers": {"Authorization": "••••••"}}]},
-            persist=False,
         )
         assert deps.notif_config.webhooks[0].headers["Authorization"] == "Bearer secret"
 
@@ -275,45 +303,52 @@ class TestNotificationsWebhookMerge:
                     "tls": True,
                 }
             },
-            persist=False,
         )
         assert deps.notif_config.email is not None
         assert deps.notif_config.email.smtp_password == "secret-pass"
         assert deps.notif_config.email.use_tls is True
 
 
-# --- Persist to TOML ---
+# --- DELETE overrides ---
 
 
 @pytest.mark.usefixtures("_setup_deps")
-class TestPersist:
-    async def test_persist_writes_toml(self, tmp_path, monkeypatch):
-        import tomlkit
+class TestDeleteOverrides:
+    async def test_delete_field_clears_override(self, _setup_deps):
+        from squire.api.routers.config import patch_config, reset_field
 
-        from squire.api.routers.config import patch_config
+        await patch_config("watch", {"interval_minutes": 9})
+        assert (await _setup_deps.get_config_overrides("watch"))["interval_minutes"] == 9
 
-        toml_file = tmp_path / "squire.toml"
-        toml_file.write_text("")
-        monkeypatch.setattr(loader_mod, "_SEARCH_PATHS", [toml_file])
+        result = await reset_field("watch", "interval_minutes")
+        stored = await _setup_deps.get_config_overrides("watch")
+        assert "interval_minutes" not in stored
+        assert result.sources["interval_minutes"] == "default"
 
-        result = await patch_config("llm", {"temperature": 0.9}, persist=True)
-        assert result["persisted"] is not None
+    async def test_delete_section_clears_all_overrides(self, _setup_deps):
+        from squire.api.routers.config import patch_config, reset_section
 
-        with open(toml_file) as f:
-            doc = tomlkit.load(f)
-        assert doc["llm"]["temperature"] == 0.9
+        await patch_config("watch", {"interval_minutes": 4, "max_tool_calls_per_cycle": 25})
+        assert await _setup_deps.get_config_overrides("watch")
 
-    async def test_persist_top_level(self, tmp_path, monkeypatch):
-        import tomlkit
+        await reset_section("watch")
+        stored = await _setup_deps.get_config_overrides("watch")
+        assert stored == {}
 
-        from squire.api.routers.config import patch_config
+    async def test_delete_unknown_section_404(self):
+        from fastapi import HTTPException
 
-        toml_file = tmp_path / "squire.toml"
-        toml_file.write_text("")
-        monkeypatch.setattr(loader_mod, "_SEARCH_PATHS", [toml_file])
+        from squire.api.routers.config import reset_section
 
-        await patch_config("app", {"history_limit": 100}, persist=True)
+        with pytest.raises(HTTPException) as exc_info:
+            await reset_section("bogus")
+        assert exc_info.value.status_code == 404
 
-        with open(toml_file) as f:
-            doc = tomlkit.load(f)
-        assert doc["history_limit"] == 100
+    async def test_delete_unknown_field_404(self):
+        from fastapi import HTTPException
+
+        from squire.api.routers.config import reset_field
+
+        with pytest.raises(HTTPException) as exc_info:
+            await reset_field("watch", "no_such_field")
+        assert exc_info.value.status_code == 404

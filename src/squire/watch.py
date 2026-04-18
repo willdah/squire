@@ -12,7 +12,9 @@ import os
 import signal
 import sys
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from agent_risk_engine import RuleGate
@@ -60,23 +62,6 @@ from .watch_playbooks import route_playbooks_for_incidents
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-
-# Keys allowed on WatchConfig from a live ``update_config`` command (JSON payload).
-_WATCH_LIVE_KEYS = frozenset(
-    {
-        "interval_minutes",
-        "max_tool_calls_per_cycle",
-        "cycle_timeout_seconds",
-        "checkin_prompt",
-        "notify_on_action",
-        "notify_on_blocked",
-        "cycles_per_session",
-        "max_context_events",
-        "max_identical_actions_per_cycle",
-        "blocked_action_cooldown_cycles",
-        "max_remote_actions_per_cycle",
-    }
-)
 
 _WATCH_ROUTING_TIMEOUT_SECONDS = 15
 _WATCH_ROUTING_MAX_LLM_CALLS = 4
@@ -226,24 +211,116 @@ def _build_watch_report(*, watch_id: str, sessions: list[dict], cycles: list[dic
     }
 
 
-def _validated_live_watch_updates(
-    payload: dict,
-    watch_config: WatchConfig,
-) -> tuple[dict, int | None]:
-    """Validate and normalize live watch config updates before applying them."""
-    updates = {key: payload[key] for key in _WATCH_LIVE_KEYS if key in payload}
-    if updates:
-        candidate = watch_config.model_dump()
-        candidate.update(updates)
-        validated = WatchConfig.model_validate(candidate)
-        updates = {key: getattr(validated, key) for key in updates}
+def _make_headless_risk_gate(
+    tool_risk_levels: dict[str, int],
+    *,
+    guardrails: GuardrailsConfig,
+    notifier: NotificationRouter | None,
+    agent_threshold: int | None = None,
+):
+    """Build a headless before_tool_callback bound to the given guardrails/notifier."""
+    return create_risk_gate(
+        tool_risk_levels=tool_risk_levels,
+        risk_overrides=dict(guardrails.tools_risk_overrides),
+        default_threshold=agent_threshold,
+        headless=True,
+        notifier=notifier,
+    )
 
-    risk_tolerance: int | None = None
-    if "risk_tolerance" in payload:
-        risk_tolerance = int(payload["risk_tolerance"])
-        if not 1 <= risk_tolerance <= 5:
-            raise ValueError("risk_tolerance must be between 1 and 5")
-    return updates, risk_tolerance
+
+def _rewire_risk_gates(
+    agent,
+    *,
+    app_config: AppConfig,
+    guardrails: GuardrailsConfig,
+    notifier: NotificationRouter | None,
+) -> None:
+    """Replace ``before_tool_callback`` on the agent (and sub-agents) after a config reload."""
+    if app_config.multi_agent:
+        from .tools.groups import ADMIN_RISK_LEVELS, CONTAINER_RISK_LEVELS, MONITOR_RISK_LEVELS
+        from .tools.notifications import NOTIFIER_RISK_LEVELS
+
+        tolerances = {
+            "Monitor": guardrails.monitor_tolerance,
+            "Container": guardrails.container_tolerance,
+            "Admin": guardrails.admin_tolerance,
+            "Notifier": guardrails.notifier_tolerance,
+        }
+        risk_maps = {
+            "Monitor": MONITOR_RISK_LEVELS,
+            "Container": CONTAINER_RISK_LEVELS,
+            "Admin": ADMIN_RISK_LEVELS,
+            "Notifier": NOTIFIER_RISK_LEVELS,
+        }
+        for sub in getattr(agent, "sub_agents", None) or []:
+            tol = tolerances.get(sub.name)
+            threshold = RuleGate(threshold=tol).threshold if tol is not None else None
+            sub.before_tool_callback = _make_headless_risk_gate(
+                risk_maps.get(sub.name, TOOL_RISK_LEVELS),
+                guardrails=guardrails,
+                notifier=notifier,
+                agent_threshold=threshold,
+            )
+    else:
+        agent.before_tool_callback = _make_headless_risk_gate(
+            TOOL_RISK_LEVELS,
+            guardrails=guardrails,
+            notifier=notifier,
+        )
+
+
+async def _reload_config_from_db(
+    db: DatabaseService,
+    watch_config: WatchConfig,
+    refs: dict[str, Any],
+    *,
+    session_ref: list | None,
+    session_state_template: dict | None,
+) -> None:
+    """Rebuild every mutable config from DB overrides and swap it into the live loop."""
+    new_watch = WatchConfig()
+    new_guardrails = GuardrailsConfig()
+    new_notif = NotificationsConfig()
+
+    # Update watch_config in place so closures elsewhere pick up new values.
+    for field_name in WatchConfig.model_fields:
+        setattr(watch_config, field_name, getattr(new_watch, field_name))
+
+    # Deep-rewire notifier: close old, install new, re-register with tools.
+    old_notifier = refs.get("notifier")
+    new_webhook = WebhookDispatcher(new_notif)
+    new_email = EmailNotifier(new_notif.email) if new_notif.email and new_notif.email.enabled else None
+    new_notifier = NotificationRouter(webhook=new_webhook, email=new_email, db=db)
+    refs["notifier"] = new_notifier
+    refs["notifications"] = new_notif
+    set_notifier(new_notifier)
+    if old_notifier is not None:
+        try:
+            await old_notifier.close()
+        except Exception:
+            logger.debug("Failed closing old notifier during reload", exc_info=True)
+
+    # Deep-rewire guardrails + risk gates.
+    refs["guardrails"] = new_guardrails
+    app_config = refs.get("app_config")
+    agent = refs.get("agent")
+    block_notifier = new_notifier if new_watch.notify_on_blocked else None
+    if app_config is not None and agent is not None:
+        _rewire_risk_gates(agent, app_config=app_config, guardrails=new_guardrails, notifier=block_notifier)
+
+    # Push derived state onto the live session so the next cycle sees the update.
+    tol = new_guardrails.watch_tolerance or new_guardrails.risk_tolerance
+    if session_state_template is not None:
+        session_state_template["risk_tolerance"] = tol
+    sess = session_ref[0] if session_ref and session_ref[0] is not None else None
+    if sess is not None:
+        sess.state["risk_tolerance"] = tol
+        sess.state["watch_max_identical_actions_per_cycle"] = new_watch.max_identical_actions_per_cycle
+        sess.state["watch_max_remote_actions_per_cycle"] = new_watch.max_remote_actions_per_cycle
+
+    await db.set_watch_state("interval_minutes", str(new_watch.interval_minutes))
+    await db.set_watch_state("risk_tolerance", str(tol))
+    logger.info("Reloaded watch config from DB overrides")
 
 
 async def _poll_commands(
@@ -253,6 +330,7 @@ async def _poll_commands(
     *,
     session_ref: list | None = None,
     session_state_template: dict | None = None,
+    refs: dict[str, Any] | None = None,
 ) -> None:
     """Process any pending watch commands from the database."""
     commands = await db.get_pending_watch_commands()
@@ -263,25 +341,15 @@ async def _poll_commands(
             if command == "stop":
                 shutdown.set()
                 await db.update_watch_command_status(cmd_id, "completed")
-            elif command == "update_config" and watch_config is not None:
-                payload = json.loads(cmd["payload"] or "{}")
-                updates, risk_tolerance = _validated_live_watch_updates(payload, watch_config)
-
-                for key, value in updates.items():
-                    setattr(watch_config, key, value)
-                if "interval_minutes" in updates:
-                    await db.set_watch_state("interval_minutes", str(updates["interval_minutes"]))
-
-                if risk_tolerance is not None:
-                    threshold = risk_tolerance
-                    if session_state_template is not None:
-                        session_state_template["risk_tolerance"] = threshold
-                    sess = session_ref[0] if session_ref and session_ref[0] is not None else None
-                    if sess is not None:
-                        sess.state["risk_tolerance"] = threshold
-                    await db.set_watch_state("risk_tolerance", str(threshold))
+            elif command == "reload_config" and watch_config is not None and refs is not None:
+                await _reload_config_from_db(
+                    db,
+                    watch_config,
+                    refs,
+                    session_ref=session_ref,
+                    session_state_template=session_state_template,
+                )
                 await db.update_watch_command_status(cmd_id, "completed")
-                logger.info("Applied config update: %s", payload)
             elif command == "start":
                 await db.update_watch_command_status(cmd_id, "completed")
             else:
@@ -293,18 +361,24 @@ async def _poll_commands(
 async def _interruptible_sleep(
     db: DatabaseService,
     shutdown: asyncio.Event,
-    interval_seconds: float,
+    interval_getter: Callable[[], float],
     poll_seconds: float = 5.0,
     watch_config: WatchConfig | None = None,
     *,
     session_ref: list | None = None,
     session_state_template: dict | None = None,
+    refs: dict[str, Any] | None = None,
 ) -> None:
-    """Sleep in short increments, polling for commands between sleeps."""
+    """Sleep in short increments, polling for commands between sleeps.
+
+    ``interval_getter`` is re-read each loop so that a mid-sleep ``reload_config``
+    that shortens ``watch_config.interval_minutes`` takes effect immediately.
+    """
     elapsed = 0.0
-    while elapsed < interval_seconds and not shutdown.is_set():
+    while elapsed < interval_getter() and not shutdown.is_set():
+        remaining = interval_getter() - elapsed
         try:
-            await asyncio.wait_for(shutdown.wait(), timeout=min(poll_seconds, interval_seconds - elapsed))
+            await asyncio.wait_for(shutdown.wait(), timeout=min(poll_seconds, remaining))
         except TimeoutError:
             pass
         elapsed += poll_seconds
@@ -315,6 +389,7 @@ async def _interruptible_sleep(
                 watch_config,
                 session_ref=session_ref,
                 session_state_template=session_state_template,
+                refs=refs,
             )
 
 
@@ -381,15 +456,6 @@ async def start_watch() -> None:
     # Build the agent with headless risk gate
     block_notifier = notifier if watch_config.notify_on_blocked else None
 
-    def _make_headless_risk_gate(tool_risk_levels: dict[str, int], agent_threshold: int | None = None):
-        return create_risk_gate(
-            tool_risk_levels=tool_risk_levels,
-            risk_overrides=dict(guardrails.tools_risk_overrides),
-            default_threshold=agent_threshold,
-            headless=True,
-            notifier=block_notifier,
-        )
-
     if app_config.multi_agent:
         agent_tolerances = {
             "Monitor": guardrails.monitor_tolerance,
@@ -403,7 +469,12 @@ async def start_watch() -> None:
             threshold = RuleGate(threshold=tol).threshold if tol is not None else None
 
             def factory(tool_risk_levels: dict[str, int]):
-                return _make_headless_risk_gate(tool_risk_levels, agent_threshold=threshold)
+                return _make_headless_risk_gate(
+                    tool_risk_levels,
+                    guardrails=guardrails,
+                    notifier=block_notifier,
+                    agent_threshold=threshold,
+                )
 
             return factory
 
@@ -416,8 +487,20 @@ async def start_watch() -> None:
         agent = create_squire_agent(
             app_config=app_config,
             llm_config=llm_config,
-            before_tool_callback=_make_headless_risk_gate(TOOL_RISK_LEVELS),
+            before_tool_callback=_make_headless_risk_gate(
+                TOOL_RISK_LEVELS,
+                guardrails=guardrails,
+                notifier=block_notifier,
+            ),
         )
+
+    refs: dict[str, Any] = {
+        "app_config": app_config,
+        "agent": agent,
+        "guardrails": guardrails,
+        "notifier": notifier,
+        "notifications": notif_config,
+    }
 
     # Create ADK runner
     adk_runtime = AdkRuntime(app_name=app_config.app_name, db_path=db_config.path)
@@ -518,6 +601,7 @@ async def start_watch() -> None:
         watch_config,
         session_ref=session_ref,
         session_state_template=session_state,
+        refs=refs,
     )
 
     cycle_count = 0
@@ -554,6 +638,7 @@ async def start_watch() -> None:
                 watch_config,
                 session_ref=session_ref,
                 session_state_template=session_state,
+                refs=refs,
             )
             if shutdown.is_set():
                 if active_cycle_id and active_cycle_started_at:
@@ -994,14 +1079,16 @@ async def start_watch() -> None:
             if cycle_count % 10 == 0:
                 await db.cleanup_watch_data()
 
-            # Sleep until next cycle (interruptible by shutdown signal or commands)
+            # Sleep until next cycle (interruptible by shutdown signal or commands).
+            # Getter is re-read each loop so a mid-sleep reload picks up new intervals.
             await _interruptible_sleep(
                 db,
                 shutdown,
-                watch_config.interval_minutes * 60,
+                lambda: watch_config.interval_minutes * 60,
                 watch_config=watch_config,
                 session_ref=session_ref,
                 session_state_template=session_state,
+                refs=refs,
             )
 
     finally:

@@ -1,23 +1,30 @@
 # Configuration Reference
 
-Squire is configured through a TOML file and environment variables.
+Squire is configured through a TOML file, environment variables, and runtime UI edits. The TOML file is user-owned and read-only from the app's perspective; UI-driven changes land in the database.
 
 ## Precedence
 
 Settings are resolved in order (highest priority first):
 
-1. **Environment variables** (`SQUIRE_`*)
-2. **TOML config file** -- first found from:
+1. **Environment variables** (`SQUIRE_`*) -- always win; fields with an env var are locked in the UI.
+2. **DB overrides** -- rows in the `config_overrides` table of `squire.db`, written by PATCH/DELETE on `/api/config` and by the Configuration UI.
+3. **TOML config file** -- first found from:
   - `./squire.toml` (project directory)
   - `~/.config/squire/squire.toml` (user config)
   - `/etc/squire/squire.toml` (system-wide)
-3. **Built-in defaults**
+4. **Built-in defaults**
+
+`GET /api/config` reports the effective source for every field under `sections[...].sources`; the UI renders a small database pip next to any field whose current value is a DB override. Click the pip (or the section-level **Reset** button) to delete overrides and revert to TOML/defaults.
+
+`DatabaseConfig` (the `[db]` section) is intentionally never overridden by DB rows — the DB path has to be resolved before the override layer can read anything.
 
 To get started, copy the example config:
 
 ```bash
 cp squire.example.toml squire.toml
 ```
+
+Because UI edits now always persist in `squire.db`, treat that file with the same sensitivity as `squire.toml`: webhook URLs and SMTP passwords edited through the UI are stored there in plaintext. In Docker, `squire.toml` can now safely be mounted read-only.
 
 > **Looking for model recommendations?** See [Tested Models](#tested-models) for what's been validated.
 

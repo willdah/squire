@@ -10,6 +10,7 @@ import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import aiosqlite
@@ -285,6 +286,20 @@ CREATE TABLE IF NOT EXISTS managed_hosts (
 )
 """
 
+_CREATE_CONFIG_OVERRIDES = """
+CREATE TABLE IF NOT EXISTS config_overrides (
+    section     TEXT NOT NULL,
+    field       TEXT NOT NULL,
+    value_json  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    PRIMARY KEY (section, field)
+)
+"""
+
+_CREATE_CONFIG_OVERRIDES_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_config_overrides_section ON config_overrides(section)
+"""
+
 
 class DatabaseService:
     """Async wrapper around aiosqlite for Squire persistence.
@@ -354,6 +369,8 @@ class DatabaseService:
             _CREATE_WATCH_REPORTS_IDX_WATCH,
             _CREATE_WATCH_REPORTS_IDX_SESSION,
             _CREATE_MANAGED_HOSTS,
+            _CREATE_CONFIG_OVERRIDES,
+            _CREATE_CONFIG_OVERRIDES_INDEX,
         )
         for stmt in core_statements:
             await self._conn.execute(stmt)
@@ -674,6 +691,80 @@ class DatabaseService:
         conn = await self._get_conn()
         await conn.execute("DELETE FROM watch_state")
         await conn.commit()
+
+    # --- Config Overrides ---
+
+    async def get_config_overrides(self, section: str) -> dict[str, Any]:
+        """Return all overrides for a single config section as {field: value}."""
+        conn = await self._get_conn()
+        cursor = await conn.execute(
+            "SELECT field, value_json FROM config_overrides WHERE section = ?",
+            (section,),
+        )
+        rows = await cursor.fetchall()
+        return {row["field"]: json.loads(row["value_json"]) for row in rows}
+
+    async def get_all_config_overrides(self) -> dict[str, dict[str, Any]]:
+        """Return every override grouped by section."""
+        conn = await self._get_conn()
+        cursor = await conn.execute("SELECT section, field, value_json FROM config_overrides")
+        rows = await cursor.fetchall()
+        result: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            result.setdefault(row["section"], {})[row["field"]] = json.loads(row["value_json"])
+        return result
+
+    async def set_config_override(self, section: str, field: str, value: Any) -> None:
+        """Upsert a single override row."""
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        await conn.execute(
+            """
+            INSERT INTO config_overrides (section, field, value_json, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(section, field) DO UPDATE SET
+                value_json = excluded.value_json,
+                updated_at = excluded.updated_at
+            """,
+            (section, field, json.dumps(value, default=str), now),
+        )
+        await conn.commit()
+
+    async def set_config_section_overrides(self, section: str, mapping: dict[str, Any]) -> None:
+        """Upsert every field in ``mapping`` under ``section`` in one transaction."""
+        if not mapping:
+            return
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        rows = [(section, field, json.dumps(value, default=str), now) for field, value in mapping.items()]
+        await conn.executemany(
+            """
+            INSERT INTO config_overrides (section, field, value_json, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(section, field) DO UPDATE SET
+                value_json = excluded.value_json,
+                updated_at = excluded.updated_at
+            """,
+            rows,
+        )
+        await conn.commit()
+
+    async def delete_config_override(self, section: str, field: str) -> bool:
+        """Delete a single override row. Returns True if a row was removed."""
+        conn = await self._get_conn()
+        cursor = await conn.execute(
+            "DELETE FROM config_overrides WHERE section = ? AND field = ?",
+            (section, field),
+        )
+        await conn.commit()
+        return cursor.rowcount > 0
+
+    async def clear_config_section(self, section: str) -> int:
+        """Delete every override for a section. Returns the number of rows removed."""
+        conn = await self._get_conn()
+        cursor = await conn.execute("DELETE FROM config_overrides WHERE section = ?", (section,))
+        await conn.commit()
+        return cursor.rowcount
 
     # --- Alert Rules ---
 

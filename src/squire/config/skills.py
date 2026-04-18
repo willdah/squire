@@ -9,6 +9,7 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
+from .db_source import DatabaseOverrideSource
 from .loader import TomlSectionSource, get_section
 
 
@@ -30,6 +31,7 @@ class SkillsConfig(BaseSettings):
             init_settings,
             env_settings,
             dotenv_settings,
+            DatabaseOverrideSource(settings_cls, "skills"),
             TomlSectionSource(settings_cls, partial(get_section, "skills")),
             file_secret_settings,
         )

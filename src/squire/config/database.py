@@ -25,6 +25,8 @@ class DatabaseConfig(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # DatabaseConfig intentionally omits DatabaseOverrideSource: resolving
+        # the DB path via DB-stored overrides would be a chicken-and-egg loop.
         return (
             init_settings,
             env_settings,

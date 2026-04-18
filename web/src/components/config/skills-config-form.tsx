@@ -13,11 +13,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import type { ConfigSource } from "@/lib/types";
 import { ConfigHint, ConfigIntro } from "./config-help";
+import { SectionResetButton, SourceBadge } from "./provenance";
 
 interface SkillsConfigFormProps {
   values: Record<string, unknown>;
   envOverrides: string[];
+  sources: Record<string, ConfigSource>;
   tomlPath: string | null;
   onSaved: () => void;
 }
@@ -40,9 +43,8 @@ function EnvLock({ field, prefix }: { field: string; prefix: string }) {
   );
 }
 
-export function SkillsConfigForm({ values, envOverrides, tomlPath, onSaved }: SkillsConfigFormProps) {
+export function SkillsConfigForm({ values, envOverrides, sources, onSaved }: SkillsConfigFormProps) {
   const [path, setPath] = useState(String(values.path ?? ""));
-  const [persist, setPersist] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,8 +60,7 @@ export function SkillsConfigForm({ values, envOverrides, tomlPath, onSaved }: Sk
     setSaving(true);
     setError(null);
     try {
-      const url = persist ? "/api/config/skills?persist=true" : "/api/config/skills";
-      await apiPatch(url, { path });
+      await apiPatch("/api/config/skills", { path });
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -70,11 +71,14 @@ export function SkillsConfigForm({ values, envOverrides, tomlPath, onSaved }: Sk
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Skills</CardTitle>
-        <CardDescription>
-          Filesystem root for Open Agent Skills—optional instructions the model can load for chat and watch.
-        </CardDescription>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <div>
+          <CardTitle className="text-base">Skills</CardTitle>
+          <CardDescription>
+            Filesystem root for Open Agent Skills—optional instructions the model can load for chat and watch.
+          </CardDescription>
+        </div>
+        <SectionResetButton section="skills" sources={sources} onReset={onSaved} />
       </CardHeader>
       <CardContent className="space-y-4">
         <ConfigIntro title="Layout and effect">
@@ -87,6 +91,7 @@ export function SkillsConfigForm({ values, envOverrides, tomlPath, onSaved }: Sk
           <div className="flex items-center gap-1.5">
             <Label>Skills directory</Label>
             {isLocked("path") && <EnvLock field="path" prefix="SQUIRE_SKILLS_" />}
+            <SourceBadge section="skills" field="path" sources={sources} onReset={onSaved} />
           </div>
           <Input
             value={path}
@@ -100,19 +105,7 @@ export function SkillsConfigForm({ values, envOverrides, tomlPath, onSaved }: Sk
           </ConfigHint>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
-        <div className="flex items-center justify-between pt-2 border-t">
-          <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center">
-            <input
-              type="checkbox"
-              checked={persist}
-              onChange={(e) => setPersist(e.target.checked)}
-              disabled={!tomlPath}
-              className="rounded"
-            />
-            <span>
-              Save to disk{tomlPath ? "" : " (no squire.toml found)"} — writes <code>[skills].path</code>.
-            </span>
-          </label>
+        <div className="flex items-center justify-end pt-2 border-t">
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={revert} disabled={!isDirty}>
               <RotateCcw className="h-3.5 w-3.5 mr-1" />

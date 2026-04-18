@@ -1,7 +1,6 @@
 """Tests for watch loop helpers: command polling and interruptible sleep."""
 
 import asyncio
-import json
 from types import SimpleNamespace
 
 import pytest
@@ -23,13 +22,29 @@ async def test_poll_commands_stop(db):
 
 
 @pytest.mark.asyncio
-async def test_poll_commands_update_config(db):
-    """An 'update_config' command should apply overrides."""
-    from squire.config import WatchConfig
+async def test_poll_commands_reload_config_rebuilds_from_db(db, monkeypatch):
+    """A 'reload_config' command should rebuild WatchConfig from DB overrides."""
+    from squire.config import AppConfig, GuardrailsConfig, NotificationsConfig, WatchConfig
+    from squire.notifications.router import NotificationRouter
+    from squire.notifications.webhook import WebhookDispatcher
     from squire.watch import _poll_commands
 
+    # DatabaseOverrideSource resolves the DB path via SQUIRE_DB_PATH env first.
+    monkeypatch.setenv("SQUIRE_DB_PATH", str(db._db_path))
+
     shutdown = asyncio.Event()
-    config = WatchConfig()
+    # Ensure schema is initialized before WatchConfig() reads it sync.
+    await db.get_pending_watch_commands()
+
+    config = WatchConfig()  # defaults — no overrides yet
+    assert config.interval_minutes == 5
+
+    # Write overrides AFTER config is built so the reload is the only thing that applies them.
+    await db.set_config_section_overrides(
+        "watch",
+        {"interval_minutes": 1, "cycle_timeout_seconds": 120, "notify_on_action": False},
+    )
+
     session_state = {"risk_tolerance": 2}
 
     class _FakeSession:
@@ -38,61 +53,42 @@ async def test_poll_commands_update_config(db):
 
     session_ref = [_FakeSession()]
 
-    await db.insert_watch_command(
-        "update_config",
-        payload=json.dumps(
-            {
-                "interval_minutes": 1,
-                "cycle_timeout_seconds": 120,
-                "notify_on_action": False,
-                "risk_tolerance": 5,
-            }
-        ),
-    )
+    notifier = NotificationRouter(webhook=WebhookDispatcher(NotificationsConfig()), email=None, db=db)
+
+    class _DummyAgent:
+        before_tool_callback = None
+        sub_agents: list = []
+
+    agent = _DummyAgent()
+    refs = {
+        "app_config": AppConfig(),
+        "agent": agent,
+        "guardrails": GuardrailsConfig(),
+        "notifier": notifier,
+        "notifications": NotificationsConfig(),
+    }
+
+    await db.insert_watch_command("reload_config")
     await _poll_commands(
         db,
         shutdown,
         watch_config=config,
         session_ref=session_ref,
         session_state_template=session_state,
+        refs=refs,
     )
 
     assert config.interval_minutes == 1
     assert config.cycle_timeout_seconds == 120
     assert config.notify_on_action is False
-    assert session_ref[0].state["risk_tolerance"] == 5
-    assert session_state["risk_tolerance"] == 5
     assert not shutdown.is_set()
 
     pending = await db.get_pending_watch_commands()
     assert len(pending) == 0
 
-
-@pytest.mark.asyncio
-async def test_poll_commands_update_config_rejects_invalid_safety_values(db):
-    """Invalid live safety updates should fail and keep existing values."""
-    from squire.config import WatchConfig
-    from squire.watch import _poll_commands
-
-    shutdown = asyncio.Event()
-    config = WatchConfig()
-    initial_identical_limit = config.max_identical_actions_per_cycle
-
-    cmd_id = await db.insert_watch_command(
-        "update_config",
-        payload=json.dumps({"max_identical_actions_per_cycle": 0}),
-    )
-    await _poll_commands(db, shutdown, watch_config=config)
-
-    assert config.max_identical_actions_per_cycle == initial_identical_limit
-    pending = await db.get_pending_watch_commands()
-    assert len(pending) == 0
-
-    conn = await db._get_conn()  # noqa: SLF001 - test verifies command status persistence
-    cursor = await conn.execute("SELECT status, error FROM watch_commands WHERE id = ?", (cmd_id,))
-    row = await cursor.fetchone()
-    assert row["status"] == "failed"
-    assert "max_identical_actions_per_cycle" in (row["error"] or "")
+    # The new notifier must have replaced the old one, and risk gates rewired.
+    assert refs["notifier"] is not notifier
+    assert agent.before_tool_callback is not None
 
 
 @pytest.mark.asyncio
@@ -126,8 +122,29 @@ async def test_interruptible_sleep_responds_to_commands(db):
         await db.insert_watch_command("stop")
 
     asyncio.create_task(insert_stop())
-    await _interruptible_sleep(db, shutdown, interval_seconds=60, poll_seconds=0.1, watch_config=None)
+    await _interruptible_sleep(db, shutdown, lambda: 60, poll_seconds=0.1, watch_config=None)
     assert shutdown.is_set()
+
+
+@pytest.mark.asyncio
+async def test_interruptible_sleep_honors_live_interval_change(db):
+    """Shortening the interval mid-sleep via the getter should wake the sleep early."""
+    from squire.watch import _interruptible_sleep
+
+    shutdown = asyncio.Event()
+    interval_holder = [5.0]  # starts at 5 seconds
+
+    async def shrink():
+        await asyncio.sleep(0.15)
+        interval_holder[0] = 0.2  # below current elapsed; loop should exit
+
+    await db.get_pending_watch_commands()  # initialize schema
+    asyncio.create_task(shrink())
+
+    start = asyncio.get_event_loop().time()
+    await _interruptible_sleep(db, shutdown, lambda: interval_holder[0], poll_seconds=0.1, watch_config=None)
+    elapsed = asyncio.get_event_loop().time() - start
+    assert elapsed < 1.0, f"sleep did not honor shortened interval, took {elapsed:.2f}s"
 
 
 @pytest.mark.asyncio

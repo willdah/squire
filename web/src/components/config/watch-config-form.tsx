@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { Lock, Loader2, RotateCcw, Save } from "lucide-react";
-import type { WatchStatus } from "@/lib/types";
-import { apiGet, apiPatch, apiPut } from "@/lib/api";
+import { apiPatch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,12 +15,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import type { ConfigSource } from "@/lib/types";
 import { ConfigHint, ConfigIntro } from "./config-help";
+import { SectionResetButton, SourceBadge } from "./provenance";
 
 interface WatchConfigFormProps {
   values: Record<string, unknown>;
   envOverrides: string[];
-  tomlPath: string | null;
+  sources: Record<string, ConfigSource>;
   onSaved: () => void;
 }
 
@@ -40,7 +41,7 @@ function EnvLock({ field, prefix }: { field: string; prefix: string }) {
   );
 }
 
-export function WatchConfigForm({ values, envOverrides, tomlPath, onSaved }: WatchConfigFormProps) {
+export function WatchConfigForm({ values, envOverrides, sources, onSaved }: WatchConfigFormProps) {
   const [intervalMinutes, setIntervalMinutes] = useState(Number(values.interval_minutes ?? 5));
   const [cycleTimeout, setCycleTimeout] = useState(Number(values.cycle_timeout_seconds ?? 300));
   const [checkinPrompt, setCheckinPrompt] = useState(String(values.checkin_prompt ?? ""));
@@ -51,7 +52,6 @@ export function WatchConfigForm({ values, envOverrides, tomlPath, onSaved }: Wat
   );
   const [cyclesPerSession, setCyclesPerSession] = useState(Number(values.cycles_per_session ?? 12));
   const [maxContextEvents, setMaxContextEvents] = useState(Number(values.max_context_events ?? 40));
-  const [persist, setPersist] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -99,18 +99,7 @@ export function WatchConfigForm({ values, envOverrides, tomlPath, onSaved }: Wat
         changed.max_context_events = maxContextEvents;
       }
 
-      const url = persist ? "/api/config/watch?persist=true" : "/api/config/watch";
-      await apiPatch(url, changed);
-
-      try {
-        const status = await apiGet<WatchStatus>("/api/watch/status");
-        if (status.status === "running" && Object.keys(changed).length > 0) {
-          await apiPut("/api/watch/config", changed);
-        }
-      } catch {
-        /* watch API unavailable — server-side config still updated */
-      }
-
+      await apiPatch("/api/config/watch", changed);
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -121,29 +110,28 @@ export function WatchConfigForm({ values, envOverrides, tomlPath, onSaved }: Wat
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Watch</CardTitle>
-        <CardDescription>
-          Autonomous <code>squire watch</code> loop: timing, prompts, limits, and notifications. Separate from web chat,
-          but many fields sync to a running watch when you save.
-        </CardDescription>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <div>
+          <CardTitle className="text-base">Watch</CardTitle>
+          <CardDescription>
+            Autonomous <code>squire watch</code> loop: timing, prompts, limits, and notifications.
+          </CardDescription>
+        </div>
+        <SectionResetButton section="watch" sources={sources} onReset={onSaved} />
       </CardHeader>
       <CardContent className="space-y-4">
-        <ConfigIntro title="Live vs restart">
+        <ConfigIntro title="How saves work">
           <p>
-            Saving updates the web API’s copy of watch settings immediately. If watch status is <strong>running</strong>,
-            the same changes are queued for the watch process (usually within a few seconds).
-          </p>
-          <p>
-            Effective <strong>risk threshold</strong> during a watch cycle can be changed from the Watch page drawer or
-            live queue; changing <strong>Guardrails → Watch tolerance</strong> requires restarting watch to reload from
-            config files.
+            UI edits land in the database as overrides and take effect immediately; any running watch process reloads
+            within a few seconds. <code>squire.toml</code> is read-only from the app — use &ldquo;Reset&rdquo; to revert a
+            field to the value in <code>squire.toml</code> or the code default.
           </p>
         </ConfigIntro>
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
             <Label>Interval (minutes)</Label>
             {isLocked("interval_minutes") && <EnvLock field="interval_minutes" prefix="SQUIRE_WATCH_" />}
+            <SourceBadge section="watch" field="interval_minutes" sources={sources} onReset={onSaved} />
           </div>
           <Input
             type="number"
@@ -273,20 +261,7 @@ export function WatchConfigForm({ values, envOverrides, tomlPath, onSaved }: Wat
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <div className="flex items-center justify-between pt-2 border-t">
-          <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center">
-            <input
-              type="checkbox"
-              checked={persist}
-              onChange={(e) => setPersist(e.target.checked)}
-              disabled={!tomlPath}
-              className="rounded"
-            />
-            <span>
-              Save to disk{tomlPath ? "" : " (no squire.toml found)"} — writes the{" "}
-              <code className="font-mono text-[11px]">[watch]</code> section.
-            </span>
-          </label>
+        <div className="flex items-center justify-end pt-2 border-t">
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={revert} disabled={!isDirty}>
               <RotateCcw className="h-3.5 w-3.5 mr-1" />

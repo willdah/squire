@@ -299,22 +299,6 @@ export interface WatchConfigResponse {
   risk_tolerance: number | null;
 }
 
-// Watch config update payload
-export interface WatchConfigUpdate {
-  interval_minutes?: number;
-  max_tool_calls_per_cycle?: number;
-  cycle_timeout_seconds?: number;
-  checkin_prompt?: string;
-  notify_on_action?: boolean;
-  notify_on_blocked?: boolean;
-  cycles_per_session?: number;
-  max_context_events?: number;
-  max_identical_actions_per_cycle?: number;
-  blocked_action_cooldown_cycles?: number;
-  max_remote_actions_per_cycle?: number;
-  risk_tolerance?: number;
-}
-
 // --- Tools ---
 
 export interface ToolParameter {
@@ -354,9 +338,12 @@ export interface ConfigResponse {
   hosts: Record<string, unknown>[];
 }
 
+export type ConfigSource = "env" | "db" | "toml" | "default";
+
 export interface ConfigSectionMeta {
   values: Record<string, unknown>;
   env_overrides: string[];
+  sources: Record<string, ConfigSource>;
 }
 
 export interface ConfigDetailResponse {
