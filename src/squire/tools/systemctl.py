@@ -1,5 +1,6 @@
 """systemctl tool — manage systemd services."""
 
+from ._effects import Effect
 from ._registry import get_registry
 
 RISK_LEVELS: dict[str, int] = {
@@ -9,6 +10,15 @@ RISK_LEVELS: dict[str, int] = {
     "systemctl:start": 3,
     "systemctl:restart": 3,
     "systemctl:stop": 4,
+}
+
+EFFECTS: dict[str, Effect] = {
+    "status": "read",
+    "is-active": "read",
+    "is-enabled": "read",
+    "start": "write",
+    "restart": "write",
+    "stop": "write",
 }
 
 

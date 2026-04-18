@@ -1,9 +1,11 @@
 """docker_ps tool — list Docker containers with status."""
 
 from ._docker_hints import append_local_docker_error_hint
+from ._effects import Effect
 from ._registry import get_registry
 
 RISK_LEVEL = 1  # Info
+EFFECT: Effect = "read"
 
 
 async def docker_ps(all_containers: bool = True, format: str = "table", host: str = "local") -> str:

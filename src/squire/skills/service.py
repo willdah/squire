@@ -14,9 +14,12 @@ the ``metadata`` key to stay spec-compliant.
 import re
 import shutil
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
+
+Effect = Literal["read", "write", "mixed"]
 
 # Spec: lowercase alphanumeric + hyphens, no leading/trailing/consecutive hyphens, max 64 chars.
 _NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
@@ -31,6 +34,7 @@ class Skill(BaseModel):
     trigger: str = "manual"  # "manual" | "watch"
     enabled: bool = True
     incident_keys: list[str] = Field(default_factory=list)
+    effect: Effect = "mixed"  # what the skill does to system state
     instructions: str = ""  # freeform Markdown body
 
     @field_validator("name")
@@ -202,6 +206,7 @@ class SkillService:
             trigger=meta.get("trigger", "manual"),
             enabled=meta.get("enabled", True),
             incident_keys=meta.get("incident_keys", []),
+            effect=meta.get("effect", "mixed"),
             instructions=body,
         )
 
@@ -224,6 +229,8 @@ class SkillService:
             metadata["enabled"] = skill.enabled
         if skill.incident_keys:
             metadata["incident_keys"] = skill.incident_keys
+        if skill.effect != "mixed":
+            metadata["effect"] = skill.effect
         if metadata:
             frontmatter["metadata"] = metadata
         fm_str = yaml.dump(frontmatter, default_flow_style=False, sort_keys=False).strip()

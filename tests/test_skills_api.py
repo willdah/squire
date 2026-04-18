@@ -85,6 +85,65 @@ def test_bootstrap_starter_playbooks(skills_service):
     assert "triage-disk-pressure" in result["created"] or "triage-disk-pressure" in result["skipped"]
 
 
+def test_bootstrap_playbooks_have_write_effect(skills_service):
+    bootstrap_watch_playbooks(skills_service=skills_service)
+    for name in ("recover-container-unhealthy", "triage-disk-pressure"):
+        skill = skills_service.get_skill(name)
+        assert skill is not None
+        assert skill.effect == "write"
+
+
+def test_create_skill_defaults_effect_to_mixed(skills_service):
+    result = create_skill(
+        SkillCreate(
+            name="defaults-mixed",
+            description="desc",
+            trigger="manual",
+            hosts=["all"],
+            instructions="Do stuff",
+        ),
+        skills_service=skills_service,
+    )
+    assert result.effect == "mixed"
+
+
+def test_create_skill_roundtrips_effect(skills_service):
+    result = create_skill(
+        SkillCreate(
+            name="reads-only",
+            description="desc",
+            trigger="manual",
+            hosts=["all"],
+            effect="read",
+            instructions="Observe stuff",
+        ),
+        skills_service=skills_service,
+    )
+    assert result.effect == "read"
+    reloaded = skills_service.get_skill("reads-only")
+    assert reloaded.effect == "read"
+
+
+def test_update_skill_changes_effect(skills_service):
+    create_skill(
+        SkillCreate(
+            name="to-change",
+            description="desc",
+            trigger="manual",
+            hosts=["all"],
+            effect="mixed",
+            instructions="Do stuff",
+        ),
+        skills_service=skills_service,
+    )
+    updated = update_skill(
+        "to-change",
+        SkillUpdate(effect="write"),
+        skills_service=skills_service,
+    )
+    assert updated.effect == "write"
+
+
 @pytest.mark.asyncio
 async def test_dry_run_contract_fields(skills_service, monkeypatch):
     create_skill(

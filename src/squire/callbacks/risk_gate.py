@@ -144,6 +144,19 @@ def create_risk_gate(
             else:
                 return {"error": f"Blocked: unknown tool '{compound_name}'."}
 
+        # Disabling a multi-action tool (e.g. `docker_container`) must block every
+        # action on that tool. The RuleGate denied set only matches the Action.name
+        # we pass in (compound), so check the bare tool name ourselves.
+        denied_tools = _set_from_state(tool_context.state.get("risk_denied_tools"))
+        if tool_name in denied_tools:
+            return {
+                "error": (
+                    f"[BLOCKED] '{compound_name}' was denied by the risk policy: "
+                    f"tool '{tool_name}' is disabled. "
+                    "Do NOT retry this tool call. Tell the user it was blocked and suggest alternatives."
+                )
+            }
+
         tool_risk = scoped_risk_levels[compound_name]
 
         # Apply per-tool risk override if configured

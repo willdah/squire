@@ -86,11 +86,13 @@ Tools live in `src/squire/tools/`. Each tool is a plain async function in its ow
 import json
 import logging
 
+from ._effects import Effect
 from ._registry import get_registry
 
 logger = logging.getLogger(__name__)
 
 RISK_LEVEL = 1  # 1=read-only info, 5=destructive/irreversible
+EFFECT: Effect = "read"  # "read" | "write" | "mixed" — what the tool does to system state
 
 async def my_tool(host: str = "local") -> str:
     """One-line summary shown to the agent as the tool description.
@@ -107,12 +109,13 @@ async def my_tool(host: str = "local") -> str:
     return json.dumps({"output": result.stdout.strip()})
 ```
 
-For tools with multiple actions at different risk levels, use `RISK_LEVELS: dict[str, int]` with `"tool_name:action"` keys instead of a single `RISK_LEVEL`.
+For tools with multiple actions, use `RISK_LEVELS: dict[str, int]` with `"tool_name:action"` keys and a matching `EFFECTS: dict[str, Effect]` with bare action names (e.g. `{"status": "read", "restart": "write"}`) instead of the scalar forms.
 
 **2. Register the tool in `src/squire/tools/__init__.py`**
 
 ```python
-# Add the import:
+# Add the imports:
+from .my_tool import EFFECT as _mt_effect
 from .my_tool import RISK_LEVEL as _mt_risk
 from .my_tool import my_tool
 
@@ -127,7 +130,15 @@ TOOL_RISK_LEVELS: dict[str, int] = {
     ...
     "my_tool": _mt_risk,
 }
+
+# Add to TOOL_EFFECTS:
+TOOL_EFFECTS: dict[str, Effect | dict[str, Effect]] = {
+    ...
+    "my_tool": _mt_effect,
+}
 ```
+
+`tests/test_tools/test_tool_effects.py::test_every_tool_has_effect` enforces that every registered tool has a declared effect — if you forget to add it here, the test will fail.
 
 The `safe_tool` wrapper is applied here at registration time, not in the tool module itself.
 

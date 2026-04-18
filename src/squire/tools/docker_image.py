@@ -1,6 +1,7 @@
 """docker_image tool — manage Docker images."""
 
 from ._docker_hints import append_local_docker_error_hint
+from ._effects import Effect
 from ._registry import get_registry
 
 RISK_LEVELS: dict[str, int] = {
@@ -8,6 +9,13 @@ RISK_LEVELS: dict[str, int] = {
     "docker_image:inspect": 1,
     "docker_image:pull": 2,
     "docker_image:remove": 3,
+}
+
+EFFECTS: dict[str, Effect] = {
+    "list": "read",
+    "inspect": "read",
+    "pull": "write",
+    "remove": "write",
 }
 
 

@@ -1,6 +1,7 @@
 """docker_compose tool — read and manage Docker Compose stacks."""
 
 from ._docker_hints import append_local_docker_error_hint
+from ._effects import Effect
 from ._registry import get_registry
 
 RISK_LEVELS: dict[str, int] = {
@@ -11,6 +12,16 @@ RISK_LEVELS: dict[str, int] = {
     "docker_compose:restart": 3,
     "docker_compose:up": 3,
     "docker_compose:down": 4,
+}
+
+EFFECTS: dict[str, Effect] = {
+    "ps": "read",
+    "config": "read",
+    "logs": "read",
+    "pull": "write",
+    "restart": "write",
+    "up": "write",
+    "down": "write",
 }
 
 

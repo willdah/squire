@@ -338,6 +338,34 @@ class TestRiskOverrides:
         assert result is None  # overridden to risk 1
 
     @pytest.mark.asyncio
+    async def test_disabled_tool_denies_bare_name(self):
+        """`tools_deny` on a single-action tool blocks it."""
+        gate = create_risk_gate(tool_risk_levels={"system_info": 1})
+        ctx = _make_context(threshold=5)
+        ctx.state["risk_denied_tools"] = {"system_info"}
+        result = await gate(_make_tool("system_info"), {}, ctx)
+        assert result is not None
+        assert "BLOCKED" in result["error"]
+        assert "disabled" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_disabled_multi_action_tool_blocks_every_action(self):
+        """Disabling `docker_container` must block every action, not just compound names."""
+        gate = create_risk_gate(
+            tool_risk_levels={
+                "docker_container:inspect": 1,
+                "docker_container:remove": 4,
+            }
+        )
+        for action in ("inspect", "remove"):
+            ctx = _make_context(threshold=5)
+            ctx.state["risk_denied_tools"] = {"docker_container"}
+            result = await gate(_make_tool("docker_container"), {"action": action}, ctx)
+            assert result is not None, f"action={action} should have been blocked"
+            assert "BLOCKED" in result["error"]
+            assert "disabled" in result["error"]
+
+    @pytest.mark.asyncio
     async def test_override_only_affects_specified_tool(self):
         """An override for one tool should not affect another."""
         gate = create_risk_gate(

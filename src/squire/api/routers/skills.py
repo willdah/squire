@@ -45,6 +45,7 @@ def bootstrap_watch_playbooks(skills_service=Depends(get_skills_service)):
             trigger="watch",
             hosts=["all"],
             incident_keys=["container-unhealthy:"],
+            effect="write",
             instructions=(
                 "When a container is unhealthy or restarting:\n"
                 "1) Inspect recent logs before restart.\n"
@@ -60,6 +61,7 @@ def bootstrap_watch_playbooks(skills_service=Depends(get_skills_service)):
             trigger="watch",
             hosts=["all"],
             incident_keys=["disk-pressure:", "disk-warning:"],
+            effect="write",
             instructions=(
                 "When disk pressure is detected:\n"
                 "1) Verify actual primary mount utilization before remediation.\n"
@@ -148,6 +150,7 @@ def create_skill(body: SkillCreate, skills_service=Depends(get_skills_service)):
             hosts=body.hosts,
             trigger=body.trigger,
             incident_keys=body.incident_keys,
+            effect=body.effect,
             instructions=body.instructions,
         )
     except ValueError as e:

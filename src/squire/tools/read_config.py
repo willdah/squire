@@ -3,9 +3,11 @@
 import os
 import posixpath
 
+from ._effects import Effect
 from ._registry import get_guardrails, get_registry
 
 RISK_LEVEL = 2  # Low
+EFFECT: Effect = "read"
 
 
 async def read_config(path: str, head: int | None = None, host: str = "local") -> str:

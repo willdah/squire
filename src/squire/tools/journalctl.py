@@ -1,8 +1,10 @@
 """journalctl tool — read systemd journal logs."""
 
+from ._effects import Effect
 from ._registry import get_registry
 
 RISK_LEVEL = 2  # Low
+EFFECT: Effect = "read"
 
 
 async def journalctl(

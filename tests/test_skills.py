@@ -183,6 +183,29 @@ class TestParsing:
         assert "  - nas\n" in content
         assert "  trigger: watch\n" in content
 
+    def test_effect_defaults_to_mixed(self, skill_service, tmp_path):
+        skill_dir = tmp_path / "no-effect"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\nname: no-effect\ndescription: test\n---\n\nBody.")
+        loaded = skill_service.get_skill("no-effect")
+        assert loaded is not None
+        assert loaded.effect == "mixed"
+
+    def test_effect_roundtrip(self, skill_service, tmp_path):
+        skill = _make_skill(effect="write")
+        skill_service.save_skill(skill)
+        loaded = skill_service.get_skill("test-skill")
+        assert loaded.effect == "write"
+        content = (tmp_path / "test-skill" / "SKILL.md").read_text()
+        assert "effect: write" in content
+
+    def test_default_effect_omitted_from_frontmatter(self, skill_service, tmp_path):
+        """When effect == 'mixed' (default), it should not appear in rendered metadata."""
+        skill = _make_skill()  # effect="mixed" by default
+        skill_service.save_skill(skill)
+        content = (tmp_path / "test-skill" / "SKILL.md").read_text()
+        assert "effect:" not in content
+
     def test_legacy_host_metadata_is_retrofitted_to_hosts(self, skill_service, tmp_path):
         skill_dir = tmp_path / "legacy-skill"
         skill_dir.mkdir()

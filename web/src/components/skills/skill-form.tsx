@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { HostInfo, IncidentFamilyInfo, Skill } from "@/lib/types";
+import type { Effect, HostInfo, IncidentFamilyInfo, Skill } from "@/lib/types";
 
 interface SkillFormProps {
   open: boolean;
@@ -32,6 +32,7 @@ interface SkillFormProps {
     trigger: string;
     incident_keys: string[];
     allow_custom_incident_prefixes: boolean;
+    effect: Effect;
     instructions: string;
   }) => void;
   skill?: Skill | null;
@@ -44,6 +45,7 @@ export function SkillForm({ open, onOpenChange, onSubmit, skill, incidentFamilie
   const [description, setDescription] = useState(skill?.description ?? "");
   const [selectedHost, setSelectedHost] = useState(skill?.hosts?.[0] ?? "all");
   const [trigger, setTrigger] = useState(skill?.trigger ?? "manual");
+  const [effect, setEffect] = useState<Effect>(skill?.effect ?? "mixed");
   const [incidentKeys, setIncidentKeys] = useState<string[]>(skill?.incident_keys ?? []);
   const [customIncidentKeys, setCustomIncidentKeys] = useState("");
   const [allowCustomIncidentPrefixes, setAllowCustomIncidentPrefixes] = useState(false);
@@ -70,6 +72,7 @@ export function SkillForm({ open, onOpenChange, onSubmit, skill, incidentFamilie
       trigger,
       incident_keys: trigger === "watch" ? mergedIncidentKeys : [],
       allow_custom_incident_prefixes: trigger === "watch" ? allowCustomIncidentPrefixes : false,
+      effect,
       instructions: instructions.trim(),
     });
   };
@@ -199,6 +202,23 @@ export function SkillForm({ open, onOpenChange, onSubmit, skill, incidentFamilie
                 </div>
               </div>
             )}
+
+            <div className="space-y-2">
+              <Label>Effect</Label>
+              <Select value={effect} onValueChange={(v) => setEffect((v ?? "mixed") as Effect)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="read">Read — observes only</SelectItem>
+                  <SelectItem value="write">Write — mutates state</SelectItem>
+                  <SelectItem value="mixed">Mixed — both, or depends</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Declare what this skill does to system state. Used for filtering in the catalog.
+              </p>
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="skill-instructions">Instructions</Label>

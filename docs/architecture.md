@@ -162,6 +162,12 @@ flowchart TD
     PROMPT -->|Declined| DENY_U
 ```
 
+### Effect classification (orthogonal UI metadata)
+
+Every tool also declares an `EFFECT` — `"read"` (observes only), `"write"` (mutates state), or `"mixed"` (both, or depends on arguments). Multi-action tools declare per-action effects in `EFFECTS: dict[str, Effect]`, and the tool-level effect is derived (`read` if all actions read, `write` if all write, else `mixed`). The registry lives alongside `TOOL_RISK_LEVELS` as `TOOL_EFFECTS` in `squire.tools`, and `GET /api/tools` surfaces the value per tool and per action. Skills carry the same field under frontmatter `metadata.effect` (default `"mixed"`).
+
+Effect is purely UI metadata today — it is not consumed by the risk gate, guardrails, or approval policy. Risk is about severity; effect is about what the tool *does*. A `write` can be low risk (`docker_image:pull`) and a `read` can be sensitive (`read_config` on a secrets file). Keep the two axes separate.
+
 
 
 ### Homelab risk patterns

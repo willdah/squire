@@ -3,9 +3,11 @@
 import json
 import platform
 
+from ._effects import Effect
 from ._registry import get_registry
 
 RISK_LEVEL = 1  # Info
+EFFECT: Effect = "read"
 
 
 def _get_os_type(backend, host: str) -> str:
