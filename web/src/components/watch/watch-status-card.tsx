@@ -4,9 +4,10 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { apiGet, apiPost } from "@/lib/api";
 import type { WatchStatus } from "@/lib/types";
-import { Loader2, Play, Square, Settings, Radar, Activity, CircleAlert, ShieldCheck } from "lucide-react";
+import { Loader2, Play, Square, Settings, Radar, Activity, CircleAlert, ShieldCheck, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 
 interface WatchStatusCardProps {
@@ -17,7 +18,11 @@ interface WatchStatusCardProps {
 
 export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusCardProps) {
   const [loading, setLoading] = useState<"starting" | "stopping" | null>(null);
-  const isRunning = status?.status === "running";
+  const [autostartSaving, setAutostartSaving] = useState(false);
+  const runtimeState = status?.state ?? "stopped";
+  const isRunning = runtimeState === "running";
+  const isFailed = runtimeState === "failed";
+  const autostartEnabled = (status?.watch_autostart ?? "").toLowerCase() === "true";
   const interval = status?.interval_minutes ? parseInt(status.interval_minutes) : 5;
   const riskTolerance = status?.risk_tolerance || "—";
   const watchId = status?.watch_id || "—";
@@ -83,6 +88,16 @@ export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusC
     }
   };
 
+  const handleAutostartToggle = async (enabled: boolean) => {
+    setAutostartSaving(true);
+    try {
+      await apiPost("/api/watch/autostart", { enabled });
+    } finally {
+      setAutostartSaving(false);
+      onRefresh();
+    }
+  };
+
   return (
     <Card className="relative h-full overflow-hidden border-border/70 bg-card/95">
       <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(circle_at_20%_0%,oklch(0.72_0.14_303/.18),transparent_42%),linear-gradient(to_right,transparent_0%,oklch(0.85_0.02_303/.05)_100%)]" />
@@ -92,11 +107,37 @@ export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusC
             <Radar className="h-4 w-4 text-primary" />
             <h2 className="text-base font-display font-semibold">Watch Control</h2>
           </div>
-          <Badge variant={isRunning ? "default" : "secondary"} className="gap-1.5">
-            <span className={`inline-block h-1.5 w-1.5 rounded-full ${isRunning ? "bg-gauge-ok animate-pulse-dot" : "bg-muted-foreground"}`} />
-            {loading === "starting" ? "Starting…" : loading === "stopping" ? "Stopping…" : isRunning ? "Running" : "Stopped"}
+          <Badge
+            variant={isRunning ? "default" : isFailed ? "destructive" : "secondary"}
+            className="gap-1.5"
+          >
+            <span
+              className={`inline-block h-1.5 w-1.5 rounded-full ${
+                isRunning ? "bg-gauge-ok animate-pulse-dot" : isFailed ? "bg-destructive" : "bg-muted-foreground"
+              }`}
+            />
+            {loading === "starting"
+              ? "Starting…"
+              : loading === "stopping"
+                ? "Stopping…"
+                : isRunning
+                  ? "Running"
+                  : isFailed
+                    ? "Failed"
+                    : "Stopped"}
           </Badge>
         </div>
+
+        {isFailed && status?.last_error && (
+          <div className="rounded-xl border border-destructive/60 bg-destructive/10 p-3 text-xs">
+            <div className="mb-1 flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              <span className="font-semibold uppercase tracking-wide">Watch crashed</span>
+            </div>
+            <p className="font-mono text-destructive-foreground/80">{status.last_error}</p>
+            <p className="mt-1 text-muted-foreground">Click Start Watch to try again.</p>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2 rounded-xl border border-border/60 bg-background/50 p-3 text-xs">
           <div>
@@ -162,6 +203,20 @@ export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusC
               Open Watch Explorer
             </Button>
           </Link>
+        </div>
+
+        <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background/50 p-3 text-xs">
+          <div>
+            <p className="font-medium">Auto-start on boot</p>
+            <p className="text-muted-foreground">
+              Resume watch when the container restarts, without a manual click.
+            </p>
+          </div>
+          <Switch
+            checked={autostartEnabled}
+            disabled={autostartSaving}
+            onCheckedChange={handleAutostartToggle}
+          />
         </div>
       </CardContent>
     </Card>

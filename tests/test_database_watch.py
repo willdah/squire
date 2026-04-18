@@ -54,29 +54,81 @@ async def test_get_watch_cycles(db):
 
 
 @pytest.mark.asyncio
-async def test_insert_and_get_pending_commands(db):
-    """Insert commands and fetch pending ones."""
-    id1 = await db.insert_watch_command("stop")
-    id2 = await db.insert_watch_command("update_config", payload=json.dumps({"interval_minutes": 1}))
-
-    pending = await db.get_pending_watch_commands()
-    assert len(pending) == 2
-    assert pending[0]["id"] == id1
-
-    await db.update_watch_command_status(id1, "completed")
-    pending = await db.get_pending_watch_commands()
-    assert len(pending) == 1
-    assert pending[0]["id"] == id2
+async def test_watch_commands_table_is_dropped_by_migration(db):
+    """The legacy watch_commands table is removed by the forward-only migration."""
+    conn = await db._get_conn()
+    cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='watch_commands'")
+    row = await cursor.fetchone()
+    assert row is None
 
 
 @pytest.mark.asyncio
-async def test_update_command_status_with_error(db):
-    """Mark a command as failed with error message."""
-    cmd_id = await db.insert_watch_command("update_config", payload="{}")
-    await db.update_watch_command_status(cmd_id, "failed", error="Invalid payload")
+async def test_claim_watch_holder_rejects_second_holder(db):
+    """A second holder cannot claim the lock while the first holder's TTL is valid."""
+    assert await db.claim_watch_holder("holder-a", ttl_seconds=60) is True
+    assert await db.claim_watch_holder("holder-b", ttl_seconds=60) is False
+    # Idempotent reclaim by the same holder is allowed.
+    assert await db.claim_watch_holder("holder-a", ttl_seconds=60) is True
 
-    pending = await db.get_pending_watch_commands()
-    assert len(pending) == 0
+
+@pytest.mark.asyncio
+async def test_claim_watch_holder_allows_reclaim_after_expiry(db):
+    """An expired holder row lets a new holder claim the lock."""
+    assert await db.claim_watch_holder("holder-a", ttl_seconds=-1) is True
+    # The row exists but is already expired, so holder-b can take over.
+    assert await db.claim_watch_holder("holder-b", ttl_seconds=60) is True
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_refreshes_and_detects_takeover(db):
+    """heartbeat_watch_holder refreshes the TTL; a different holder makes it return False."""
+    await db.claim_watch_holder("holder-a", ttl_seconds=60)
+    assert await db.heartbeat_watch_holder("holder-a", ttl_seconds=60) is True
+
+    # Simulate holder-a releasing and holder-b taking the lock.
+    await db.release_watch_holder("holder-a")
+    await db.claim_watch_holder("holder-b", ttl_seconds=60)
+    # holder-a's heartbeat should now report that it no longer owns the lock.
+    assert await db.heartbeat_watch_holder("holder-a", ttl_seconds=60) is False
+
+    # Heartbeat when no row exists returns False too.
+    await db.release_watch_holder("holder-b")
+    assert await db.heartbeat_watch_holder("holder-a", ttl_seconds=60) is False
+
+
+@pytest.mark.asyncio
+async def test_release_watch_holder_is_scoped_by_holder_id(db):
+    """release_watch_holder only deletes if the caller currently holds the lock."""
+    await db.claim_watch_holder("holder-a", ttl_seconds=60)
+    await db.release_watch_holder("holder-b")  # no-op
+    # holder-a still owns it.
+    assert await db.claim_watch_holder("holder-b", ttl_seconds=60) is False
+
+    await db.release_watch_holder("holder-a")
+    assert await db.claim_watch_holder("holder-b", ttl_seconds=60) is True
+
+
+@pytest.mark.asyncio
+async def test_finalize_stale_watch_runs_on_boot_closes_all_running(db):
+    """Every ``running`` watch run gets finalized in a single boot pass."""
+    await db.create_watch_run("watch_boot_a")
+    await db.create_watch_session("wss_boot_a", watch_id="watch_boot_a", adk_session_id="adk_boot_a")
+    await db.create_watch_run("watch_boot_b")
+    await db.create_watch_session("wss_boot_b", watch_id="watch_boot_b", adk_session_id="adk_boot_b")
+
+    finalized = await db.finalize_stale_watch_runs_on_boot()
+    assert set(finalized) == {"watch_boot_a", "watch_boot_b"}
+
+    for watch_id in ("watch_boot_a", "watch_boot_b"):
+        run = await db.get_watch_run(watch_id)
+        assert run is not None
+        assert run["status"] == "stopped"
+
+    # The holder row (if any) is cleared on boot so the next controller can claim it.
+    await db.claim_watch_holder("new-holder", ttl_seconds=60)
+    await db.finalize_stale_watch_runs_on_boot()
+    # After boot cleanup, a brand new holder can take the lock without contention.
+    assert await db.claim_watch_holder("post-boot", ttl_seconds=60) is True
 
 
 @pytest.mark.asyncio
@@ -109,12 +161,11 @@ async def test_approval_not_found(db):
 
 @pytest.mark.asyncio
 async def test_delete_watch_cycles(db):
-    """delete_watch_cycles removes all watch events but preserves commands/approvals."""
+    """delete_watch_cycles removes all watch events but preserves approvals."""
     await db.insert_watch_event(cycle=1, type="cycle_start", content="{}")
     await db.insert_watch_event(cycle=1, type="cycle_end", content="{}")
     await db.insert_watch_event(cycle=2, type="cycle_start", content="{}")
     await db.insert_watch_event(cycle=2, type="cycle_end", content="{}")
-    await db.insert_watch_command("stop")
     await db.insert_watch_approval(request_id="req-1", tool_name="test", args="{}", risk_level=3)
 
     await db.delete_watch_cycles()
@@ -123,9 +174,7 @@ async def test_delete_watch_cycles(db):
     assert events == []
     cycles = await db.get_watch_cycles()
     assert cycles == []
-    # Commands and approvals must be preserved
-    commands = await db.get_pending_watch_commands()
-    assert len(commands) == 1
+    # Approvals must be preserved
     approval = await db.get_watch_approval("req-1")
     assert approval is not None
 

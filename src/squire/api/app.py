@@ -33,6 +33,7 @@ from ..tools import set_db as tools_set_db
 from ..tools import set_guardrails as tools_set_guardrails
 from ..tools import set_notifier as tools_set_notifier
 from ..tools import set_registry as tools_set_registry
+from ..watch_controller import WatchController
 from . import dependencies as deps
 from .routers import chat, config, events, health, hosts, notifications, sessions, skills, system, tools, watch
 
@@ -111,10 +112,41 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         _background_snapshots(deps.db, deps.db_config.snapshot_interval_minutes, deps.registry)
     )
 
+    # Clean up any half-open watch rows from a previous container crash.
+    try:
+        await deps.db.finalize_stale_watch_runs_on_boot()
+    except Exception:
+        logger.exception("Failed to finalize stale watch runs on boot")
+
+    # Build the in-process watch controller and honor the user's auto-start preference.
+    deps.watch_controller = WatchController(
+        db=deps.db,
+        registry=deps.registry,
+        adk_runtime=deps.adk_runtime,
+        skill_service=deps.skills_service,
+        app_config=deps.app_config,
+        llm_config=deps.llm_config,
+        watch_config=deps.watch_config,
+        guardrails=deps.guardrails,
+        notifications=deps.notif_config,
+        notifier=deps.notifier,
+    )
+    if (await deps.db.get_watch_state("watch_autostart") or "").lower() == "true":
+        try:
+            await deps.watch_controller.start()
+        except Exception:
+            logger.exception("Failed to auto-start watch on boot")
+
     logger.info("Squire web API started")
     yield
 
-    # Shutdown
+    # Shutdown — stop watch first (it holds the DB holder lock and owns the agent loop).
+    if deps.watch_controller is not None:
+        try:
+            await deps.watch_controller.stop(timeout=30.0)
+        except Exception:
+            logger.exception("Failed to stop watch controller cleanly")
+
     snapshot_task.cancel()
     try:
         await snapshot_task

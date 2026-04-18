@@ -132,8 +132,13 @@ export interface EventInfo {
   details?: string;
 }
 
+export type WatchRuntimeState = "stopped" | "starting" | "running" | "failed";
+
 export interface WatchStatus {
   status: string;
+  state: WatchRuntimeState;
+  last_error?: string | null;
+  watch_autostart?: string | null;
   started_at?: string | null;
   stopped_at?: string | null;
   cycle?: string | null;
@@ -145,7 +150,6 @@ export interface WatchStatus {
   watch_session_id?: string | null;
   cycle_id?: string | null;
   last_response?: string | null;
-  pid?: string | null;
   total_actions?: string | null;
   total_blocked?: string | null;
   total_errors?: string | null;
