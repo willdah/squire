@@ -1,11 +1,17 @@
 """docker_volume tool — manage Docker volumes."""
 
 from ._docker_hints import append_local_docker_error_hint
+from ._effects import Effect
 from ._registry import get_registry
 
 RISK_LEVELS: dict[str, int] = {
     "docker_volume:list": 1,
     "docker_volume:inspect": 1,
+}
+
+EFFECTS: dict[str, Effect] = {
+    "list": "read",
+    "inspect": "read",
 }
 
 

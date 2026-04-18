@@ -34,7 +34,13 @@ import {
   ToggleLeft,
   ToggleRight,
 } from "lucide-react";
-import type { HostInfo, IncidentFamilyInfo, PlaybookDryRunSelection, Skill } from "@/lib/types";
+import type { Effect, HostInfo, IncidentFamilyInfo, PlaybookDryRunSelection, Skill } from "@/lib/types";
+
+const EFFECT_COLORS: Record<Effect, string> = {
+  read: "bg-sky-500/12 text-sky-700 dark:text-sky-400",
+  write: "bg-amber-500/12 text-amber-700 dark:text-amber-400",
+  mixed: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300",
+};
 
 export default function SkillsPage() {
   const router = useRouter();
@@ -48,6 +54,7 @@ export default function SkillsPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
+  const [effectFilter, setEffectFilter] = useState<string>("all");
   const [dryRunKey, setDryRunKey] = useState("disk-pressure:local");
   const [dryRunHost, setDryRunHost] = useState("local");
   const availableHostNames = Array.from(
@@ -64,6 +71,7 @@ export default function SkillsPage() {
     trigger: string;
     incident_keys: string[];
     allow_custom_incident_prefixes: boolean;
+    effect: Effect;
     instructions: string;
   }) => {
     await apiPost("/api/skills", data);
@@ -78,6 +86,7 @@ export default function SkillsPage() {
     trigger: string;
     incident_keys: string[];
     allow_custom_incident_prefixes: boolean;
+    effect: Effect;
     instructions: string;
   }) => {
     const { name, ...rest } = data;
@@ -242,6 +251,21 @@ export default function SkillsPage() {
           </p>
         </div>
       ) : (
+        <>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Effect:</span>
+          <Select value={effectFilter} onValueChange={(v) => setEffectFilter(v ?? "all")}>
+            <SelectTrigger className="h-8 w-[110px] text-xs">
+              <SelectValue placeholder="All" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="read">Read</SelectItem>
+              <SelectItem value="write">Write</SelectItem>
+              <SelectItem value="mixed">Mixed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <Table>
           <TableHeader>
             <TableRow>
@@ -249,13 +273,16 @@ export default function SkillsPage() {
               <TableHead>Description</TableHead>
               <TableHead>Hosts</TableHead>
               <TableHead>Trigger</TableHead>
+              <TableHead>Effect</TableHead>
               <TableHead>Incident Keys</TableHead>
               <TableHead>Status</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {skills.map((s) => (
+            {skills
+              .filter((s) => effectFilter === "all" || s.effect === effectFilter)
+              .map((s) => (
               <TableRow key={s.name} className="hover:bg-muted/50">
                 <TableCell className="font-medium">{s.name}</TableCell>
                 <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
@@ -265,6 +292,11 @@ export default function SkillsPage() {
                 <TableCell>
                   <Badge variant={s.trigger === "watch" ? "secondary" : "outline"}>
                     {s.trigger}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={EFFECT_COLORS[s.effect]}>
+                    {s.effect}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
@@ -320,6 +352,7 @@ export default function SkillsPage() {
             ))}
           </TableBody>
         </Table>
+        </>
       )}
 
       <SkillForm

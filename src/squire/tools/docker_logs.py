@@ -1,9 +1,11 @@
 """docker_logs tool — read container logs."""
 
 from ._docker_hints import append_local_docker_error_hint
+from ._effects import Effect
 from ._registry import get_registry
 
 RISK_LEVEL = 2  # Low
+EFFECT: Effect = "read"
 
 
 async def docker_logs(

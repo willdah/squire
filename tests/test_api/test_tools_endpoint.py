@@ -103,3 +103,44 @@ class TestBuildToolCatalog:
         si = next(t for t in tools if t.name == "system_info")
         assert "system information" in si.description.lower()
         assert "\n" not in si.description
+
+
+class TestEffect:
+    def test_every_tool_has_effect(self):
+        guardrails = GuardrailsConfig()
+        tools = _build_tool_catalog(guardrails)
+        for t in tools:
+            assert t.effect in {"read", "write", "mixed"}
+
+    def test_single_action_read_tool(self):
+        guardrails = GuardrailsConfig()
+        tools = _build_tool_catalog(guardrails)
+        si = next(t for t in tools if t.name == "system_info")
+        assert si.effect == "read"
+
+    def test_run_command_is_mixed(self):
+        guardrails = GuardrailsConfig()
+        tools = _build_tool_catalog(guardrails)
+        rc = next(t for t in tools if t.name == "run_command")
+        assert rc.effect == "mixed"
+
+    def test_multi_action_tool_effect_derived_mixed(self):
+        guardrails = GuardrailsConfig()
+        tools = _build_tool_catalog(guardrails)
+        dc = next(t for t in tools if t.name == "docker_container")
+        assert dc.effect == "mixed"  # inspect=read, start/stop/... = write
+
+    def test_multi_action_all_read_tool_effect(self):
+        guardrails = GuardrailsConfig()
+        tools = _build_tool_catalog(guardrails)
+        dv = next(t for t in tools if t.name == "docker_volume")
+        assert dv.effect == "read"  # only list and inspect
+
+    def test_per_action_effect_present(self):
+        guardrails = GuardrailsConfig()
+        tools = _build_tool_catalog(guardrails)
+        dc = next(t for t in tools if t.name == "docker_container")
+        by_name = {a.name: a.effect for a in dc.actions}
+        assert by_name["inspect"] == "read"
+        assert by_name["remove"] == "write"
+        assert by_name["start"] == "write"

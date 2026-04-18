@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Tool & skill effect classification:** Every tool declares an `EFFECT` (`read` / `write` / `mixed`); multi-action tools declare per-action `EFFECTS`. New `TOOL_EFFECTS` registry and `get_tool_effect()` helper in `squire.tools`. `GET /api/tools` now includes a tool-level `effect` field and per-action `effect` on multi-action tools; `GET /api/skills` includes `effect` (optional frontmatter `metadata.effect`, default `"mixed"`). The Tools and Skills pages render an Effect column with a colored badge and a filter dropdown (read/write/mixed); the Tools page URL-state backs the new filter. Skill form has a matching Effect selector. Bootstrapped watch playbooks (`recover-container-unhealthy`, `triage-disk-pressure`) are seeded as `effect: write`. Effect is UI-only metadata — orthogonal to risk and not consumed by the risk gate, guardrails, or approval today.
 - **Dev tooling:** ``scripts/webhook_receiver.py`` and ``make webhook-receiver`` — stdlib HTTP server that logs Squire webhook POSTs (for integration testing); ``squire.example.toml`` documents localhost and ``host.docker.internal`` URLs.
 - **Agent instructions:** Shared guidance for host-scoped tools (default `host`, which host tool output describes, consistency across Docker calls, daemon vs remote confusion, anti-retry after repeated identical failures) on the root Squire agent, Monitor, Container, and router; Container agent now includes `docker_ps` for discovery without a Monitor handoff (also on Monitor for read-only observation).
 - **Docker errors:** When Docker fails on `local` (missing CLI, unreachable daemon, or socket/connect errors), Docker tool error text appends a short hint about passing `host=` consistently and lists other configured hosts when available.
@@ -24,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Multi-action tool deny:** Adding a multi-action tool (e.g. `docker_container`, `systemctl`) to `tools_deny` now blocks every action on that tool. Previously only single-action tools like `docker_ps` were blocked because the risk gate compared the compound action name (`docker_container:inspect`) against a denied set that only contained the bare tool name.
 - **Chat skill loop:** WebSocket skill auto-continue no longer runs up to 15 text-only turns when the model stops calling tools; `[SKILL COMPLETE]` is honored from accumulated assistant text even on a final text-only turn.
 - **Skill lookup:** `SkillService.get_skill` (and `delete_skill`) now resolve skills by directory slug, case-insensitive directory match, or declared frontmatter `name`, so chat `?skill=` and the API match how skills are listed; WebSocket skill query params are trimmed.
 - **Chat skills:** Session state built when the WebSocket opens (including `active_skill`) is now passed as ADK `state_delta` on each `run_async` call. The runner reloads chat sessions from SQLite, so in-memory `session.state.update` alone never applied skill instructions to the model.

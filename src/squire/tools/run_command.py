@@ -2,9 +2,11 @@
 
 import shlex
 
+from ._effects import Effect
 from ._registry import get_guardrails, get_registry
 
 RISK_LEVEL = 5  # Critical
+EFFECT: Effect = "mixed"  # shell escape hatch — effect depends on the command
 
 
 async def run_command(command: str, timeout: float = 30.0, host: str = "local") -> str:

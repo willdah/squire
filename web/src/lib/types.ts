@@ -1,5 +1,7 @@
 // TypeScript types matching the API schemas
 
+export type Effect = "read" | "write" | "mixed";
+
 export interface ContainerInfo {
   name: string;
   image: string;
@@ -109,6 +111,7 @@ export interface Skill {
   trigger: string;
   enabled: boolean;
   incident_keys: string[];
+  effect: Effect;
   instructions: string;
 }
 
@@ -323,6 +326,7 @@ export interface ToolAction {
   name: string;
   risk_level: number;
   risk_override: number | null;
+  effect: Effect;
 }
 
 export interface ToolInfo {
@@ -335,6 +339,7 @@ export interface ToolInfo {
   risk_override: number | null;
   status: "enabled" | "disabled";
   approval_policy: "always" | "never" | null;
+  effect: Effect;
 }
 
 export interface ConfigResponse {

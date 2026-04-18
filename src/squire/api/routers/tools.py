@@ -5,7 +5,7 @@ import inspect
 from fastapi import APIRouter, Depends
 
 from ...config import GuardrailsConfig
-from ...tools import TOOL_RISK_LEVELS
+from ...tools import TOOL_EFFECTS, TOOL_RISK_LEVELS, get_tool_effect
 
 # Import raw tool functions for signature introspection
 from ...tools.docker_cleanup import docker_cleanup
@@ -110,12 +110,17 @@ def _build_tool_catalog(guardrails: GuardrailsConfig) -> list[ToolInfo]:
 
         action_names = _get_action_names(name)
 
+        tool_effect = get_tool_effect(name)
+
         if action_names:
+            action_effects = TOOL_EFFECTS[name]
+            assert isinstance(action_effects, dict)  # multi-action tools always have dict entries
             actions = [
                 ToolAction(
                     name=action,
                     risk_level=TOOL_RISK_LEVELS.get(f"{name}:{action}", 1),
                     risk_override=overrides.get(f"{name}:{action}"),
+                    effect=action_effects[action],
                 )
                 for action in action_names
             ]
@@ -128,6 +133,7 @@ def _build_tool_catalog(guardrails: GuardrailsConfig) -> list[ToolInfo]:
                     actions=actions,
                     status=status,
                     approval_policy=approval_policy,
+                    effect=tool_effect,
                 )
             )
         else:
@@ -141,6 +147,7 @@ def _build_tool_catalog(guardrails: GuardrailsConfig) -> list[ToolInfo]:
                     risk_override=overrides.get(name),
                     status=status,
                     approval_policy=approval_policy,
+                    effect=tool_effect,
                 )
             )
     return tools

@@ -1,6 +1,10 @@
 """Pydantic response models for the Squire web API."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+Effect = Literal["read", "write", "mixed"]
 
 # --- System / Snapshots ---
 
@@ -142,6 +146,7 @@ class Skill(BaseModel):
     trigger: str = "manual"
     enabled: bool = True
     incident_keys: list[str] = []
+    effect: Effect = "mixed"
     instructions: str = ""
 
 
@@ -152,6 +157,7 @@ class SkillCreate(BaseModel):
     trigger: str = "manual"
     incident_keys: list[str] = []
     allow_custom_incident_prefixes: bool = False
+    effect: Effect = "mixed"
     instructions: str
 
 
@@ -162,6 +168,7 @@ class SkillUpdate(BaseModel):
     enabled: bool | None = None
     incident_keys: list[str] | None = None
     allow_custom_incident_prefixes: bool | None = None
+    effect: Effect | None = None
     instructions: str | None = None
 
 
@@ -231,6 +238,7 @@ class ToolAction(BaseModel):
     name: str
     risk_level: int
     risk_override: int | None = None
+    effect: Effect
 
 
 class ToolInfo(BaseModel):
@@ -243,6 +251,7 @@ class ToolInfo(BaseModel):
     risk_override: int | None = None  # single-action tools only
     status: str  # "enabled" | "disabled"
     approval_policy: str | None = None  # "always" | "never" | null
+    effect: Effect  # tool-level; derived from per-action effects for multi-action tools
 
 
 # --- Config ---

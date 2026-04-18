@@ -4,11 +4,13 @@ import json
 import logging
 import platform
 
+from ._effects import Effect
 from ._registry import get_registry
 
 logger = logging.getLogger(__name__)
 
 RISK_LEVEL = 1  # Info
+EFFECT: Effect = "read"
 
 
 def _get_os_type(backend, host: str) -> str:
