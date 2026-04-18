@@ -27,6 +27,7 @@ class HostSnapshot(BaseModel):
     disk_usage_raw: str = ""
     containers: list[ContainerInfo] = []
     error: str | None = None
+    checked_at: str | None = None
 
 
 class SystemStatusResponse(BaseModel):
@@ -78,6 +79,7 @@ class HostVerifyResponse(BaseModel):
     name: str
     reachable: bool
     message: str
+    checked_at: str
 
 
 # --- Sessions ---
