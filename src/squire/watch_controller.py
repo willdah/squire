@@ -20,7 +20,7 @@ import os
 from collections import defaultdict
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import uuid4
 
@@ -32,7 +32,9 @@ from google.genai import types
 from .adk.runtime import AdkRuntime
 from .adk.session_state import build_watch_session_state
 from .agents.squire_agent import create_squire_agent
+from .callbacks.db_approval_provider import DatabaseApprovalProvider
 from .callbacks.risk_gate import create_risk_gate
+from .callbacks.sanitize import create_after_tool_sanitizer
 from .config import (
     AppConfig,
     GuardrailsConfig,
@@ -311,19 +313,34 @@ class WatchController:
             _rewire_risk_gates(agent, app_config=self._app_config, guardrails=new_guardrails, notifier=block_notifier)
 
         # Push derived state onto the live session so the next cycle sees the update.
-        tol = new_guardrails.watch_tolerance or new_guardrails.risk_tolerance
+        base_tol = new_guardrails.watch_tolerance or new_guardrails.risk_tolerance
+        mode = await self._get_watch_autonomy_mode()
+        tol = _effective_watch_risk_tolerance(base_tol, mode)
+        approval_tools = _watch_approval_tools_for_mode(mode, new_guardrails)
         session_state_template = getattr(self, "_session_state_template", None)
         if session_state_template is not None:
             session_state_template["risk_tolerance"] = tol
+            session_state_template["risk_approval_tools"] = sorted(approval_tools)
         session = getattr(self, "_session", None)
         if session is not None:
             session.state["risk_tolerance"] = tol
+            session.state["risk_approval_tools"] = sorted(approval_tools)
             session.state["watch_max_identical_actions_per_cycle"] = new_watch.max_identical_actions_per_cycle
             session.state["watch_max_remote_actions_per_cycle"] = new_watch.max_remote_actions_per_cycle
 
         await self._db.set_watch_state("interval_minutes", str(new_watch.interval_minutes))
         await self._db.set_watch_state("risk_tolerance", str(tol))
         logger.info("Reloaded watch config from DB overrides")
+
+    async def _get_watch_autonomy_mode(self) -> Literal["supervised", "autonomous"]:
+        configured = (await self._db.get_watch_state("autonomy_mode")) or self._watch_config.autonomy_mode
+        value = str(configured or "supervised").strip().lower()
+        return "autonomous" if value == "autonomous" else "supervised"
+
+    async def _is_kill_switch_active(self) -> bool:
+        """Return True when the persistent autonomy kill switch is engaged."""
+        raw = await self._db.get_watch_state("autonomy_kill_switch")
+        return str(raw or "").strip().lower() in {"1", "true", "on"}
 
     # --------------------------------------------------------------- Main loop
 
@@ -337,7 +354,10 @@ class WatchController:
         db = self._db
         watch_config = self._watch_config
         guardrails = self._guardrails
-        watch_tolerance = guardrails.watch_tolerance or guardrails.risk_tolerance
+        base_watch_tolerance = guardrails.watch_tolerance or guardrails.risk_tolerance
+        autonomy_mode = await self._get_watch_autonomy_mode()
+        watch_tolerance = _effective_watch_risk_tolerance(base_watch_tolerance, autonomy_mode)
+        watch_approval_tools = _watch_approval_tools_for_mode(autonomy_mode, guardrails)
         watch_allowed_tools = set(guardrails.tools_allow) | set(guardrails.watch_tools_allow)
         watch_denied_tools = set(guardrails.tools_deny) | set(guardrails.watch_tools_deny)
 
@@ -350,6 +370,7 @@ class WatchController:
             llm_config=self._llm_config,
             guardrails=guardrails,
             block_notifier=block_notifier,
+            approval_provider=None,
         )
         self._agent = agent  # expose for _apply_reload to rewire risk gates
 
@@ -369,6 +390,7 @@ class WatchController:
             host_configs={name: cfg.model_dump() for name, cfg in self._registry.host_configs.items()},
             risk_tolerance=watch_tolerance,
             risk_allowed_tools=watch_allowed_tools,
+            risk_approval_tools=watch_approval_tools,
             risk_denied_tools=watch_denied_tools,
         )
         self._session_state_template = session_state
@@ -403,6 +425,7 @@ class WatchController:
             "watch_session_id": watch_session_id,
             "interval_minutes": str(watch_config.interval_minutes),
             "risk_tolerance": str(watch_tolerance),
+            "autonomy_mode": autonomy_mode,
             "total_actions": "0",
             "total_blocked": "0",
             "total_errors": "0",
@@ -446,6 +469,13 @@ class WatchController:
 
         try:
             while not self._shutdown.is_set():
+                if await self._is_kill_switch_active():
+                    await db.set_watch_state("last_kill_switch_skip_at", datetime.now(UTC).isoformat())
+                    await emitter.emit_kill_switch(cycle=cycle_count, active=True)
+                    logger.info("Watch cycle skipped: autonomy kill switch active")
+                    await self._sleep_until_next_cycle(watch_config.interval_minutes * 60)
+                    continue
+
                 cycle_count += 1
                 cycle_started_at = datetime.now(UTC)
                 cycle_start = cycle_started_at.isoformat()
@@ -521,6 +551,40 @@ class WatchController:
                 session.state["watch_blocked_action_signatures"] = blocked_signatures
                 session.state["watch_max_identical_actions_per_cycle"] = watch_config.max_identical_actions_per_cycle
                 session.state["watch_max_remote_actions_per_cycle"] = watch_config.max_remote_actions_per_cycle
+                active_guardrails = self._guardrails
+                base_cycle_tolerance = active_guardrails.watch_tolerance or active_guardrails.risk_tolerance
+                autonomy_mode = await self._get_watch_autonomy_mode()
+                cycle_tolerance = _effective_watch_risk_tolerance(base_cycle_tolerance, autonomy_mode)
+                cycle_approval_tools = _watch_approval_tools_for_mode(autonomy_mode, active_guardrails)
+                session.state["risk_tolerance"] = cycle_tolerance
+                session.state["risk_approval_tools"] = sorted(cycle_approval_tools)
+                if self._session_state_template is not None:
+                    self._session_state_template["risk_tolerance"] = cycle_tolerance
+                    self._session_state_template["risk_approval_tools"] = sorted(cycle_approval_tools)
+                await db.set_watch_state("risk_tolerance", str(cycle_tolerance))
+                await db.set_watch_state("autonomy_mode", autonomy_mode)
+
+                approval_provider = DatabaseApprovalProvider(
+                    db=db,
+                    emitter=emitter,
+                    cycle=cycle_count,
+                    timeout=float(watch_config.approval_timeout_seconds),
+                )
+                rate_limit_gate = _make_autonomous_rate_gate(
+                    db=db,
+                    emitter=emitter,
+                    cycle=cycle_count,
+                    mode=autonomy_mode,
+                    ceiling=watch_config.max_autonomous_actions_per_hour,
+                )
+                _rewire_risk_gates(
+                    agent,
+                    app_config=self._app_config,
+                    guardrails=active_guardrails,
+                    notifier=block_notifier,
+                    approval_provider=approval_provider,
+                    rate_limit_gate=rate_limit_gate,
+                )
 
                 watch_skills = []
                 playbook_skills = []
@@ -586,6 +650,25 @@ class WatchController:
                             )
                 except Exception:
                     logger.debug("Failed to load watch skills", exc_info=True)
+
+                # Apply per-skill autonomy overrides (propose skills force approval
+                # for their declared tools even in autonomous mode).
+                propose_tools: set[str] = set()
+                for sk in watch_skills:
+                    if sk.autonomy == "propose":
+                        propose_tools.update(sk.allowed_tools)
+                    elif sk.autonomy == "remediate":
+                        logger.info(
+                            "Watch skill '%s' declares autonomy=remediate; its allowed_tools %s "
+                            "will run without prompting when matched.",
+                            sk.name,
+                            list(sk.allowed_tools),
+                        )
+                if propose_tools:
+                    merged = set(session.state.get("risk_approval_tools") or []) | propose_tools
+                    session.state["risk_approval_tools"] = sorted(merged)
+                    if self._session_state_template is not None:
+                        self._session_state_template["risk_approval_tools"] = sorted(merged)
 
                 # Run the watch cycle.
                 cycle_start_time = datetime.now(UTC)
@@ -770,6 +853,25 @@ class WatchController:
                     error_reason=error_reason,
                     cycle_carryforward=cycle_carryforward,
                 )
+                fingerprint = outcome.get("incident_fingerprint")
+                if fingerprint and incidents:
+                    dominant = incidents[0]
+                    if outcome.get("resolved"):
+                        lifecycle_status = "resolved"
+                    elif outcome.get("escalated"):
+                        lifecycle_status = "escalated"
+                    else:
+                        lifecycle_status = "active"
+                    await db.upsert_incident(
+                        incident_key=fingerprint,
+                        severity=dominant.severity,
+                        host=dominant.host,
+                        title=dominant.title,
+                        first_seen=cycle_start,
+                        last_seen=datetime.now(UTC).isoformat(),
+                        last_outcome_json=outcome,
+                        observed_status=lifecycle_status,
+                    )
                 active_cycle_id = None
                 active_cycle_started_at = None
                 cycle_row = {
@@ -995,12 +1097,34 @@ def _append_bounded(records: list[dict], row: dict) -> None:
         del records[: len(records) - _ALL_CYCLES_MAX]
 
 
+def _effective_watch_risk_tolerance(base_tolerance, mode: Literal["supervised", "autonomous"]) -> int:
+    """Return cycle threshold after applying global watch autonomy mode.
+
+    ``base_tolerance`` may be a ``RiskTolerance`` enum value, a string alias,
+    or an int — normalize to a numeric threshold via RuleGate before
+    comparing, since StrEnum values don't support ``max()`` against ints.
+    """
+    numeric = RuleGate(threshold=base_tolerance).threshold
+    if mode == "autonomous":
+        return max(numeric, 4)
+    return numeric
+
+
+def _watch_approval_tools_for_mode(mode: Literal["supervised", "autonomous"], guardrails: GuardrailsConfig) -> set[str]:
+    """Resolve which tools should force user approval in this mode."""
+    if mode == "autonomous":
+        return set()
+    return set(guardrails.tools_require_approval)
+
+
 def _headless_risk_gate(
     tool_risk_levels: dict[str, int],
     *,
     guardrails: GuardrailsConfig,
     notifier: NotificationRouter | None,
+    approval_provider=None,
     agent_threshold: int | None = None,
+    rate_limit_gate=None,
 ):
     """Build a headless before_tool_callback bound to the given guardrails/notifier."""
     return create_risk_gate(
@@ -1009,7 +1133,37 @@ def _headless_risk_gate(
         default_threshold=agent_threshold,
         headless=True,
         notifier=notifier,
+        approval_provider=approval_provider,
+        rate_limit_gate=rate_limit_gate,
     )
+
+
+def _make_autonomous_rate_gate(
+    *,
+    db: DatabaseService,
+    emitter,
+    cycle: int,
+    mode: Literal["supervised", "autonomous"],
+    ceiling: int,
+):
+    """Return a rate_limit_gate callable enforcing the per-hour ceiling.
+
+    Only active in autonomous mode. When the count of ``tool_call`` events
+    in the last hour meets or exceeds ``ceiling``, the gate returns True
+    and the risk gate downgrades the decision to NEEDS_APPROVAL.
+    """
+    if mode != "autonomous":
+        return None
+
+    async def _gate(tool_name: str, _args: dict) -> bool:
+        since = datetime.now(UTC) - timedelta(hours=1)
+        count = await db.count_autonomous_actions_since(since=since)
+        if count >= ceiling:
+            await emitter.emit_rate_limit(cycle=cycle, tool_name=tool_name, count=count, ceiling=ceiling)
+            return True
+        return False
+
+    return _gate
 
 
 def _rewire_risk_gates(
@@ -1018,6 +1172,8 @@ def _rewire_risk_gates(
     app_config: AppConfig,
     guardrails: GuardrailsConfig,
     notifier: NotificationRouter | None,
+    approval_provider=None,
+    rate_limit_gate=None,
 ) -> None:
     """Replace ``before_tool_callback`` on the agent (and sub-agents) after a config reload."""
     if app_config.multi_agent:
@@ -1043,6 +1199,8 @@ def _rewire_risk_gates(
                 risk_maps.get(sub.name, TOOL_RISK_LEVELS),
                 guardrails=guardrails,
                 notifier=notifier,
+                approval_provider=approval_provider,
+                rate_limit_gate=rate_limit_gate,
                 agent_threshold=threshold,
             )
     else:
@@ -1050,6 +1208,8 @@ def _rewire_risk_gates(
             TOOL_RISK_LEVELS,
             guardrails=guardrails,
             notifier=notifier,
+            approval_provider=approval_provider,
+            rate_limit_gate=rate_limit_gate,
         )
 
 
@@ -1059,6 +1219,7 @@ def _build_watch_agent(
     llm_config: LLMConfig,
     guardrails: GuardrailsConfig,
     block_notifier: NotificationRouter | None,
+    approval_provider=None,
 ):
     """Build the root watch agent with the appropriate per-agent risk gates."""
     if app_config.multi_agent:
@@ -1078,26 +1239,46 @@ def _build_watch_agent(
                     tool_risk_levels,
                     guardrails=guardrails,
                     notifier=block_notifier,
+                    approval_provider=approval_provider,
                     agent_threshold=threshold,
                 )
 
             return factory
 
-        return create_squire_agent(
+        multi_agent = create_squire_agent(
             app_config=app_config,
             llm_config=llm_config,
             risk_gate_factory_builder=_per_agent_builder,
         )
+        _attach_tool_output_sanitizer(multi_agent)
+        return multi_agent
 
-    return create_squire_agent(
+    agent = create_squire_agent(
         app_config=app_config,
         llm_config=llm_config,
         before_tool_callback=_headless_risk_gate(
             TOOL_RISK_LEVELS,
             guardrails=guardrails,
             notifier=block_notifier,
+            approval_provider=approval_provider,
         ),
     )
+    _attach_tool_output_sanitizer(agent)
+    return agent
+
+
+def _attach_tool_output_sanitizer(agent) -> None:
+    """Attach a per-tool output sanitizer to the watch agent tree.
+
+    Wraps every tool return with ``<tool-output>`` tags and neutralizes
+    instruction-shaped content before it flows back to the model. Applied
+    only in watch mode because untrusted output (container logs, SSH
+    stdout) is the realistic prompt-injection vector for autonomous runs.
+    """
+    sanitizer = create_after_tool_sanitizer()
+    agent.after_tool_callback = sanitizer
+    for sub in getattr(agent, "sub_agents", None) or []:
+        sub.after_tool_callback = sanitizer
 
 
 # ------------------------------------------------------------- Standalone CLI

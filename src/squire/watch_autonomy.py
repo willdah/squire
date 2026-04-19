@@ -234,3 +234,71 @@ def severity_rank(severity: str) -> int:
     """Sort helper for deterministic incident ordering."""
     ranks = {"high": 0, "medium": 1, "low": 2}
     return ranks.get(severity.lower(), 3)
+
+
+async def insight_sweep_from_metrics(db) -> int:
+    """Derive proactive insights from recent metrics + audit state.
+
+    Not a skill runner — this is the minimum sweep that yields
+    actionable data from telemetry we already collect. User-authored
+    ``observe``-tier skills extend this surface as they are added.
+    Returns the number of insight rows created or updated.
+    """
+    created = 0
+    metrics = await db.get_watch_metrics(hours=24)
+    audit = await db.verify_watch_event_chain()
+
+    if metrics["total_resolved"] >= 3 and metrics["auto_resolve_rate"] >= 0.8:
+        await db.upsert_insight(
+            category="reliability",
+            host=None,
+            summary=f"Autonomy resolved {int(metrics['auto_resolve_rate'] * 100)}% of recent incidents",
+            detail=(
+                f"Over the last {metrics['window_hours']}h Squire auto-resolved "
+                f"{metrics['auto_resolved']} of {metrics['total_resolved']} incidents without human approval."
+            ),
+            severity="low",
+        )
+        created += 1
+
+    if metrics["rate_limit_hits"] > 0:
+        await db.upsert_insight(
+            category="reliability",
+            host=None,
+            summary=f"Rate ceiling engaged {metrics['rate_limit_hits']} time(s)",
+            detail=(
+                "The autonomous action ceiling downgraded one or more actions to NEEDS_APPROVAL. "
+                "Review whether the ceiling is right-sized for your workload."
+            ),
+            severity="medium",
+        )
+        created += 1
+
+    if not audit["intact"]:
+        await db.upsert_insight(
+            category="security",
+            host=None,
+            summary="Watch event audit chain is broken",
+            detail=(
+                "The hash chain over watch_events has detected a break. "
+                "Investigate audit_breaks rows and confirm no unauthorized deletion occurred."
+            ),
+            severity="high",
+        )
+        created += 1
+
+    latency = metrics.get("median_approval_latency_seconds")
+    if latency is not None and latency > 180:
+        await db.upsert_insight(
+            category="reliability",
+            host=None,
+            summary=f"Median approval latency is {int(latency)}s",
+            detail=(
+                "Approvals are waiting longer than 3 minutes to get human attention. "
+                "Consider snoozing or adjusting the autonomy mode if this persists."
+            ),
+            severity="medium",
+        )
+        created += 1
+
+    return created

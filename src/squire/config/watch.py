@@ -5,6 +5,7 @@ Risk policy for watch mode is now in [guardrails.watch].
 """
 
 from functools import partial
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
@@ -16,8 +17,8 @@ from .loader import TomlSectionSource, get_section
 class WatchConfig(BaseSettings):
     """Operational configuration for autonomous watch mode (``squire watch``).
 
-    Watch mode runs headless — no interactive UI or approval. Risk policy
-    (tolerance, tool allow/deny) is configured under ``[guardrails.watch]``.
+    Risk policy (tolerance, tool allow/deny) is configured under
+    ``[guardrails.watch]``.
     """
 
     model_config = SettingsConfigDict(env_prefix="SQUIRE_WATCH_", case_sensitive=False, extra="ignore")
@@ -95,4 +96,29 @@ class WatchConfig(BaseSettings):
         default=4,
         ge=1,
         description="Maximum remote-host tool calls allowed in a single cycle",
+    )
+    autonomy_mode: Literal["supervised", "autonomous"] = Field(
+        default="supervised",
+        description=(
+            "Global watch autonomy mode. 'supervised' requests approvals for configured tools; "
+            "'autonomous' runs with elevated tolerance and approval tools disabled."
+        ),
+    )
+    approval_timeout_seconds: int = Field(
+        default=300,
+        ge=30,
+        description="Seconds to wait for watch approvals before expiring the request",
+    )
+    max_autonomous_actions_per_hour: int = Field(
+        default=30,
+        ge=1,
+        description=(
+            "Hard ceiling on auto-approved tool calls across cycles while in autonomous mode. "
+            "Actions above this threshold downgrade to NEEDS_APPROVAL."
+        ),
+    )
+    insight_sweep_interval_hours: int = Field(
+        default=6,
+        ge=1,
+        description="Hours between runs of the proactive insight sweep (Phase 4 surfaces).",
     )

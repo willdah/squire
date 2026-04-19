@@ -37,7 +37,6 @@ export function WatchStatsCard({ status }: WatchStatsCardProps) {
 
   return (
     <Card className="relative h-full overflow-hidden border-border/70 bg-card/95">
-      <div className="pointer-events-none absolute inset-0 opacity-35 [background-image:radial-gradient(circle_at_100%_0%,oklch(0.78_0.12_45/.18),transparent_45%)]" />
       <CardContent className="relative space-y-4 pt-5">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-display font-semibold">Status</h2>

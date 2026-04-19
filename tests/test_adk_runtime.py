@@ -65,6 +65,7 @@ def test_watch_session_state_builder_sets_watch_mode():
         host_configs={"local": {"name": "local"}},
         risk_tolerance=4,
         risk_allowed_tools={"system_info"},
+        risk_approval_tools=set(),
         risk_denied_tools={"run_command"},
     )
     assert state["watch_mode"] is True

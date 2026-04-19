@@ -26,14 +26,16 @@ class DatabaseApprovalProvider:
         db: DatabaseService,
         emitter: WatchEventEmitter,
         cycle: int,
-        timeout: float = 60.0,
+        timeout: float = 300.0,
         poll_interval: float = 0.2,
+        reminder_seconds: float = 60.0,
     ) -> None:
         self._db = db
         self._emitter = emitter
         self.cycle = cycle
         self._timeout = timeout
         self._poll_interval = poll_interval
+        self._reminder_seconds = reminder_seconds
 
     async def request_approval_async(
         self,
@@ -59,9 +61,17 @@ class DatabaseApprovalProvider:
         )
 
         elapsed = 0.0
+        reminder_sent = False
         while elapsed < self._timeout:
             await asyncio.sleep(self._poll_interval)
             elapsed += self._poll_interval
+            if not reminder_sent and elapsed >= self._reminder_seconds:
+                await self._emitter.emit_approval_reminder(
+                    cycle=self.cycle,
+                    request_id=request_id,
+                    seconds_elapsed=int(self._reminder_seconds),
+                )
+                reminder_sent = True
 
             approval = await self._db.get_watch_approval(request_id)
             if approval and approval["status"] != "pending":

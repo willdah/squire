@@ -294,6 +294,8 @@ class WatchConfigPatch(BaseModel):
     max_identical_actions_per_cycle: int | None = Field(default=None, ge=1)
     blocked_action_cooldown_cycles: int | None = Field(default=None, ge=1)
     max_remote_actions_per_cycle: int | None = Field(default=None, ge=1)
+    autonomy_mode: str | None = None
+    approval_timeout_seconds: int | None = Field(default=None, ge=30)
 
 
 class GuardrailsConfigUpdate(BaseModel):
@@ -373,11 +375,67 @@ class WatchConfigResponse(BaseModel):
     max_identical_actions_per_cycle: int
     blocked_action_cooldown_cycles: int
     max_remote_actions_per_cycle: int
+    autonomy_mode: str
+    approval_timeout_seconds: int
     risk_tolerance: int | None
 
 
 class WatchApprovalAction(BaseModel):
     approved: bool
+
+
+class WatchModeRequest(BaseModel):
+    mode: str
+
+
+class WatchModeResponse(BaseModel):
+    mode: str
+
+
+class WatchIncidentSummary(BaseModel):
+    incident_key: str
+    first_seen: str
+    last_seen: str
+    cycle_count: int
+    severity: str
+    status: str
+    watch_id: str | None = None
+    watch_session_id: str | None = None
+    latest_cycle_id: str | None = None
+    latest_outcome_json: dict
+    pending_approval: dict | None = None
+    acknowledged_at: str | None = None
+    snoozed_until: str | None = None
+    resolved_at: str | None = None
+
+
+class WatchIncidentSnoozeRequest(BaseModel):
+    duration_seconds: int = 3600
+
+
+class WatchKillSwitchRequest(BaseModel):
+    active: bool
+
+
+class WatchKillSwitchResponse(BaseModel):
+    active: bool
+
+
+class WatchMetricsResponse(BaseModel):
+    window_hours: int
+    auto_resolved: int
+    approval_resolved: int
+    total_resolved: int
+    auto_resolve_rate: float
+    median_mttr_seconds: float | None
+    median_approval_latency_seconds: float | None
+    rate_limit_hits: int
+
+
+class WatchAuditVerifyResponse(BaseModel):
+    intact: bool
+    total: int
+    breaks: list[dict]
 
 
 class WatchCommandResponse(BaseModel):

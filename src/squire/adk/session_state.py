@@ -58,6 +58,7 @@ def build_watch_session_state(
     host_configs: dict[str, dict],
     risk_tolerance: int,
     risk_allowed_tools: set[str],
+    risk_approval_tools: set[str],
     risk_denied_tools: set[str],
 ) -> dict:
     """Build serializable state for headless watch sessions."""
@@ -68,7 +69,7 @@ def build_watch_session_state(
         risk_tolerance=risk_tolerance,
         risk_strict=True,
         risk_allowed_tools=risk_allowed_tools,
-        risk_approval_tools=set(),
+        risk_approval_tools=risk_approval_tools,
         risk_denied_tools=risk_denied_tools,
     )
     state["watch_mode"] = True

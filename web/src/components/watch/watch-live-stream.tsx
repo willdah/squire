@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
@@ -93,6 +93,7 @@ function EventRow({ event }: { event: WatchEvent }) {
 }
 
 export function WatchLiveStream({ enabled }: WatchLiveStreamProps) {
+  const [expanded, setExpanded] = useState(false);
   const { status, events, clearEvents } = useWatchWebSocket(enabled);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -119,22 +120,32 @@ export function WatchLiveStream({ enabled }: WatchLiveStreamProps) {
           <Badge variant={status === "connected" ? "default" : "secondary"} className="text-xs">
             {status}
           </Badge>
+          <Badge variant="outline" className="text-xs">
+            Debug stream
+          </Badge>
           <span className="text-xs text-muted-foreground">{events.length} events</span>
         </div>
-        {events.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={clearEvents} className="text-xs text-muted-foreground">
-            <Trash2 className="h-3.5 w-3.5 mr-1" />
-            Clear Stream
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setExpanded((v) => !v)} className="text-xs">
+            {expanded ? "Hide" : "Show"}
           </Button>
-        )}
+          {events.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={clearEvents} className="text-xs text-muted-foreground">
+              <Trash2 className="h-3.5 w-3.5 mr-1" />
+              Clear Stream
+            </Button>
+          )}
+        </div>
       </div>
-      <div ref={scrollRef} className="p-4 font-mono text-sm max-h-[500px] overflow-y-auto">
-        {events.length === 0 ? (
-          <p className="text-muted-foreground">Waiting for events...</p>
-        ) : (
-          events.map((event) => <EventRow key={event.id} event={event} />)
-        )}
-      </div>
+      {expanded && (
+        <div ref={scrollRef} className="p-4 font-mono text-sm max-h-[500px] overflow-y-auto">
+          {events.length === 0 ? (
+            <p className="text-muted-foreground">Waiting for events...</p>
+          ) : (
+            events.map((event) => <EventRow key={event.id} event={event} />)
+          )}
+        </div>
+      )}
     </div>
   );
 }

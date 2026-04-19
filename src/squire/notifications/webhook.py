@@ -13,6 +13,18 @@ from ..config.notifications import NotificationsConfig, WebhookConfig
 
 logger = logging.getLogger(__name__)
 
+# Transport-level failures (DNS, refused, timeout) are expected for a
+# misconfigured webhook and shouldn't produce full tracebacks on every
+# dispatch — one concise line is enough for users to act on.
+_TRANSPORT_ERRORS: tuple[type[Exception], ...] = (
+    httpx.ConnectError,
+    httpx.ConnectTimeout,
+    httpx.ReadTimeout,
+    httpx.WriteTimeout,
+    httpx.PoolTimeout,
+    httpx.NetworkError,
+)
+
 
 class WebhookDispatcher:
     """Dispatches event notifications to configured webhook endpoints."""
@@ -78,6 +90,13 @@ class WebhookDispatcher:
                         resp.status_code,
                         resp.text[:200],
                     )
+            except _TRANSPORT_ERRORS as exc:
+                logger.warning(
+                    "Webhook '%s' unreachable (%s: %s)",
+                    webhook.name,
+                    type(exc).__name__,
+                    str(exc).splitlines()[0] if str(exc) else "no detail",
+                )
             except Exception:
                 logger.warning("Webhook '%s' failed", webhook.name, exc_info=True)
 

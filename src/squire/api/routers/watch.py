@@ -8,10 +8,18 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, WebSocket, W
 from ..dependencies import get_db, get_guardrails, get_watch_config, get_watch_controller
 from ..schemas import (
     WatchApprovalAction,
+    WatchAuditVerifyResponse,
     WatchAutostartRequest,
     WatchCommandResponse,
     WatchConfigResponse,
     WatchCycleSummary,
+    WatchIncidentSnoozeRequest,
+    WatchIncidentSummary,
+    WatchKillSwitchRequest,
+    WatchKillSwitchResponse,
+    WatchMetricsResponse,
+    WatchModeRequest,
+    WatchModeResponse,
     WatchReportInfo,
     WatchRunSummary,
     WatchSessionSummary,
@@ -113,8 +121,262 @@ async def watch_config_get(
         max_identical_actions_per_cycle=watch_config.max_identical_actions_per_cycle,
         blocked_action_cooldown_cycles=watch_config.blocked_action_cooldown_cycles,
         max_remote_actions_per_cycle=watch_config.max_remote_actions_per_cycle,
+        autonomy_mode=watch_config.autonomy_mode,
+        approval_timeout_seconds=watch_config.approval_timeout_seconds,
         risk_tolerance=_effective_watch_risk_level(guardrails),
     )
+
+
+@router.get("/mode", response_model=WatchModeResponse)
+async def watch_mode_get(
+    db=Depends(get_db),
+    watch_config=Depends(get_watch_config),
+):
+    mode = (await db.get_watch_state("autonomy_mode")) or watch_config.autonomy_mode
+    mode_value = "autonomous" if str(mode).strip().lower() == "autonomous" else "supervised"
+    return WatchModeResponse(mode=mode_value)
+
+
+@router.post("/mode", response_model=WatchModeResponse)
+async def watch_mode_set(
+    body: WatchModeRequest = Body(...),
+    db=Depends(get_db),
+    controller=Depends(get_watch_controller),
+):
+    mode = str(body.mode).strip().lower()
+    if mode not in {"supervised", "autonomous"}:
+        raise HTTPException(status_code=422, detail="mode must be 'supervised' or 'autonomous'")
+    await db.set_watch_state("autonomy_mode", mode)
+    controller.reload()
+    return WatchModeResponse(mode=mode)
+
+
+@router.get("/incidents", response_model=list[WatchIncidentSummary])
+async def watch_incidents(db=Depends(get_db)):
+    rows = await db.list_watch_incidents()
+    return [WatchIncidentSummary(**row) for row in rows]
+
+
+@router.get("/kill-switch", response_model=WatchKillSwitchResponse)
+async def watch_kill_switch_get(db=Depends(get_db)):
+    raw = (await db.get_watch_state("autonomy_kill_switch")) or ""
+    active = str(raw).strip().lower() in {"1", "true", "on"}
+    return WatchKillSwitchResponse(active=active)
+
+
+@router.post("/kill-switch", response_model=WatchKillSwitchResponse)
+async def watch_kill_switch_set(
+    body: WatchKillSwitchRequest = Body(...),
+    db=Depends(get_db),
+):
+    value = "true" if body.active else "false"
+    await db.set_watch_state("autonomy_kill_switch", value)
+    return WatchKillSwitchResponse(active=bool(body.active))
+
+
+@router.get("/metrics", response_model=WatchMetricsResponse)
+async def watch_metrics(
+    hours: int = Query(24, ge=1, le=720),
+    db=Depends(get_db),
+):
+    metrics = await db.get_watch_metrics(hours=hours)
+    return WatchMetricsResponse(**metrics)
+
+
+@router.get("/digest")
+async def watch_digest(
+    hours: int = Query(24, ge=1, le=720),
+    db=Depends(get_db),
+):
+    """Autonomous-action digest — actions taken, outcomes, MTTR.
+
+    Consumed by the ``/incidents`` page as a daily roll-up so the user can
+    scan what autonomy did overnight without reading the raw activity log.
+    """
+    metrics = await db.get_watch_metrics(hours=hours)
+    conn = await db._get_conn()
+    import json as _json
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    since_iso = (_dt.now(_UTC) - _td(hours=hours)).isoformat()
+    cursor = await conn.execute(
+        """
+        SELECT content
+        FROM watch_events
+        WHERE type = 'tool_call' AND created_at >= ?
+        """,
+        (since_iso,),
+    )
+    tools_used: dict[str, int] = {}
+    total_tool_calls = 0
+    for row in await cursor.fetchall():
+        total_tool_calls += 1
+        try:
+            payload = _json.loads(row["content"] or "{}")
+        except (TypeError, ValueError):
+            continue
+        name = str(payload.get("name") or "unknown")
+        tools_used[name] = tools_used.get(name, 0) + 1
+
+    return {
+        "window_hours": hours,
+        "metrics": metrics,
+        "total_tool_calls": total_tool_calls,
+        "tools_used": tools_used,
+    }
+
+
+@router.get("/insights")
+async def watch_insights(
+    category: str | None = Query(None),
+    db=Depends(get_db),
+):
+    """Return proactive insights, optionally filtered by category.
+
+    Categories are free-form but the Phase 4 dashboards render specific
+    ones: ``reliability``, ``maintenance``, ``security``, ``design``.
+    """
+    return {"items": await db.list_insights(category=category)}
+
+
+@router.post("/insights")
+async def watch_insights_create(
+    body: dict = Body(...),
+    db=Depends(get_db),
+):
+    """Upsert an insight (admin/testing surface)."""
+    required = ("category", "summary")
+    for field in required:
+        if not body.get(field):
+            raise HTTPException(status_code=422, detail=f"missing required field '{field}'")
+    insight_id = await db.upsert_insight(
+        category=str(body["category"]),
+        host=body.get("host"),
+        summary=str(body["summary"]),
+        detail=body.get("detail"),
+        severity=body.get("severity"),
+    )
+    return {"id": insight_id}
+
+
+@router.post("/insights/sweep")
+async def watch_insights_sweep(
+    db=Depends(get_db),
+):
+    """Manually run the full insight sweep (metrics + observe-tier skills)."""
+    from ... import api as _squire_api
+    from ...insight_sweep import run_insight_sweep
+
+    deps = _squire_api.dependencies
+    result = await run_insight_sweep(
+        db=db,
+        skill_service=deps.skills_service,
+        adk_runtime=deps.adk_runtime,
+        llm_config=deps.llm_config,
+        app_config=deps.app_config,
+    )
+    return {"status": "ok", **result}
+
+
+@router.post("/simulate")
+async def watch_simulate(
+    body: dict = Body(...),
+    db=Depends(get_db),
+):
+    """Run incident detection against a user-supplied snapshot.
+
+    The snapshot payload mirrors what ``_collect_all_snapshots`` produces
+    in live watch mode: a ``{host: {...}}`` mapping. Write tools are
+    never invoked — this is pure detection + RCA replay, useful for
+    validating a new skill without side effects.
+    """
+    from ...watch_autonomy import detect_incidents
+
+    snapshot = body.get("snapshot") or body
+    if not isinstance(snapshot, dict):
+        raise HTTPException(status_code=422, detail="snapshot must be a mapping")
+    incidents = detect_incidents(snapshot)
+    return {
+        "detected": [
+            {
+                "key": inc.key,
+                "severity": inc.severity,
+                "title": inc.title,
+                "detail": inc.detail,
+                "host": inc.host,
+            }
+            for inc in incidents
+        ],
+        "count": len(incidents),
+    }
+
+
+@router.get("/audit/verify", response_model=WatchAuditVerifyResponse)
+async def watch_audit_verify(db=Depends(get_db)):
+    result = await db.verify_watch_event_chain()
+    return WatchAuditVerifyResponse(**result)
+
+
+@router.post("/incidents/{incident_key}/ack", response_model=WatchCommandResponse)
+async def watch_incident_ack(incident_key: str, db=Depends(get_db)):
+    ok = await db.ack_incident(incident_key)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"unknown incident {incident_key}")
+    return WatchCommandResponse(status="ok", message=f"acknowledged {incident_key}")
+
+
+@router.post("/incidents/{incident_key}/snooze", response_model=WatchCommandResponse)
+async def watch_incident_snooze(
+    incident_key: str,
+    body: WatchIncidentSnoozeRequest | None = Body(None),
+    db=Depends(get_db),
+):
+    duration = body.duration_seconds if body else 3600
+    ok = await db.snooze_incident(incident_key, duration_seconds=duration)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"unknown incident {incident_key}")
+    return WatchCommandResponse(status="ok", message=f"snoozed {incident_key} for {duration}s")
+
+
+@router.post("/incidents/{incident_key}/resolve", response_model=WatchCommandResponse)
+async def watch_incident_resolve(incident_key: str, db=Depends(get_db)):
+    ok = await db.resolve_incident(incident_key)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"unknown incident {incident_key}")
+    return WatchCommandResponse(status="ok", message=f"resolved {incident_key}")
+
+
+@router.post("/incidents/{incident_key}/revert-last", response_model=WatchCommandResponse)
+async def watch_incident_revert_last(incident_key: str, db=Depends(get_db)):
+    """Revert the most recent reversible action for this incident.
+
+    In Phase 3 the registry of handlers is small — unknown tools return
+    ``unavailable``. Actions are marked as reverted in either case so the
+    UI can track attempts.
+    """
+    import json as _json
+
+    from ...callbacks.revertible import get_revertible
+
+    action = await db.get_latest_reversible_action_for_incident(incident_key)
+    if not action:
+        raise HTTPException(status_code=404, detail=f"no reversible action recorded for {incident_key}")
+
+    handler = get_revertible(action["tool_name"])
+    if handler is None:
+        await db.mark_reversible_action_reverted(action["id"], status="unavailable", reverted_by="user")
+        return WatchCommandResponse(
+            status="unavailable",
+            message=f"No revert handler registered for '{action['tool_name']}'",
+        )
+
+    args = _json.loads(action["args_json"] or "{}")
+    pre_state = _json.loads(action["pre_state_json"] or "{}")
+    outcome = await handler.revert(args, pre_state)
+    await db.mark_reversible_action_reverted(action["id"], status=outcome.status, reverted_by="user")
+    return WatchCommandResponse(status=outcome.status, message=outcome.evidence)
 
 
 @router.get("/cycles")

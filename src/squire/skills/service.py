@@ -20,6 +20,7 @@ import yaml
 from pydantic import BaseModel, Field, field_validator
 
 Effect = Literal["read", "write", "mixed"]
+Autonomy = Literal["observe", "remediate", "propose"]
 
 # Spec: lowercase alphanumeric + hyphens, no leading/trailing/consecutive hyphens, max 64 chars.
 _NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
@@ -35,6 +36,9 @@ class Skill(BaseModel):
     enabled: bool = True
     incident_keys: list[str] = Field(default_factory=list)
     effect: Effect = "mixed"  # what the skill does to system state
+    autonomy: Autonomy = "propose"  # default — force approval even in autonomous mode
+    allowed_tools: list[str] = Field(default_factory=list)
+    category: str | None = None  # reliability | maintenance | security | design
     instructions: str = ""  # freeform Markdown body
 
     @field_validator("name")
@@ -207,6 +211,9 @@ class SkillService:
             enabled=meta.get("enabled", True),
             incident_keys=meta.get("incident_keys", []),
             effect=meta.get("effect", "mixed"),
+            autonomy=meta.get("autonomy", "propose"),
+            allowed_tools=meta.get("allowed_tools", []),
+            category=meta.get("category"),
             instructions=body,
         )
 
@@ -231,6 +238,12 @@ class SkillService:
             metadata["incident_keys"] = skill.incident_keys
         if skill.effect != "mixed":
             metadata["effect"] = skill.effect
+        if skill.autonomy != "propose":
+            metadata["autonomy"] = skill.autonomy
+        if skill.allowed_tools:
+            metadata["allowed_tools"] = skill.allowed_tools
+        if skill.category:
+            metadata["category"] = skill.category
         if metadata:
             frontmatter["metadata"] = metadata
         fm_str = yaml.dump(frontmatter, default_flow_style=False, sort_keys=False).strip()

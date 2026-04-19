@@ -7,9 +7,11 @@ Connection is opened lazily on first use.
 """
 
 import asyncio
+import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from statistics import median
 from typing import Any
 from uuid import uuid4
 
@@ -271,6 +273,76 @@ _CREATE_CONFIG_OVERRIDES_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_config_overrides_section ON config_overrides(section)
 """
 
+_CREATE_AUDIT_BREAKS = """
+CREATE TABLE IF NOT EXISTS audit_breaks (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    detected_at      TEXT NOT NULL,
+    expected_id      INTEGER,
+    actual_id        INTEGER,
+    reason           TEXT NOT NULL
+)
+"""
+
+_CREATE_INCIDENTS = """
+CREATE TABLE IF NOT EXISTS incidents (
+    incident_key       TEXT PRIMARY KEY,
+    first_seen         TEXT NOT NULL,
+    last_seen          TEXT NOT NULL,
+    cycle_count        INTEGER NOT NULL DEFAULT 1,
+    status             TEXT NOT NULL DEFAULT 'active',
+    severity           TEXT,
+    host               TEXT,
+    title              TEXT,
+    acknowledged_at    TEXT,
+    snoozed_until      TEXT,
+    resolved_at        TEXT,
+    escalated_at       TEXT,
+    last_outcome_json  TEXT,
+    created_at         TEXT NOT NULL
+)
+"""
+
+_CREATE_INCIDENTS_IDX_STATUS = """
+CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status)
+"""
+
+_CREATE_REVERSIBLE_ACTIONS = """
+CREATE TABLE IF NOT EXISTS reversible_actions (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    cycle_id         TEXT,
+    incident_key     TEXT,
+    tool_name        TEXT NOT NULL,
+    args_json        TEXT,
+    pre_state_json   TEXT,
+    executed_at      TEXT NOT NULL,
+    reverted_at      TEXT,
+    reverted_by      TEXT,
+    revert_status    TEXT
+)
+"""
+
+_CREATE_REVERSIBLE_ACTIONS_IDX_INCIDENT = """
+CREATE INDEX IF NOT EXISTS idx_reversible_actions_incident ON reversible_actions(incident_key)
+"""
+
+_CREATE_INSIGHTS = """
+CREATE TABLE IF NOT EXISTS insights (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    category         TEXT NOT NULL,
+    host             TEXT,
+    summary          TEXT NOT NULL,
+    detail           TEXT,
+    severity         TEXT,
+    created_at       TEXT NOT NULL,
+    actioned_at      TEXT,
+    snoozed_until    TEXT
+)
+"""
+
+_CREATE_INSIGHTS_IDX_CATEGORY = """
+CREATE INDEX IF NOT EXISTS idx_insights_category ON insights(category)
+"""
+
 
 class DatabaseService:
     """Async wrapper around aiosqlite for Squire persistence.
@@ -282,6 +354,7 @@ class DatabaseService:
         self._db_path = db_path
         self._conn: aiosqlite.Connection | None = None
         self._conn_lock = asyncio.Lock()
+        self._event_chain_lock = asyncio.Lock()
         self._initialized = False
 
     async def _get_conn(self) -> aiosqlite.Connection:
@@ -339,6 +412,13 @@ class DatabaseService:
             _CREATE_MANAGED_HOSTS,
             _CREATE_CONFIG_OVERRIDES,
             _CREATE_CONFIG_OVERRIDES_INDEX,
+            _CREATE_AUDIT_BREAKS,
+            _CREATE_INCIDENTS,
+            _CREATE_INCIDENTS_IDX_STATUS,
+            _CREATE_REVERSIBLE_ACTIONS,
+            _CREATE_REVERSIBLE_ACTIONS_IDX_INCIDENT,
+            _CREATE_INSIGHTS,
+            _CREATE_INSIGHTS_IDX_CATEGORY,
         )
         for stmt in core_statements:
             await self._conn.execute(stmt)
@@ -388,6 +468,8 @@ class DatabaseService:
             ("cycle_id", "TEXT"),
             ("watch_id", "TEXT"),
             ("watch_session_id", "TEXT"),
+            ("prev_hash", "TEXT"),
+            ("content_hash", "TEXT"),
         ):
             if column not in existing_columns:
                 await self._conn.execute(f"ALTER TABLE watch_events ADD COLUMN {column} {kind}")
@@ -757,18 +839,235 @@ class DatabaseService:
         watch_session_id: str | None = None,
         cycle_id: str | None = None,
     ) -> int:
-        """Insert a watch event and return its ID."""
+        """Insert a watch event and return its ID.
+
+        Each event is linked to its predecessor via a SHA-256 hash chain
+        (``prev_hash`` + ``content_hash``). A deletion breaks the chain,
+        which ``verify_watch_event_chain`` can detect.
+        """
         conn = await self._get_conn()
         now = datetime.now(UTC).isoformat()
+        async with self._event_chain_lock:
+            cursor = await conn.execute("SELECT content_hash FROM watch_events ORDER BY id DESC LIMIT 1")
+            row = await cursor.fetchone()
+            prev_hash = (row["content_hash"] if row else None) or ""
+            payload = {
+                "cycle": cycle,
+                "cycle_id": cycle_id,
+                "watch_id": watch_id,
+                "watch_session_id": watch_session_id,
+                "type": type,
+                "content": content,
+                "created_at": now,
+            }
+            content_hash = hashlib.sha256((prev_hash + json.dumps(payload, sort_keys=True)).encode("utf-8")).hexdigest()
+            cursor = await conn.execute(
+                """
+                INSERT INTO watch_events
+                    (cycle, cycle_id, watch_id, watch_session_id, type, content, created_at,
+                     prev_hash, content_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    cycle,
+                    cycle_id,
+                    watch_id,
+                    watch_session_id,
+                    type,
+                    content,
+                    now,
+                    prev_hash,
+                    content_hash,
+                ),
+            )
+            await conn.commit()
+            return cursor.lastrowid
+
+    async def verify_watch_event_chain(self) -> dict:
+        """Walk the watch_events hash chain and report any breaks.
+
+        Returns ``{"intact": bool, "total": int, "breaks": [...]}``. When
+        a break is detected (recomputed hash mismatch or missing id), a
+        row is recorded in ``audit_breaks`` so the tamper event itself is
+        auditable.
+        """
+        conn = await self._get_conn()
         cursor = await conn.execute(
             """
-            INSERT INTO watch_events (cycle, cycle_id, watch_id, watch_session_id, type, content, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (cycle, cycle_id, watch_id, watch_session_id, type, content, now),
+            SELECT id, cycle, cycle_id, watch_id, watch_session_id, type,
+                   content, created_at, prev_hash, content_hash
+            FROM watch_events
+            ORDER BY id
+            """
         )
-        await conn.commit()
-        return cursor.lastrowid
+        rows = await cursor.fetchall()
+        breaks: list[dict] = []
+        previous_hash = ""
+        previous_id = 0
+        for row in rows:
+            row_dict = dict(row)
+            expected_id = previous_id + 1
+            if previous_id and row_dict["id"] != expected_id:
+                breaks.append(
+                    {
+                        "reason": "missing_id",
+                        "expected_id": expected_id,
+                        "actual_id": row_dict["id"],
+                    }
+                )
+            payload = {
+                "cycle": row_dict["cycle"],
+                "cycle_id": row_dict["cycle_id"],
+                "watch_id": row_dict["watch_id"],
+                "watch_session_id": row_dict["watch_session_id"],
+                "type": row_dict["type"],
+                "content": row_dict["content"],
+                "created_at": row_dict["created_at"],
+            }
+            recomputed = hashlib.sha256(
+                (previous_hash + json.dumps(payload, sort_keys=True)).encode("utf-8")
+            ).hexdigest()
+            stored = row_dict.get("content_hash") or ""
+            if stored and stored != recomputed:
+                breaks.append(
+                    {
+                        "reason": "hash_mismatch",
+                        "expected_id": row_dict["id"],
+                        "actual_id": row_dict["id"],
+                    }
+                )
+            previous_hash = stored or recomputed
+            previous_id = row_dict["id"]
+        if breaks:
+            now = datetime.now(UTC).isoformat()
+            await conn.executemany(
+                """
+                INSERT INTO audit_breaks (detected_at, expected_id, actual_id, reason)
+                VALUES (?, ?, ?, ?)
+                """,
+                [(now, b.get("expected_id"), b.get("actual_id"), b["reason"]) for b in breaks],
+            )
+            await conn.commit()
+        return {"intact": not breaks, "total": len(rows), "breaks": breaks}
+
+    async def count_autonomous_actions_since(self, *, since: datetime) -> int:
+        """Count ``tool_call`` events emitted at or after ``since``.
+
+        Used to enforce a cross-cycle rate ceiling on autonomous actions.
+        """
+        conn = await self._get_conn()
+        cursor = await conn.execute(
+            """
+            SELECT COUNT(*) AS c
+            FROM watch_events
+            WHERE type = 'tool_call' AND created_at >= ?
+            """,
+            (since.isoformat(),),
+        )
+        row = await cursor.fetchone()
+        return int(row["c"] or 0) if row else 0
+
+    async def get_watch_metrics(self, *, hours: int = 24) -> dict:
+        """Effectiveness metrics over a rolling window.
+
+        Produces auto-resolve rate, MTTR, approval latency, and rate-limit
+        breach counts so the incidents inbox can surface trust-building
+        numbers from day one.
+        """
+        conn = await self._get_conn()
+        since = datetime.now(UTC) - timedelta(hours=hours)
+        since_iso = since.isoformat()
+
+        cursor = await conn.execute(
+            """
+            SELECT cycle_id, outcome_json, started_at, ended_at
+            FROM watch_cycles
+            WHERE incident_key IS NOT NULL AND incident_key != ''
+              AND started_at >= ?
+            """,
+            (since_iso,),
+        )
+        cycle_rows = await cursor.fetchall()
+
+        approval_cycles: set[str] = set()
+        approvals_cursor = await conn.execute(
+            """
+            SELECT we.cycle_id
+            FROM watch_approvals wa
+            JOIN watch_events we
+              ON we.type = 'approval_request'
+             AND json_extract(we.content, '$.request_id') = wa.request_id
+            WHERE we.created_at >= ?
+            """,
+            (since_iso,),
+        )
+        for row in await approvals_cursor.fetchall():
+            if row["cycle_id"]:
+                approval_cycles.add(row["cycle_id"])
+
+        resolved = 0
+        approval_resolved = 0
+        mttrs: list[float] = []
+        for row in cycle_rows:
+            outcome: dict = {}
+            if row["outcome_json"]:
+                try:
+                    outcome = json.loads(row["outcome_json"])
+                except (TypeError, ValueError):
+                    outcome = {}
+            if not outcome.get("resolved"):
+                continue
+            resolved += 1
+            if row["cycle_id"] in approval_cycles:
+                approval_resolved += 1
+            if row["started_at"] and row["ended_at"]:
+                try:
+                    started = datetime.fromisoformat(row["started_at"])
+                    ended = datetime.fromisoformat(row["ended_at"])
+                    mttrs.append((ended - started).total_seconds())
+                except ValueError:
+                    pass
+
+        auto_resolved = resolved - approval_resolved
+        auto_rate = (auto_resolved / resolved) if resolved else 0.0
+
+        latency_cursor = await conn.execute(
+            """
+            SELECT created_at, responded_at
+            FROM watch_approvals
+            WHERE responded_at IS NOT NULL AND created_at >= ?
+            """,
+            (since_iso,),
+        )
+        latencies: list[float] = []
+        for row in await latency_cursor.fetchall():
+            try:
+                created = datetime.fromisoformat(row["created_at"])
+                responded = datetime.fromisoformat(row["responded_at"])
+                latencies.append((responded - created).total_seconds())
+            except (TypeError, ValueError):
+                continue
+
+        rate_cursor = await conn.execute(
+            """
+            SELECT COUNT(*) AS c
+            FROM watch_events
+            WHERE type = 'rate_limit' AND created_at >= ?
+            """,
+            (since_iso,),
+        )
+        rate_row = await rate_cursor.fetchone()
+
+        return {
+            "window_hours": hours,
+            "auto_resolved": auto_resolved,
+            "approval_resolved": approval_resolved,
+            "total_resolved": resolved,
+            "auto_resolve_rate": auto_rate,
+            "median_mttr_seconds": median(mttrs) if mttrs else None,
+            "median_approval_latency_seconds": median(latencies) if latencies else None,
+            "rate_limit_hits": int(rate_row["c"] or 0) if rate_row else 0,
+        }
 
     async def get_watch_events_since(
         self,
@@ -959,6 +1258,432 @@ class DatabaseService:
         await conn.execute("DELETE FROM watch_runs")
         await conn.execute("DELETE FROM watch_events")
         await conn.commit()
+
+    # --- Incidents (durable lifecycle overlay) ---
+
+    async def upsert_incident(
+        self,
+        *,
+        incident_key: str,
+        severity: str | None,
+        host: str | None,
+        title: str | None,
+        first_seen: str,
+        last_seen: str,
+        last_outcome_json: dict | None,
+        cycle_increment: int = 1,
+        observed_status: str = "active",
+    ) -> None:
+        """Insert-or-update an incident lifecycle row.
+
+        Preserves manual overrides (``acknowledged``, ``snoozed``,
+        ``resolved``) unless the incident is actively re-observed after a
+        resolution window.
+        """
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        cursor = await conn.execute(
+            "SELECT status, acknowledged_at, snoozed_until, resolved_at FROM incidents WHERE incident_key = ?",
+            (incident_key,),
+        )
+        existing = await cursor.fetchone()
+        outcome_json = json.dumps(last_outcome_json or {})
+
+        if existing is None:
+            await conn.execute(
+                """
+                INSERT INTO incidents
+                    (incident_key, first_seen, last_seen, cycle_count, status, severity, host, title,
+                     last_outcome_json, created_at)
+                VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    incident_key,
+                    first_seen,
+                    last_seen,
+                    observed_status,
+                    severity,
+                    host,
+                    title,
+                    outcome_json,
+                    now,
+                ),
+            )
+            await conn.commit()
+            return
+
+        current_status = existing["status"]
+        next_status = current_status
+        if current_status == "resolved" and observed_status != "resolved":
+            # Re-observed after resolution — reopen.
+            next_status = observed_status
+        elif current_status in {"active", "escalated"}:
+            next_status = observed_status
+
+        await conn.execute(
+            """
+            UPDATE incidents
+               SET last_seen = ?,
+                   cycle_count = cycle_count + ?,
+                   status = ?,
+                   severity = COALESCE(?, severity),
+                   host = COALESCE(?, host),
+                   title = COALESCE(?, title),
+                   last_outcome_json = ?
+             WHERE incident_key = ?
+            """,
+            (
+                last_seen,
+                cycle_increment,
+                next_status,
+                severity,
+                host,
+                title,
+                outcome_json,
+                incident_key,
+            ),
+        )
+        await conn.commit()
+
+    async def get_incident(self, incident_key: str) -> dict | None:
+        conn = await self._get_conn()
+        cursor = await conn.execute(
+            "SELECT * FROM incidents WHERE incident_key = ?",
+            (incident_key,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def ack_incident(self, incident_key: str) -> bool:
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        cursor = await conn.execute(
+            """
+            UPDATE incidents
+               SET acknowledged_at = ?,
+                   status = CASE
+                     WHEN status IN ('resolved', 'snoozed') THEN status
+                     ELSE 'acknowledged'
+                   END
+             WHERE incident_key = ?
+            """,
+            (now, incident_key),
+        )
+        await conn.commit()
+        return cursor.rowcount > 0
+
+    async def snooze_incident(self, incident_key: str, *, duration_seconds: int) -> bool:
+        conn = await self._get_conn()
+        until = (datetime.now(UTC) + timedelta(seconds=max(60, duration_seconds))).isoformat()
+        cursor = await conn.execute(
+            """
+            UPDATE incidents
+               SET snoozed_until = ?, status = 'snoozed'
+             WHERE incident_key = ?
+            """,
+            (until, incident_key),
+        )
+        await conn.commit()
+        return cursor.rowcount > 0
+
+    async def resolve_incident(self, incident_key: str) -> bool:
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        cursor = await conn.execute(
+            """
+            UPDATE incidents
+               SET resolved_at = ?, status = 'resolved'
+             WHERE incident_key = ?
+            """,
+            (now, incident_key),
+        )
+        await conn.commit()
+        return cursor.rowcount > 0
+
+    async def is_incident_snoozed(self, incident_key: str) -> bool:
+        """Return True when the incident is actively snoozed right now."""
+        row = await self.get_incident(incident_key)
+        if not row or not row.get("snoozed_until"):
+            return False
+        try:
+            until = datetime.fromisoformat(row["snoozed_until"])
+        except ValueError:
+            return False
+        return until > datetime.now(UTC)
+
+    # --- Reversible actions ---
+
+    async def record_reversible_action(
+        self,
+        *,
+        cycle_id: str | None,
+        incident_key: str | None,
+        tool_name: str,
+        args: dict,
+        pre_state: dict,
+    ) -> int:
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        cursor = await conn.execute(
+            """
+            INSERT INTO reversible_actions
+                (cycle_id, incident_key, tool_name, args_json, pre_state_json, executed_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (cycle_id, incident_key, tool_name, json.dumps(args), json.dumps(pre_state), now),
+        )
+        await conn.commit()
+        return cursor.lastrowid
+
+    async def get_latest_reversible_action_for_incident(self, incident_key: str) -> dict | None:
+        conn = await self._get_conn()
+        cursor = await conn.execute(
+            """
+            SELECT * FROM reversible_actions
+             WHERE incident_key = ? AND reverted_at IS NULL
+             ORDER BY id DESC
+             LIMIT 1
+            """,
+            (incident_key,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def mark_reversible_action_reverted(
+        self,
+        action_id: int,
+        *,
+        status: str,
+        reverted_by: str = "user",
+    ) -> None:
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        await conn.execute(
+            """
+            UPDATE reversible_actions
+               SET reverted_at = ?, revert_status = ?, reverted_by = ?
+             WHERE id = ?
+            """,
+            (now, status, reverted_by, action_id),
+        )
+        await conn.commit()
+
+    # --- Insights (Phase 4) ---
+
+    async def upsert_insight(
+        self,
+        *,
+        category: str,
+        host: str | None,
+        summary: str,
+        detail: str | None = None,
+        severity: str | None = None,
+    ) -> int:
+        conn = await self._get_conn()
+        now = datetime.now(UTC).isoformat()
+        cursor = await conn.execute(
+            "SELECT id FROM insights WHERE category = ? AND summary = ? AND host IS ?",
+            (category, summary, host),
+        )
+        existing = await cursor.fetchone()
+        if existing:
+            await conn.execute(
+                "UPDATE insights SET detail = ?, severity = ? WHERE id = ?",
+                (detail, severity, existing["id"]),
+            )
+            await conn.commit()
+            return int(existing["id"])
+        cursor = await conn.execute(
+            """
+            INSERT INTO insights (category, host, summary, detail, severity, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (category, host, summary, detail, severity, now),
+        )
+        await conn.commit()
+        return cursor.lastrowid
+
+    async def list_insights(self, *, category: str | None = None) -> list[dict]:
+        conn = await self._get_conn()
+        if category:
+            cursor = await conn.execute(
+                """
+                SELECT * FROM insights
+                 WHERE category = ? AND (snoozed_until IS NULL OR snoozed_until < ?)
+                 ORDER BY created_at DESC
+                """,
+                (category, datetime.now(UTC).isoformat()),
+            )
+        else:
+            cursor = await conn.execute(
+                """
+                SELECT * FROM insights
+                 WHERE (snoozed_until IS NULL OR snoozed_until < ?)
+                 ORDER BY created_at DESC
+                """,
+                (datetime.now(UTC).isoformat(),),
+            )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def list_watch_incidents(self) -> list[dict]:
+        """Group watch cycles by incident fingerprint for inbox-style incident views."""
+        conn = await self._get_conn()
+        cursor = await conn.execute(
+            """
+            SELECT
+                incident_key,
+                MIN(started_at) AS first_seen,
+                MAX(started_at) AS last_seen,
+                COUNT(*) AS cycle_count
+            FROM watch_cycles
+            WHERE incident_key IS NOT NULL AND incident_key != ''
+            GROUP BY incident_key
+            ORDER BY MAX(started_at) DESC
+            """
+        )
+        grouped = await cursor.fetchall()
+        incidents: list[dict] = []
+
+        def _severity_rank(severity: str | None) -> int:
+            ranks = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+            return ranks.get((severity or "").lower(), 9)
+
+        for row in grouped:
+            incident_key = row["incident_key"]
+            latest_cursor = await conn.execute(
+                """
+                SELECT cycle_id, watch_id, watch_session_id, status, started_at, ended_at, outcome_json
+                FROM watch_cycles
+                WHERE incident_key = ?
+                ORDER BY started_at DESC
+                LIMIT 1
+                """,
+                (incident_key,),
+            )
+            latest = await latest_cursor.fetchone()
+            if not latest:
+                continue
+
+            latest_outcome: dict = {}
+            if latest["outcome_json"]:
+                try:
+                    latest_outcome = json.loads(latest["outcome_json"])
+                except (TypeError, ValueError):
+                    latest_outcome = {}
+
+            pending_cursor = await conn.execute(
+                """
+                SELECT wa.*
+                FROM watch_approvals wa
+                JOIN watch_events we
+                  ON we.type = 'approval_request'
+                 AND json_extract(we.content, '$.request_id') = wa.request_id
+                JOIN watch_cycles wc
+                  ON wc.cycle_id = we.cycle_id
+                WHERE wc.incident_key = ?
+                  AND wa.status = 'pending'
+                ORDER BY wa.created_at DESC
+                LIMIT 1
+                """,
+                (incident_key,),
+            )
+            pending = await pending_cursor.fetchone()
+
+            severity = "unknown"
+            severity_cursor = await conn.execute(
+                """
+                SELECT content
+                FROM watch_events
+                WHERE cycle_id = ? AND type = 'incident'
+                """,
+                (latest["cycle_id"],),
+            )
+            severity_rows = await severity_cursor.fetchall()
+            if severity_rows:
+                severity_values: list[str] = []
+                for event_row in severity_rows:
+                    try:
+                        payload = json.loads(event_row["content"] or "{}")
+                    except (TypeError, ValueError):
+                        payload = {}
+                    if payload.get("severity"):
+                        severity_values.append(str(payload["severity"]))
+                if severity_values:
+                    severity = sorted(severity_values, key=_severity_rank)[0]
+
+            pending_approval = None
+            if pending:
+                pending_approval = {
+                    "request_id": pending["request_id"],
+                    "tool_name": pending["tool_name"],
+                    "args": json.loads(pending["args"] or "{}"),
+                    "risk_level": pending["risk_level"],
+                    "created_at": pending["created_at"],
+                }
+
+            if pending_approval:
+                status = "needs_you"
+            elif bool(latest_outcome.get("resolved", False)):
+                status = "resolved"
+            elif latest["status"] == "error" or bool(latest_outcome.get("escalated", False)):
+                status = "escalated"
+            else:
+                status = "active"
+
+            lifecycle_cursor = await conn.execute(
+                """
+                SELECT status, acknowledged_at, snoozed_until, resolved_at
+                FROM incidents
+                WHERE incident_key = ?
+                """,
+                (incident_key,),
+            )
+            lifecycle = await lifecycle_cursor.fetchone()
+            manual_overrides: dict[str, str | None] = {
+                "acknowledged_at": None,
+                "snoozed_until": None,
+                "resolved_at": None,
+            }
+            if lifecycle:
+                manual_overrides = {
+                    "acknowledged_at": lifecycle["acknowledged_at"],
+                    "snoozed_until": lifecycle["snoozed_until"],
+                    "resolved_at": lifecycle["resolved_at"],
+                }
+                manual_status = str(lifecycle["status"] or "").lower()
+                snoozed_until = lifecycle["snoozed_until"]
+                if snoozed_until:
+                    try:
+                        if datetime.fromisoformat(snoozed_until) > datetime.now(UTC):
+                            status = "snoozed"
+                    except ValueError:
+                        pass
+                if manual_status == "resolved" and not pending_approval:
+                    status = "resolved"
+                elif manual_status == "acknowledged" and status == "active":
+                    status = "acknowledged"
+
+            incidents.append(
+                {
+                    "incident_key": incident_key,
+                    "first_seen": row["first_seen"],
+                    "last_seen": row["last_seen"],
+                    "cycle_count": row["cycle_count"],
+                    "severity": severity,
+                    "status": status,
+                    "watch_id": latest["watch_id"],
+                    "watch_session_id": latest["watch_session_id"],
+                    "latest_cycle_id": latest["cycle_id"],
+                    "latest_outcome_json": latest_outcome,
+                    "pending_approval": pending_approval,
+                    "acknowledged_at": manual_overrides["acknowledged_at"],
+                    "snoozed_until": manual_overrides["snoozed_until"],
+                    "resolved_at": manual_overrides["resolved_at"],
+                }
+            )
+
+        return incidents
 
     async def create_watch_run(self, watch_id: str, *, started_by: str = "user") -> None:
         """Create a new watch run record."""

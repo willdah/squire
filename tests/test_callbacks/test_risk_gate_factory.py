@@ -151,6 +151,58 @@ class TestHeadlessMode:
         await gate(_make_tool("run_command"), {"command": "rm -rf /"}, _make_context(threshold=2))
         notifier.dispatch.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_headless_with_async_approval_provider_prompts_instead_of_auto_deny(self):
+        provider = AsyncMock(spec=AsyncApprovalProvider)
+        provider.request_approval_async.return_value = True
+        gate = create_risk_gate(
+            tool_risk_levels={"run_command": 5},
+            headless=True,
+            approval_provider=provider,
+        )
+        result = await gate(_make_tool("run_command"), {"command": "ls"}, _make_context(threshold=2))
+        assert result is None
+        provider.request_approval_async.assert_awaited_once()
+
+
+class TestRateCeiling:
+    @pytest.mark.asyncio
+    async def test_rate_limit_gate_downgrades_allowed_to_needs_approval(self):
+        provider = AsyncMock(spec=AsyncApprovalProvider)
+        provider.request_approval_async.return_value = True
+
+        async def _hit_ceiling(tool_name, args):
+            return True
+
+        gate = create_risk_gate(
+            tool_risk_levels={"system_info": 1},
+            headless=True,
+            approval_provider=provider,
+            rate_limit_gate=_hit_ceiling,
+        )
+        # system_info is below threshold → would normally be ALLOWED; rate gate
+        # forces it to NEEDS_APPROVAL so provider is asked.
+        result = await gate(_make_tool("system_info"), {}, _make_context(threshold=3))
+        assert result is None
+        provider.request_approval_async.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_gate_noop_when_under_ceiling(self):
+        provider = AsyncMock(spec=AsyncApprovalProvider)
+
+        async def _under_ceiling(tool_name, args):
+            return False
+
+        gate = create_risk_gate(
+            tool_risk_levels={"system_info": 1},
+            headless=True,
+            approval_provider=provider,
+            rate_limit_gate=_under_ceiling,
+        )
+        result = await gate(_make_tool("system_info"), {}, _make_context(threshold=3))
+        assert result is None
+        provider.request_approval_async.assert_not_called()
+
 
 class TestHostRiskEscalation:
     @pytest.mark.asyncio

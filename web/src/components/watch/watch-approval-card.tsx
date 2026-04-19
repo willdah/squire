@@ -15,23 +15,24 @@ interface WatchApprovalCardProps {
   toolName: string;
   args: Record<string, unknown>;
   riskLevel: number;
+  countdownSeconds?: number;
   resolved?: boolean;
   resolvedStatus?: string;
 }
 
 export function WatchApprovalCard({
-  requestId, toolName, args, riskLevel, resolved, resolvedStatus,
+  requestId, toolName, args, riskLevel, countdownSeconds = 60, resolved, resolvedStatus,
 }: WatchApprovalCardProps) {
-  const [countdown, setCountdown] = useState(60);
+  const [countdown, setCountdown] = useState(countdownSeconds);
   const [responding, setResponding] = useState(false);
 
   useEffect(() => {
-    if (resolved) return;
+    if (resolved || countdown <= 0) return;
     const timer = setInterval(() => {
       setCountdown((c) => Math.max(0, c - 1));
     }, 1000);
     return () => clearInterval(timer);
-  }, [resolved]);
+  }, [resolved, countdown]);
 
   const handleRespond = async (approved: boolean) => {
     setResponding(true);
@@ -73,7 +74,7 @@ export function WatchApprovalCard({
         {JSON.stringify(args, null, 2)}
       </pre>
       <div className="flex gap-2">
-        <Button size="sm" onClick={() => handleRespond(true)} disabled={responding || countdown === 0}>
+        <Button size="sm" onClick={() => handleRespond(true)} disabled={responding}>
           Approve
         </Button>
         <Button size="sm" variant="destructive" onClick={() => handleRespond(false)} disabled={responding}>

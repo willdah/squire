@@ -6,6 +6,7 @@ and headless (auto-deny + optional notification) modes.
 """
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from agent_risk_engine import Action, GateResult, PatternAnalyzer, RiskEvaluator, RiskPattern, RuleGate
@@ -94,6 +95,7 @@ def create_risk_gate(
     default_threshold: int | None = None,
     headless: bool = False,
     notifier: Any | None = None,
+    rate_limit_gate: Callable[[str, dict[str, Any]], Awaitable[bool]] | None = None,
 ) -> BeforeToolCallback:
     """Create a before_tool_callback for the risk evaluation pipeline.
 
@@ -193,6 +195,12 @@ def create_risk_gate(
         risk_threshold = evaluator.rule_gate.threshold
         analyzer_escalated = result.decision == GateResult.ALLOWED and result.risk_score.level > risk_threshold
 
+        if rate_limit_gate is not None and result.decision == GateResult.ALLOWED and not analyzer_escalated:
+            if await rate_limit_gate(compound_name, args):
+                # Autonomous rate ceiling hit — downgrade to NEEDS_APPROVAL
+                # so the human must approve the next action explicitly.
+                analyzer_escalated = True
+
         if result.decision == GateResult.DENIED:
             if headless and notifier:
                 await _notify_blocked(notifier, compound_name, args, result.reasoning)
@@ -204,7 +212,7 @@ def create_risk_gate(
             }
 
         if result.decision == GateResult.NEEDS_APPROVAL or analyzer_escalated:
-            if headless:
+            if headless and approval_provider is None:
                 if notifier:
                     await _notify_blocked(notifier, compound_name, args, result.reasoning)
                 return {

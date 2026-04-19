@@ -15,8 +15,9 @@ import {
   ListChecks,
   Eye,
   Wrench,
-  Shield,
   FileText,
+  Lightbulb,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ConfigDetailResponse } from "@/lib/types";
@@ -28,6 +29,8 @@ const chatNav = [
 
 const monitorNav = [
   { href: "/watch", label: "Watch", icon: Eye },
+  { href: "/incidents", label: "Incidents", icon: Activity },
+  { href: "/insights", label: "Insights", icon: Lightbulb },
   { href: "/watch-explorer", label: "Watch Explorer", icon: FileText },
   { href: "/activity", label: "Activity", icon: Activity },
 ];

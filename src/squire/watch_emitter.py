@@ -6,8 +6,36 @@ and logged — emission must never block the watch cycle.
 
 import json
 import logging
+from typing import Any
 
 from .database.service import DatabaseService
+
+
+def _preview_for(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Build a compact effect preview for the approval UI.
+
+    Returns a dict with a human-readable ``effect`` string plus the
+    concrete ``command`` when the tool wraps a shell invocation. The
+    preview is intentionally conservative — when effects are unknown we
+    surface that rather than guess.
+    """
+    try:
+        from .tools import get_tool_effect
+    except Exception:
+        effect = "mixed"
+    else:
+        try:
+            effect = get_tool_effect(tool_name.split(":", 1)[0])
+        except Exception:
+            effect = "mixed"
+    command = ""
+    if isinstance(args, dict):
+        for key in ("command", "cmd", "action", "name"):
+            if key in args and args[key]:
+                command = f"{key}={args[key]}"
+                break
+    return {"effect": effect, "command": command}
+
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +127,7 @@ class WatchEventEmitter:
         args: dict,
         risk_level: int,
     ) -> None:
+        preview = _preview_for(tool_name, args)
         await self._emit(
             cycle,
             "approval_request",
@@ -108,12 +137,20 @@ class WatchEventEmitter:
                     "tool_name": tool_name,
                     "args": args,
                     "risk_level": risk_level,
+                    "preview": preview,
                 }
             ),
         )
 
     async def emit_approval_resolved(self, cycle: int, request_id: str, status: str) -> None:
         await self._emit(cycle, "approval_resolved", json.dumps({"request_id": request_id, "status": status}))
+
+    async def emit_approval_reminder(self, cycle: int, request_id: str, seconds_elapsed: int) -> None:
+        await self._emit(
+            cycle,
+            "approval_reminder",
+            json.dumps({"request_id": request_id, "seconds_elapsed": seconds_elapsed}),
+        )
 
     async def emit_error(self, cycle: int, message: str, *, cycle_id: str | None = None) -> None:
         await self._emit(cycle, "error", json.dumps({"message": message}), cycle_id=cycle_id)
@@ -141,6 +178,26 @@ class WatchEventEmitter:
                     "details": details or "",
                 }
             ),
+        )
+
+    async def emit_kill_switch(self, cycle: int, active: bool) -> None:
+        await self._emit(
+            cycle,
+            "kill_switch",
+            json.dumps({"active": bool(active)}),
+        )
+
+    async def emit_rate_limit(
+        self,
+        cycle: int,
+        tool_name: str,
+        count: int,
+        ceiling: int,
+    ) -> None:
+        await self._emit(
+            cycle,
+            "rate_limit",
+            json.dumps({"tool_name": tool_name, "count": count, "ceiling": ceiling}),
         )
 
     async def emit_incident(

@@ -121,7 +121,7 @@ function ActivityPageInner() {
   );
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
+    <div className="space-y-6">
       <div className="space-y-2">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl">Activity</h1>
