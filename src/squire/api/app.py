@@ -69,6 +69,39 @@ async def _background_snapshots(db: DatabaseService, interval_minutes: int, regi
             logger.debug("Background snapshot failed", exc_info=True)
 
 
+async def _background_insight_sweep(
+    *,
+    db: DatabaseService,
+    skill_service,
+    adk_runtime,
+    llm_config,
+    app_config,
+    interval_hours: int,
+) -> None:
+    """Periodically populate the insights table from metrics + observe-tier skills."""
+    from ..insight_sweep import run_insight_sweep
+
+    # Initial delay so the first sweep doesn't race startup.
+    await asyncio.sleep(30)
+    while True:
+        try:
+            result = await run_insight_sweep(
+                db=db,
+                skill_service=skill_service,
+                adk_runtime=adk_runtime,
+                llm_config=llm_config,
+                app_config=app_config,
+            )
+            logger.info(
+                "Insight sweep complete: metric=%d skill=%d",
+                result["metric_insights"],
+                result["skill_insights"],
+            )
+        except Exception:
+            logger.debug("Background insight sweep failed", exc_info=True)
+        await asyncio.sleep(max(3600, interval_hours * 3600))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Initialize shared services on startup, clean up on shutdown."""
@@ -112,6 +145,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         _background_snapshots(deps.db, deps.db_config.snapshot_interval_minutes, deps.registry)
     )
 
+    # Start background insight sweep (metrics + observe-tier skills).
+    insight_task = asyncio.create_task(
+        _background_insight_sweep(
+            db=deps.db,
+            skill_service=deps.skills_service,
+            adk_runtime=deps.adk_runtime,
+            llm_config=deps.llm_config,
+            app_config=deps.app_config,
+            interval_hours=deps.watch_config.insight_sweep_interval_hours,
+        )
+    )
+
     # Clean up any half-open watch rows from a previous container crash.
     try:
         await deps.db.finalize_stale_watch_runs_on_boot()
@@ -150,6 +195,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     snapshot_task.cancel()
     try:
         await snapshot_task
+    except asyncio.CancelledError:
+        pass
+
+    insight_task.cancel()
+    try:
+        await insight_task
     except asyncio.CancelledError:
         pass
     await deps.registry.close_all()

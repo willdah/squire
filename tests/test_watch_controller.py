@@ -21,8 +21,9 @@ from squire.config import (
     NotificationsConfig,
     WatchConfig,
 )
+from squire.config.app import RiskTolerance
 from squire.database.service import DatabaseService
-from squire.watch_controller import WatchController
+from squire.watch_controller import WatchController, _effective_watch_risk_tolerance, _headless_risk_gate
 
 
 @pytest_asyncio.fixture
@@ -223,3 +224,60 @@ async def test_stop_releases_holder_even_if_task_never_started(db):
     await db.claim_watch_holder(controller._holder_id, ttl_seconds=60)
     await controller.stop(timeout=0.1)
     assert await db.get_watch_state("watch_holder") is None
+
+
+def test_headless_risk_gate_wires_approval_provider(monkeypatch):
+    captured = {}
+
+    def _fake_create_risk_gate(
+        *,
+        tool_risk_levels,
+        risk_overrides,
+        default_threshold,
+        headless,
+        notifier,
+        approval_provider,
+        rate_limit_gate=None,
+    ):
+        captured["tool_risk_levels"] = tool_risk_levels
+        captured["risk_overrides"] = risk_overrides
+        captured["default_threshold"] = default_threshold
+        captured["headless"] = headless
+        captured["notifier"] = notifier
+        captured["approval_provider"] = approval_provider
+        captured["rate_limit_gate"] = rate_limit_gate
+        return object()
+
+    monkeypatch.setattr("squire.watch_controller.create_risk_gate", _fake_create_risk_gate)
+    provider = object()
+    result = _headless_risk_gate(
+        {"run_command": 5},
+        guardrails=GuardrailsConfig(),
+        notifier=None,
+        approval_provider=provider,
+    )
+    assert result is not None
+    assert captured["headless"] is True
+    assert captured["approval_provider"] is provider
+
+
+class TestEffectiveWatchRiskTolerance:
+    """Regression: autonomy-mode helper must normalize enum/str tolerances to ints."""
+
+    def test_accepts_risk_tolerance_enum(self):
+        # Regression: passing a RiskTolerance enum used to crash with
+        # "TypeError: '>' not supported between instances of 'int' and 'RiskTolerance'".
+        assert _effective_watch_risk_tolerance(RiskTolerance.STANDARD, "supervised") == 3
+        assert _effective_watch_risk_tolerance(RiskTolerance.STANDARD, "autonomous") == 4
+
+    def test_accepts_string_alias(self):
+        assert _effective_watch_risk_tolerance("cautious", "supervised") == 2
+        assert _effective_watch_risk_tolerance("cautious", "autonomous") == 4
+
+    def test_accepts_int(self):
+        assert _effective_watch_risk_tolerance(2, "supervised") == 2
+        assert _effective_watch_risk_tolerance(2, "autonomous") == 4
+
+    def test_autonomous_never_regresses_above_ceiling(self):
+        # Already at full-trust (5): autonomous must not cap at 4.
+        assert _effective_watch_risk_tolerance(RiskTolerance.FULL_TRUST, "autonomous") == 5

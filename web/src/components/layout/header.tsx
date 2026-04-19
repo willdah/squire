@@ -21,6 +21,7 @@ import {
   ListChecks,
   Eye,
   Wrench,
+  Lightbulb,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,8 @@ const navItems = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/sessions", label: "Sessions", icon: History },
   { href: "/watch", label: "Watch", icon: Eye },
+  { href: "/incidents", label: "Incidents", icon: Activity },
+  { href: "/insights", label: "Insights", icon: Lightbulb },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/skills", label: "Skills", icon: ListChecks },
   { href: "/tools", label: "Tools", icon: Wrench },

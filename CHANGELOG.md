@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Incident inbox API + UI:** Added `GET /api/watch/incidents` and a new `/incidents` page that groups watch cycles by stable incident fingerprint, splits incidents into **Needs you / Active / Recently resolved**, and reuses `WatchApprovalCard` for pending approvals directly from the incident card.
+- **Watch autonomy mode API:** Added `GET /api/watch/mode` and `POST /api/watch/mode` to toggle global watch mode between `supervised` and `autonomous`. Autonomous mode requires typed `AUTONOMOUS` confirmation in the UI.
+- **Tool-output sanitization (prompt-injection defense):** New `squire.callbacks.sanitize` module strips ANSI and control chars, neutralizes instruction-shaped patterns, and wraps every watch-tool output in `<tool-output source="...">` envelopes before it re-enters the LLM context.
+- **Persistent kill switch:** `GET/POST /api/watch/kill-switch` persists a halt flag in `watch_state`; the watch loop skips cycles while the switch is active, survives restart, and is one-click toggleable from the `/incidents` header.
+- **Autonomous-action rate ceiling:** New `watch.max_autonomous_actions_per_hour` config (default `30`) enforces a cross-cycle ceiling. Above the ceiling, actions downgrade from ALLOWED to `NEEDS_APPROVAL` and emit a `rate_limit` watch event.
+- **Tamper-evident audit chain:** `watch_events` now stores `prev_hash` / `content_hash` columns with a SHA-256 chain across inserts. `GET /api/watch/audit/verify` walks the chain and reports breaks; breaks are recorded in a new `audit_breaks` table.
+- **Effectiveness metrics:** `GET /api/watch/metrics?hours=24` returns auto-resolve rate, median MTTR, median approval latency, and rate-ceiling hits. The `/incidents` header surfaces these as a metrics strip.
+- **Incident lifecycle (Phase 2):** New `incidents` table + `POST /api/watch/incidents/{key}/ack`, `/snooze`, `/resolve` endpoints; UI buttons on each card. Snoozed incidents suppress until `snoozed_until`.
+- **Skill autonomy metadata (Phase 2):** `SKILL.md` `metadata` frontmatter now supports `autonomy: observe | remediate | propose`, `allowed_tools`, and `category`. `propose` skills force approval for their declared tools even in autonomous mode; `remediate` skills log a startup warning so they are visible.
+- **Trust affordances (Phase 3):**
+  - Approval events now include a `preview` payload (effect + command summary) for clearer approval prompts.
+  - New `reversible_actions` table + `POST /api/watch/incidents/{key}/revert-last` endpoint. Tool revert handlers register via `squire.callbacks.revertible.register_revertible`.
+  - `POST /api/watch/simulate` replays incident detection against a user-supplied snapshot without touching tools.
+  - `GET /api/watch/digest` returns autonomous-action roll-ups; an autonomous digest card renders on `/incidents`.
+- **Proactive surfaces (Phase 4):** New `/insights` page with tabs for Reliability / Maintenance / Security / Design (deep-link via `?category=...`), backed by a new `insights` table and `GET /api/watch/insights?category=...`.
+- **Scheduled + skill-driven insight sweep:** A background task in the FastAPI lifespan runs the insight sweep every `watch.insight_sweep_interval_hours` (default `6h`). The sweep combines deterministic metric rules (`watch_autonomy.insight_sweep_from_metrics`) with **observe-tier skills**: any enabled skill whose `metadata.autonomy` is `observe` and whose `metadata.category` is a recognized tab is run through an insight agent, and structured `INSIGHT:` lines in the response are parsed into the `insights` table. Tool-less for v1 — skills reason over the latest snapshot and 24h metrics passed in context. `POST /api/watch/insights/sweep` still triggers the combined sweep manually.
+- **Watch docs:** Expanded `docs/watch.md` with security foundations, lifecycle, skill autonomy, trust affordances, and proactive-surface sections.
+
+### Changed
+
+- **Watch approval wiring:** Watch now injects a per-cycle `DatabaseApprovalProvider` into risk gates in headless mode, and watch session-state now carries `risk_approval_tools` instead of forcing it to empty.
+- **Headless risk-gate policy:** `NEEDS_APPROVAL` is no longer auto-denied just because `headless=True`; it only auto-denies when no approval provider exists.
+- **Watch config model:** Added `watch.autonomy_mode` (default `supervised`), `watch.approval_timeout_seconds` (default `300`), `watch.max_autonomous_actions_per_hour` (default `30`), and `watch.insight_sweep_interval_hours` (default `6`).
+- **Approval timeout behavior:** `DatabaseApprovalProvider` default timeout increased from 60s to 300s and now emits a reminder event at 60s.
+- **Watch UI polish:** Reorganized the Monitoring sidebar section so Watch sits at the top (flagship), followed by Incidents and the consolidated `/insights` page (Reliability / Maintenance / Security / Design tabs). Removed decorative activity/watch card flourishes; demoted the watch live stream into a collapsible debug panel.
+- **Webhook log noise:** Transport-level webhook failures (DNS, refused, timeout) now log a single line per failure instead of dumping a full stack trace. Unexpected exceptions still get full tracebacks.
+
 ## [0.20.0] — 2026-04-18
 
 ### Fixed

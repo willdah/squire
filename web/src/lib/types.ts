@@ -280,7 +280,57 @@ export interface WatchConfigResponse {
   max_identical_actions_per_cycle: number;
   blocked_action_cooldown_cycles: number;
   max_remote_actions_per_cycle: number;
+  autonomy_mode: "supervised" | "autonomous";
+  approval_timeout_seconds: number;
   risk_tolerance: number | null;
+}
+
+export interface WatchModeResponse {
+  mode: "supervised" | "autonomous";
+}
+
+export interface WatchIncident {
+  incident_key: string;
+  first_seen: string;
+  last_seen: string;
+  cycle_count: number;
+  severity: string;
+  status: "needs_you" | "active" | "resolved" | "escalated" | "snoozed" | "acknowledged" | string;
+  watch_id?: string | null;
+  watch_session_id?: string | null;
+  latest_cycle_id?: string | null;
+  latest_outcome_json: Record<string, unknown>;
+  pending_approval?: {
+    request_id: string;
+    tool_name: string;
+    args: Record<string, unknown>;
+    risk_level: number;
+    created_at: string;
+  } | null;
+  acknowledged_at?: string | null;
+  snoozed_until?: string | null;
+  resolved_at?: string | null;
+}
+
+export interface WatchKillSwitchResponse {
+  active: boolean;
+}
+
+export interface WatchMetricsResponse {
+  window_hours: number;
+  auto_resolved: number;
+  approval_resolved: number;
+  total_resolved: number;
+  auto_resolve_rate: number;
+  median_mttr_seconds: number | null;
+  median_approval_latency_seconds: number | null;
+  rate_limit_hits: number;
+}
+
+export interface WatchAuditVerifyResponse {
+  intact: boolean;
+  total: number;
+  breaks: Array<Record<string, unknown>>;
 }
 
 // --- Tools ---

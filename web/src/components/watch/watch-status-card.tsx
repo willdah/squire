@@ -100,7 +100,6 @@ export function WatchStatusCard({ status, onConfigure, onRefresh }: WatchStatusC
 
   return (
     <Card className="relative h-full overflow-hidden border-border/70 bg-card/95">
-      <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(circle_at_20%_0%,oklch(0.72_0.14_303/.18),transparent_42%),linear-gradient(to_right,transparent_0%,oklch(0.85_0.02_303/.05)_100%)]" />
       <CardContent className="relative space-y-4 pt-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
