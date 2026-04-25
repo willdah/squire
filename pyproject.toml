@@ -37,7 +37,7 @@ dependencies = [
     "pyyaml==6.0.3",
     "agent-risk-engine==0.2.0",
     "tomlkit==0.14.0",
-    "fastapi==0.135.1",
+    "fastapi==0.136.1",
     "uvicorn[standard]==0.44.0",
 ]
 
